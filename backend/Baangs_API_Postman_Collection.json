@@ -1,0 +1,169 @@
+{
+  "info": {
+    "_postman_id": "f0b4f8c9-b4e2-4ad0-9d2e-8af1846f3d21",
+    "name": "Baangs FSM API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Auth - Login (Admin Web)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"sahil\",\n  \"password\": \"password123\",\n  \"platform\": \"web\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Auth - Login (Technician Mobile)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"sarun\",\n  \"password\": \"password123\",\n  \"platform\": \"mobile\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Jobs - List",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/jobs/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "jobs",
+            ""
+          ]
+        }
+      }
+    },
+    {
+      "name": "Attendance - CheckIn",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"staff_id\": \"STF-SARUN01\",\n  \"latitude\": 9.9312,\n  \"longitude\": 76.2673,\n  \"remarks\": \"API checkin\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/attendance/checkin",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "attendance",
+            "checkin"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Leaves - Apply",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"leave_type\": \"casual\",\n  \"from_date\": \"2026-05-20\",\n  \"to_date\": \"2026-05-21\",\n  \"reason\": \"API leave request\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/leaves/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "leaves",
+            ""
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ]
+}
+
