@@ -35,6 +35,7 @@
       [
         "expo-image-picker",
         {
+          "cameraPermission": "Camera access is required to capture attendance verification photos.",
           "photosPermission": "The app accesses your photos to let you share them with your friends."
         }
       ],

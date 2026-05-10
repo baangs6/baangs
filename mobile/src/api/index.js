@@ -1,29 +1,11 @@
 import axios from 'axios';
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import storage from '../utils/storage';
 
-const API_PORT = '8000';
+const DEFAULT_API_BASE = 'https://baangs-backend-docker.onrender.com';
 
 function trimTrailingSlash(url) {
   return url.replace(/\/+$/, '');
-}
-
-function getExpoHost() {
-  const hostCandidates = [
-    Constants.expoConfig?.hostUri,
-    Constants.expoGoConfig?.debuggerHost,
-    Constants.manifest2?.extra?.expoClient?.hostUri,
-    Constants.manifest?.debuggerHost,
-  ];
-
-  for (const host of hostCandidates) {
-    if (typeof host === 'string' && host.length > 0) {
-      return host.split(':')[0];
-    }
-  }
-
-  return null;
 }
 
 function resolveApiBase() {
@@ -31,25 +13,7 @@ function resolveApiBase() {
   if (envUrl) {
     return trimTrailingSlash(envUrl);
   }
-
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:${API_PORT}`;
-  }
-
-  const expoHost = getExpoHost();
-  if (expoHost) {
-    return `http://${expoHost}:${API_PORT}`;
-  }
-
-  if (Platform.OS === 'android') {
-    return `http://10.0.2.2:${API_PORT}`;
-  }
-
-  if (Platform.OS === 'ios') {
-    return `http://127.0.0.1:${API_PORT}`;
-  }
-
-  return `http://localhost:${API_PORT}`;
+  return DEFAULT_API_BASE;
 }
 
 const API_BASE = resolveApiBase();
@@ -58,6 +22,36 @@ const api = axios.create({
   baseURL: API_BASE,
   timeout: 30000,
 });
+
+async function uploadAttendancePhoto(path, attendanceId, uri, fileName) {
+  const formData = new FormData();
+
+  if (Platform.OS === 'web') {
+    const resp = await fetch(uri);
+    const blob = await resp.blob();
+    const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+    formData.append('file', file);
+  } else {
+    formData.append('file', {
+      uri,
+      type: 'image/jpeg',
+      name: fileName,
+    });
+  }
+
+  const token = await storage.getItem('token');
+  const response = await fetch(`${API_BASE}${path}?attendance_id=${encodeURIComponent(attendanceId)}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData,
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw { response: { status: response.status, data: payload }, message: payload.detail || 'Photo upload failed' };
+  }
+  return { data: payload, status: response.status };
+}
 
 api.interceptors.request.use(async (config) => {
   const token = await storage.getItem('token');
@@ -100,38 +94,10 @@ export const attendanceApi = {
   checkIn: (data) => api.post('/attendance/checkin', data),
   checkOut: (data) => api.post('/attendance/checkout', data),
   list: (params) => api.get('/attendance/', { params }),
-  uploadCheckinPhoto: async (attendanceId, uri) => {
-    const formData = new FormData();
-    if (Platform.OS === 'web') {
-      const resp = await fetch(uri);
-      const blob = await resp.blob();
-      const file = new File([blob], `checkin_${attendanceId}.jpg`, { type: blob.type || 'image/jpeg' });
-      formData.append('file', file);
-    } else {
-      formData.append('file', {
-        uri,
-        type: 'image/jpeg',
-        name: `checkin_${attendanceId}.jpg`,
-      });
-    }
-    return api.post(`/attendance/checkin/photo?attendance_id=${attendanceId}`, formData);
-  },
-  uploadCheckoutPhoto: async (attendanceId, uri) => {
-    const formData = new FormData();
-    if (Platform.OS === 'web') {
-      const resp = await fetch(uri);
-      const blob = await resp.blob();
-      const file = new File([blob], `checkout_${attendanceId}.jpg`, { type: blob.type || 'image/jpeg' });
-      formData.append('file', file);
-    } else {
-      formData.append('file', {
-        uri,
-        type: 'image/jpeg',
-        name: `checkout_${attendanceId}.jpg`,
-      });
-    }
-    return api.post(`/attendance/checkout/photo?attendance_id=${attendanceId}`, formData);
-  },
+  uploadCheckinPhoto: (attendanceId, uri) =>
+    uploadAttendancePhoto('/attendance/checkin/photo', attendanceId, uri, `checkin_${attendanceId}.jpg`),
+  uploadCheckoutPhoto: (attendanceId, uri) =>
+    uploadAttendancePhoto('/attendance/checkout/photo', attendanceId, uri, `checkout_${attendanceId}.jpg`),
 };
 
 export const staffApi = {

@@ -39,7 +39,8 @@ async def upload_image_base64(base64_data: str, folder: str = "baangs") -> str:
 async def upload_image_bytes(image_bytes: bytes, folder: str = "baangs") -> str:
     """Upload raw image bytes to Cloudinary."""
     if not settings.CLOUDINARY_CLOUD_NAME:
-        return base64.b64encode(image_bytes).decode()
+        encoded = base64.b64encode(image_bytes).decode()
+        return f"data:image/jpeg;base64,{encoded}"
     configure_cloudinary()
     result = cloudinary.uploader.upload(
         image_bytes,
