@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { View, ActivityIndicator, StatusBar } from 'react-native';
 import Icon from '@expo/vector-icons/MaterialIcons';
@@ -95,8 +95,10 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppNavigator />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <AppNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
