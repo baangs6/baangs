@@ -103,9 +103,9 @@ export default function CustomerDetail() {
               ['Location', customer.location || '-'],
               [
                 'Map Location',
-                customer.map_location ? (
+                getMapHref(customer.map_location, customer.location) ? (
                   <a
-                    href={customer.map_location.startsWith('http') ? customer.map_location : `https://${customer.map_location}`}
+                    href={getMapHref(customer.map_location, customer.location)}
                     target="_blank"
                     rel="noreferrer"
                     style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}
@@ -177,4 +177,17 @@ export default function CustomerDetail() {
       </div>
     </div>
   );
+}
+
+function getMapHref(mapLocation, location) {
+  const value = (mapLocation || '').trim();
+  if (value) {
+    if (/^https?:\/\//i.test(value)) return value;
+    const coordinates = value.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+    if (coordinates) return `https://maps.google.com/?q=${coordinates[1]},${coordinates[2]}`;
+    return `https://maps.google.com/?q=${encodeURIComponent(value)}`;
+  }
+
+  const address = (location || '').trim();
+  return address ? `https://maps.google.com/?q=${encodeURIComponent(address)}` : '';
 }

@@ -18,6 +18,7 @@ def _format_job(j: dict, staff_name: str = None) -> dict:
         "customer_name": j["customer_name"],
         "phone_number": j["phone_number"],
         "location": j.get("location"),
+        "map_location": j.get("map_location"),
         "site_type": j.get("site_type"),
         "work_type": j["work_type"],
         "complaint": j.get("complaint"),
@@ -130,19 +131,33 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
 
     if customer:
         customer_id = customer["customer_id"]
+        location = data.location or customer.get("location")
+        map_location = data.map_location or customer.get("map_location")
+        site_type = data.site_type or customer.get("site_type")
+        customer_updates = {"latest_request_date": today_ist_str()}
+        if data.location is not None:
+            customer_updates["location"] = data.location
+        if data.map_location is not None:
+            customer_updates["map_location"] = data.map_location
+        if data.site_type is not None:
+            customer_updates["site_type"] = data.site_type
         # Update customer stats
         await db.customers.update_one(
             {"customer_key": customer_key},
-            {"$set": {"latest_request_date": today_ist_str()}, "$inc": {"total_jobs": 1}}
+            {"$set": customer_updates, "$inc": {"total_jobs": 1}}
         )
     else:
         customer_id = generate_customer_id()
+        location = data.location
+        map_location = data.map_location
+        site_type = data.site_type
         customer_doc = {
             "customer_id": customer_id,
             "customer_name": data.customer_name,
             "phone_number": data.phone_number,
-            "location": data.location,
-            "site_type": data.site_type,
+            "location": location,
+            "map_location": map_location,
+            "site_type": site_type,
             "first_request_date": today_ist_str(),
             "latest_request_date": today_ist_str(),
             "total_jobs": 1,
@@ -166,8 +181,9 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
         "customer_id": customer_id,
         "customer_name": data.customer_name,
         "phone_number": data.phone_number,
-        "location": data.location,
-        "site_type": data.site_type,
+        "location": location,
+        "map_location": map_location,
+        "site_type": site_type,
         "work_type": data.work_type,
         "complaint": data.complaint,
         "priority": data.priority,

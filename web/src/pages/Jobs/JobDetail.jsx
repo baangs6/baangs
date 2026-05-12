@@ -154,6 +154,9 @@ export default function JobDetail() {
 
   const openEditModal = () => {
     setEditForm({
+      location: job.location || '',
+      map_location: job.map_location || '',
+      site_type: job.site_type || '',
       work_type: job.work_type,
       priority: job.priority,
       assigned_staff_id: job.assigned_staff_id || '',
@@ -224,7 +227,7 @@ export default function JobDetail() {
             <div className="detail-item"><span className="detail-label">Name</span><span className="detail-value">{job.customer_name}</span></div>
             <div className="detail-item"><span className="detail-label">Phone</span><span className="detail-value">{job.phone_number}</span></div>
             <div className="detail-item"><span className="detail-label">Location</span><span className="detail-value">{job.location || '-'}</span></div>
-            <div className="detail-item"><span className="detail-label">Map Location</span><span className="detail-value">{job.map_location ? <a href={job.map_location.startsWith('http') ? job.map_location : `https://${job.map_location}`} target="_blank" rel="noreferrer" style={{color: 'var(--color-primary)', textDecoration: 'underline'}}>View Map</a> : '-'}</span></div>
+            <div className="detail-item"><span className="detail-label">Map Location</span><span className="detail-value">{getMapHref(job.map_location, job.location) ? <a href={getMapHref(job.map_location, job.location)} target="_blank" rel="noreferrer" style={{color: 'var(--color-primary)', textDecoration: 'underline'}}>View Map</a> : '-'}</span></div>
             <div className="detail-item"><span className="detail-label">Site Type</span><span className="detail-value">{job.site_type || '-'}</span></div>
           </div>
         </div>
@@ -501,6 +504,24 @@ export default function JobDetail() {
                     </select>
                   </div>
                   <div className="form-group">
+                    <label className="form-label">Location / Address</label>
+                    <input className="form-input" value={editForm.location || ''} onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Map Location</label>
+                    <input className="form-input" value={editForm.map_location || ''} onChange={e => setEditForm(f => ({ ...f, map_location: e.target.value }))} placeholder="Google Maps URL or coordinates" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Site Type</label>
+                    <select className="form-select" value={editForm.site_type || ''} onChange={e => setEditForm(f => ({ ...f, site_type: e.target.value }))}>
+                      <option value="">Select site type</option>
+                      <option value="Home">Home</option>
+                      <option value="Office">Office</option>
+                      <option value="Shop">Shop</option>
+                      <option value="Land">Land</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
                     <label className="form-label">Priority</label>
                     <select className="form-select" value={editForm.priority} onChange={e => setEditForm(f => ({ ...f, priority: e.target.value }))}>
                       {(lookups.priority_levels || []).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -547,6 +568,19 @@ function formatLocation(location) {
   const lon = Number(location.longitude).toFixed(5);
   const acc = location.accuracy ? ` (+-${Math.round(location.accuracy)}m)` : '';
   return `${lat}, ${lon}${acc}`;
+}
+
+function getMapHref(mapLocation, location) {
+  const value = (mapLocation || '').trim();
+  if (value) {
+    if (/^https?:\/\//i.test(value)) return value;
+    const coordinates = value.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+    if (coordinates) return `https://maps.google.com/?q=${coordinates[1]},${coordinates[2]}`;
+    return `https://maps.google.com/?q=${encodeURIComponent(value)}`;
+  }
+
+  const address = (location || '').trim();
+  return address ? `https://maps.google.com/?q=${encodeURIComponent(address)}` : '';
 }
 
 function formatDuration(startStr, endStr) {

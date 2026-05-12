@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
-    "version": "1.0.0",
+    "name": "Baangs",
+    "slug": "baangs",
+    "version": "1.0.2",
     "platforms": [
       "ios",
       "android",
@@ -26,7 +26,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.mobile"
+      "package": "com.anonymous.mobile",
+      "versionCode": 3
     },
     "web": {
       "favicon": "./assets/favicon.png"

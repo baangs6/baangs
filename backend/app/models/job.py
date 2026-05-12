@@ -37,6 +37,9 @@ class JobCreate(BaseModel):
 
 
 class JobUpdate(BaseModel):
+    location: Optional[str] = None
+    map_location: Optional[str] = None
+    site_type: Optional[str] = None
     work_type: Optional[str] = None
     complaint: Optional[str] = None
     priority: Optional[JobPriority] = None

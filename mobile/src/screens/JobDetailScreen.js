@@ -9,6 +9,8 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
@@ -534,8 +536,16 @@ export default function JobDetailScreen({ route }) {
       </View>
 
       <Modal visible={showUpdateModal} animationType="slide" transparent onRequestClose={() => setShowUpdateModal(false)}>
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modal}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalSheet}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+            >
             <Text style={styles.modalTitle}>Update Job Status</Text>
 
             <Text style={styles.label}>Status</Text>
@@ -737,20 +747,29 @@ export default function JobDetailScreen({ route }) {
             </View>
 
             <View style={styles.modalBtns}>
+              <TouchableOpacity style={[styles.saveBtn, styles.saveBtnStacked]} onPress={submitUpdate} disabled={saving}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save</Text>}
+              </TouchableOpacity>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowUpdateModal(false)}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={submitUpdate} disabled={saving}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save</Text>}
-              </TouchableOpacity>
             </View>
-          </ScrollView>
-        </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={showBillingModal} animationType="slide" transparent onRequestClose={() => setShowBillingModal(false)}>
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modal}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalSheet}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+            >
             <Text style={styles.modalTitle}>Create Billing</Text>
             {[
               ['Invoice Amount (Rs)', 'invoice_amount'],
@@ -804,15 +823,16 @@ export default function JobDetailScreen({ route }) {
             />
 
             <View style={styles.modalBtns}>
+              <TouchableOpacity style={[styles.saveBtn, styles.saveBtnStacked, { backgroundColor: colors.success }]} onPress={submitBilling} disabled={saving}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Complete</Text>}
+              </TouchableOpacity>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowBillingModal(false)}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.success }]} onPress={submitBilling} disabled={saving}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Complete</Text>}
-              </TouchableOpacity>
             </View>
-          </ScrollView>
-        </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={showScannerModal} animationType="slide" onRequestClose={() => setShowScannerModal(false)}>
@@ -924,15 +944,17 @@ const styles = StyleSheet.create({
   inventoryTitle: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, marginBottom: 4 },
   inventoryLine: { fontSize: 12, color: colors.text },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
-  modal: {
+  modalSheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    padding: spacing.xl,
     borderWidth: 1,
     borderColor: colors.border,
     maxHeight: '90%',
+    overflow: 'hidden',
   },
+  modalScroll: { flexShrink: 1 },
+  modalContent: { padding: spacing.xl, paddingBottom: spacing.lg },
   modalTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: spacing.lg, textAlign: 'center' },
   label: {
     fontSize: 11,
@@ -995,18 +1017,32 @@ const styles = StyleSheet.create({
   },
   selectedText: { color: colors.text, fontSize: 12, flex: 1, marginRight: 12 },
   removeText: { color: colors.danger, fontWeight: '700', fontSize: 12 },
-  modalBtns: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.lg },
+  modalBtns: {
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
   cancelBtn: {
-    flex: 1,
+    width: '100%',
     backgroundColor: colors.surface2,
     borderRadius: radius.md,
-    padding: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
+    minHeight: 38,
     borderWidth: 1,
     borderColor: colors.border,
   },
   cancelBtnText: { color: colors.textSecondary, fontWeight: '600' },
-  saveBtn: { flex: 1, backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: 'center' },
+  saveBtn: {
+    width: '100%',
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    minHeight: 38,
+  },
+  saveBtnStacked: { marginBottom: spacing.sm },
   saveBtnText: { color: '#fff', fontWeight: '700' },
   scannerWrap: { flex: 1, backgroundColor: '#000' },
   scannerOverlay: {
