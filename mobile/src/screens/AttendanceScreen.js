@@ -129,6 +129,10 @@ export default function AttendanceScreen() {
       Alert.alert('Invalid Amount', 'Enter a valid expense amount.');
       return;
     }
+    if (allowanceForm.expense_type === 'other' && !allowanceForm.remark.trim()) {
+      Alert.alert('Remark Required', 'Remark is mandatory for Other Expense.');
+      return;
+    }
     setAllowanceSaving(true);
     try {
       const res = await attendanceApi.createAllowance({
@@ -138,7 +142,13 @@ export default function AttendanceScreen() {
         remark: allowanceForm.remark,
       });
       if (allowanceForm.bill_uri) {
-        await attendanceApi.uploadAllowanceBill(res.data.allowance_id, allowanceForm.bill_uri);
+        try {
+          await attendanceApi.uploadAllowanceBill(res.data.allowance_id, allowanceForm.bill_uri);
+        } catch (uploadError) {
+          await loadAllowances();
+          Alert.alert('Bill Upload Failed', uploadError.response?.data?.detail || 'Expense saved, but bill image upload failed.');
+          return;
+        }
       }
       setAllowanceForm({ expense_type: 'food', amount: '', remark: '', bill_uri: null });
       await loadAllowances();
@@ -432,6 +442,9 @@ export default function AttendanceScreen() {
         <TouchableOpacity style={styles.billBtn} onPress={pickBillPhoto}>
           <Text style={styles.billBtnText}>{allowanceForm.bill_uri ? 'Bill Photo Added' : 'Add Bill Photo'}</Text>
         </TouchableOpacity>
+        {allowanceForm.bill_uri ? (
+          <Image source={{ uri: allowanceForm.bill_uri }} style={styles.billPreview} resizeMode="cover" />
+        ) : null}
 
         <TouchableOpacity style={styles.checkInBtn} onPress={submitAllowance} disabled={allowanceSaving}>
           <Text style={styles.checkInBtnText}>{allowanceSaving ? 'Saving...' : 'Save Expense'}</Text>
@@ -522,6 +535,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   billBtnText: { color: colors.textSecondary, fontWeight: '700', fontSize: 13 },
+  billPreview: { width: '100%', height: 140, borderRadius: radius.md, marginBottom: spacing.sm },
   emptyText: { color: colors.textMuted, fontSize: 13, textAlign: 'center', paddingVertical: spacing.md },
   expenseRow: {
     flexDirection: 'row',

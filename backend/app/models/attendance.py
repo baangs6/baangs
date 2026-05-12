@@ -72,6 +72,7 @@ class DailyAllowanceResponse(BaseModel):
     extra_paid_amount: float = 0.0
     payment_status: str = "unpaid"
     payment_remark: Optional[str] = None
+    payment_made_date: Optional[str] = None
     paid_at: Optional[str] = None
     paid_by: Optional[str] = None
     created_at: Optional[str] = None

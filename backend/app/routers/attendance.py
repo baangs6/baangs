@@ -45,8 +45,9 @@ def _fmt_allowance(a: dict) -> dict:
         "paid_amount": float(a.get("paid_amount", 0)),
         "balance_amount": balance,
         "extra_paid_amount": extra,
-        "payment_status": a.get("payment_status") or status,
+        "payment_status": status,
         "payment_remark": a.get("payment_remark"),
+        "payment_made_date": a.get("payment_made_date"),
         "paid_at": a.get("paid_at"),
         "paid_by": a.get("paid_by"),
         "created_at": a.get("created_at"),
@@ -178,6 +179,8 @@ async def create_allowance(data: DailyAllowanceCreate, current_user: dict = Depe
 
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    if data.expense_type.value == "other" and not (data.remark or "").strip():
+        raise HTTPException(status_code=400, detail="Remark is required for Other Expense")
 
     staff = await db.staff.find_one({"staff_id": data.staff_id})
     staff_name = staff["name"] if staff else current_user.get("full_name") or current_user.get("username") or "Unknown"
@@ -196,6 +199,7 @@ async def create_allowance(data: DailyAllowanceCreate, current_user: dict = Depe
         "extra_paid_amount": extra,
         "payment_status": status,
         "payment_remark": None,
+        "payment_made_date": None,
         "paid_at": None,
         "paid_by": None,
         "created_at": now_ist_str(),
@@ -250,8 +254,15 @@ async def pay_allowances(data: DailyAllowancePayment, current_user: dict = Depen
         raise HTTPException(status_code=404, detail="One or more expenses were not found")
 
     remaining = round(float(data.paid_amount), 2)
+    payable_rows = [
+        row for row in rows
+        if round(max(float(row.get("amount", 0)) - float(row.get("paid_amount", 0)), 0), 2) > 0
+    ]
+    if not payable_rows:
+        raise HTTPException(status_code=400, detail="Selected expenses are already fully paid")
+
     updated = []
-    for index, row in enumerate(rows):
+    for index, row in enumerate(payable_rows):
         current_paid = round(float(row.get("paid_amount", 0)), 2)
         balance = round(max(float(row.get("amount", 0)) - current_paid, 0), 2)
         add_amount = 0.0
@@ -272,6 +283,7 @@ async def pay_allowances(data: DailyAllowancePayment, current_user: dict = Depen
                 "extra_paid_amount": extra,
                 "payment_status": status,
                 "payment_remark": data.payment_remark,
+                "payment_made_date": today_ist_str(),
                 "paid_at": now_ist_str(),
                 "paid_by": current_user.get("full_name") or current_user.get("username"),
             }},

@@ -110,7 +110,11 @@ export default function AttendanceReport() {
     }
   };
 
+  const payableAllowanceRows = allowanceRows.filter((row) => Number(row.balance_amount || 0) > 0);
+
   const toggleAllowance = (allowanceId) => {
+    const row = allowanceRows.find((item) => item.allowance_id === allowanceId);
+    if (!row || Number(row.balance_amount || 0) <= 0) return;
     setSelectedAllowances((prev) =>
       prev.includes(allowanceId)
         ? prev.filter((id) => id !== allowanceId)
@@ -118,7 +122,7 @@ export default function AttendanceReport() {
     );
   };
 
-  const selectedAllowanceRows = allowanceRows.filter((row) => selectedAllowances.includes(row.allowance_id));
+  const selectedAllowanceRows = payableAllowanceRows.filter((row) => selectedAllowances.includes(row.allowance_id));
   const selectedBalance = selectedAllowanceRows.reduce((sum, row) => sum + Number(row.balance_amount || 0), 0);
   const enteredPayment = Number(payForm.paid_amount || 0);
   const paymentDifference = enteredPayment - selectedBalance;
@@ -350,8 +354,8 @@ export default function AttendanceReport() {
                       <th>
                         <input
                           type="checkbox"
-                          checked={allowanceRows.length > 0 && selectedAllowances.length === allowanceRows.length}
-                          onChange={(e) => setSelectedAllowances(e.target.checked ? allowanceRows.map((row) => row.allowance_id) : [])}
+                          checked={payableAllowanceRows.length > 0 && selectedAllowances.length === payableAllowanceRows.length}
+                          onChange={(e) => setSelectedAllowances(e.target.checked ? payableAllowanceRows.map((row) => row.allowance_id) : [])}
                         />
                       </th>
                       <th>Date</th>
@@ -361,6 +365,7 @@ export default function AttendanceReport() {
                       <th>Bill</th>
                       <th>Remark</th>
                       <th>Payment Status</th>
+                      <th>Payment Date</th>
                       <th>Paid</th>
                       <th>Balance</th>
                       <th>Extra</th>
@@ -373,6 +378,7 @@ export default function AttendanceReport() {
                           <input
                             type="checkbox"
                             checked={selectedAllowances.includes(row.allowance_id)}
+                            disabled={Number(row.balance_amount || 0) <= 0}
                             onChange={() => toggleAllowance(row.allowance_id)}
                           />
                         </td>
@@ -382,13 +388,14 @@ export default function AttendanceReport() {
                         <td>₹{Number(row.amount || 0).toFixed(2)}</td>
                         <td>
                           {row.bill_url ? (
-                            <button className="btn btn-secondary btn-sm" onClick={() => setViewPhoto(row.bill_url)}>
-                              <MdPhoto /> Bill
+                            <button className="btn btn-secondary btn-sm" onClick={() => setViewPhoto(row.bill_url)} style={{ padding: 4 }}>
+                              <img src={row.bill_url} alt="Bill" style={{ width: 42, height: 32, objectFit: 'cover', borderRadius: 4 }} />
                             </button>
                           ) : '—'}
                         </td>
                         <td style={{ maxWidth: 220, fontSize: '0.82rem' }}>{row.remark || '—'}</td>
                         <td><span className={`badge ${statusBadgeClass(row.payment_status)}`}>{row.payment_status}</span></td>
+                        <td>{row.payment_made_date || '—'}</td>
                         <td>₹{Number(row.paid_amount || 0).toFixed(2)}</td>
                         <td>₹{Number(row.balance_amount || 0).toFixed(2)}</td>
                         <td>₹{Number(row.extra_paid_amount || 0).toFixed(2)}</td>
