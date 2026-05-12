@@ -1,13 +1,56 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
 from typing import List, Optional
-from ..models.attendance import CheckInCreate, CheckOutCreate, AttendanceResponse
+from ..models.attendance import (
+    CheckInCreate,
+    CheckOutCreate,
+    AttendanceResponse,
+    DailyAllowanceCreate,
+    DailyAllowancePayment,
+    DailyAllowanceResponse,
+)
 from ..auth.utils import require_admin, require_admin_or_manager, require_any, get_current_user
 from ..database import get_db
-from ..utils.id_generator import generate_attendance_id
+from ..utils.id_generator import generate_attendance_id, generate_allowance_id
 from ..utils.timezone import now_ist_str, today_ist_str
 from ..utils.cloudinary_helper import upload_image_bytes
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
+
+
+def _calc_payment_status(amount: float, paid_amount: float) -> tuple[str, float, float]:
+    amount = round(float(amount or 0), 2)
+    paid_amount = round(float(paid_amount or 0), 2)
+    balance = round(max(amount - paid_amount, 0), 2)
+    extra = round(max(paid_amount - amount, 0), 2)
+    if paid_amount <= 0:
+        return "unpaid", balance, extra
+    if paid_amount < amount:
+        return "partial", balance, extra
+    if paid_amount == amount:
+        return "paid", balance, extra
+    return "overpaid", balance, extra
+
+
+def _fmt_allowance(a: dict) -> dict:
+    status, balance, extra = _calc_payment_status(a.get("amount", 0), a.get("paid_amount", 0))
+    return {
+        "allowance_id": a["allowance_id"],
+        "staff_id": a["staff_id"],
+        "staff_name": a.get("staff_name"),
+        "date": a["date"],
+        "expense_type": a["expense_type"],
+        "amount": float(a.get("amount", 0)),
+        "bill_url": a.get("bill_url"),
+        "remark": a.get("remark"),
+        "paid_amount": float(a.get("paid_amount", 0)),
+        "balance_amount": balance,
+        "extra_paid_amount": extra,
+        "payment_status": a.get("payment_status") or status,
+        "payment_remark": a.get("payment_remark"),
+        "paid_at": a.get("paid_at"),
+        "paid_by": a.get("paid_by"),
+        "created_at": a.get("created_at"),
+    }
 
 
 def _fmt(a: dict, staff_name: str = None) -> dict:
@@ -125,6 +168,140 @@ async def list_attendance(
 
     records = await db.attendance.find(query).sort("date", -1).skip(skip).limit(limit).to_list(limit)
     return [_fmt(r) for r in records]
+
+
+@router.post("/allowances", response_model=DailyAllowanceResponse)
+async def create_allowance(data: DailyAllowanceCreate, current_user: dict = Depends(get_current_user)):
+    db = get_db()
+    if current_user["role"] == "technician" and data.staff_id != current_user.get("staff_id"):
+        raise HTTPException(status_code=403, detail="Technicians can only add their own expenses")
+
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+
+    staff = await db.staff.find_one({"staff_id": data.staff_id})
+    staff_name = staff["name"] if staff else current_user.get("full_name") or current_user.get("username") or "Unknown"
+    status, balance, extra = _calc_payment_status(data.amount, 0)
+    doc = {
+        "allowance_id": generate_allowance_id(),
+        "staff_id": data.staff_id,
+        "staff_name": staff_name,
+        "date": data.date or today_ist_str(),
+        "expense_type": data.expense_type.value,
+        "amount": round(float(data.amount), 2),
+        "bill_url": data.bill_url,
+        "remark": data.remark,
+        "paid_amount": 0.0,
+        "balance_amount": balance,
+        "extra_paid_amount": extra,
+        "payment_status": status,
+        "payment_remark": None,
+        "paid_at": None,
+        "paid_by": None,
+        "created_at": now_ist_str(),
+    }
+    await db.attendance_allowances.insert_one(doc)
+    return _fmt_allowance(doc)
+
+
+@router.get("/allowances", response_model=List[DailyAllowanceResponse])
+async def list_allowances(
+    staff_id: Optional[str] = Query(None),
+    date: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    payment_status: Optional[str] = Query(None),
+    skip: int = 0,
+    limit: int = 200,
+    current_user: dict = Depends(get_current_user),
+):
+    db = get_db()
+    query = {}
+    if current_user["role"] == "technician":
+        query["staff_id"] = current_user.get("staff_id")
+    elif staff_id:
+        query["staff_id"] = staff_id
+    if date:
+        query["date"] = date
+    elif date_from or date_to:
+        date_filter = {}
+        if date_from:
+            date_filter["$gte"] = date_from
+        if date_to:
+            date_filter["$lte"] = date_to
+        query["date"] = date_filter
+    if payment_status:
+        query["payment_status"] = payment_status
+
+    rows = await db.attendance_allowances.find(query).sort("date", -1).skip(skip).limit(limit).to_list(limit)
+    return [_fmt_allowance(row) for row in rows]
+
+
+@router.patch("/allowances/pay", response_model=List[DailyAllowanceResponse])
+async def pay_allowances(data: DailyAllowancePayment, current_user: dict = Depends(require_admin_or_manager)):
+    if not data.allowance_ids:
+        raise HTTPException(status_code=400, detail="Select at least one expense")
+    if data.paid_amount <= 0:
+        raise HTTPException(status_code=400, detail="Paid amount must be greater than zero")
+
+    db = get_db()
+    rows = await db.attendance_allowances.find({"allowance_id": {"$in": data.allowance_ids}}).sort("date", 1).to_list(len(data.allowance_ids))
+    if len(rows) != len(set(data.allowance_ids)):
+        raise HTTPException(status_code=404, detail="One or more expenses were not found")
+
+    remaining = round(float(data.paid_amount), 2)
+    updated = []
+    for index, row in enumerate(rows):
+        current_paid = round(float(row.get("paid_amount", 0)), 2)
+        balance = round(max(float(row.get("amount", 0)) - current_paid, 0), 2)
+        add_amount = 0.0
+        if balance > 0:
+            add_amount = min(remaining, balance)
+            remaining = round(remaining - add_amount, 2)
+        if index == len(rows) - 1 and remaining > 0:
+            add_amount = round(add_amount + remaining, 2)
+            remaining = 0.0
+
+        new_paid = round(current_paid + add_amount, 2)
+        status, new_balance, extra = _calc_payment_status(row.get("amount", 0), new_paid)
+        result = await db.attendance_allowances.find_one_and_update(
+            {"allowance_id": row["allowance_id"]},
+            {"$set": {
+                "paid_amount": new_paid,
+                "balance_amount": new_balance,
+                "extra_paid_amount": extra,
+                "payment_status": status,
+                "payment_remark": data.payment_remark,
+                "paid_at": now_ist_str(),
+                "paid_by": current_user.get("full_name") or current_user.get("username"),
+            }},
+            return_document=True,
+        )
+        updated.append(_fmt_allowance(result))
+
+    return updated
+
+
+@router.post("/allowances/{allowance_id}/bill")
+async def upload_allowance_bill(
+    allowance_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    db = get_db()
+    row = await db.attendance_allowances.find_one({"allowance_id": allowance_id})
+    if not row:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    if current_user["role"] == "technician" and row.get("staff_id") != current_user.get("staff_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    image_bytes = await file.read()
+    url = await upload_image_bytes(image_bytes, folder="baangs/allowances")
+    await db.attendance_allowances.update_one(
+        {"allowance_id": allowance_id},
+        {"$set": {"bill_url": url}}
+    )
+    return {"bill_url": url}
 
 
 @router.post("/checkin/photo")

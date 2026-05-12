@@ -2,7 +2,7 @@
   "expo": {
     "name": "Baangs",
     "slug": "baangs",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "platforms": [
       "ios",
       "android",
@@ -27,7 +27,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.mobile",
-      "versionCode": 3
+      "versionCode": 4
     },
     "web": {
       "favicon": "./assets/favicon.png"

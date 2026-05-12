@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { attendanceApi, staffApi, exportApi, leavesApi } from '../../api';
-import { MdDownload, MdSearch, MdLocationOn, MdPhoto } from 'react-icons/md';
+import { MdDownload, MdLocationOn, MdPhoto } from 'react-icons/md';
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -21,6 +21,10 @@ export default function AttendanceReport() {
   const [payrollMonth, setPayrollMonth] = useState(new Date().toISOString().slice(0, 7));
   const [payrollData, setPayrollData] = useState({ totals: null, items: [] });
   const [payrollLoading, setPayrollLoading] = useState(false);
+  const [allowanceRows, setAllowanceRows] = useState([]);
+  const [allowanceLoading, setAllowanceLoading] = useState(false);
+  const [selectedAllowances, setSelectedAllowances] = useState([]);
+  const [payForm, setPayForm] = useState({ paid_amount: '', payment_remark: '' });
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -63,6 +67,29 @@ export default function AttendanceReport() {
     if (activeTab === 'payroll') loadPayroll();
   }, [activeTab, loadPayroll]);
 
+  const loadAllowances = useCallback(async () => {
+    setAllowanceLoading(true);
+    try {
+      const params = {};
+      if (filters.staff_id) params.staff_id = filters.staff_id;
+      if (filters.date_from) params.date_from = filters.date_from;
+      if (filters.date_to) params.date_to = filters.date_to;
+      const res = await attendanceApi.allowances(params);
+      setAllowanceRows(res.data || []);
+      setSelectedAllowances([]);
+      setPayForm({ paid_amount: '', payment_remark: '' });
+    } catch (e) {
+      console.error(e);
+      setAllowanceRows([]);
+    } finally {
+      setAllowanceLoading(false);
+    }
+  }, [filters]);
+
+  useEffect(() => {
+    if (activeTab === 'allowance') loadAllowances();
+  }, [activeTab, loadAllowances]);
+
   const handleExport = async () => {
     try {
       const res = await exportApi.attendanceCsv();
@@ -80,6 +107,40 @@ export default function AttendanceReport() {
     } catch (e) {
       console.error(e);
       alert(e.response?.data?.detail || 'Failed to update leave');
+    }
+  };
+
+  const toggleAllowance = (allowanceId) => {
+    setSelectedAllowances((prev) =>
+      prev.includes(allowanceId)
+        ? prev.filter((id) => id !== allowanceId)
+        : [...prev, allowanceId]
+    );
+  };
+
+  const selectedAllowanceRows = allowanceRows.filter((row) => selectedAllowances.includes(row.allowance_id));
+  const selectedBalance = selectedAllowanceRows.reduce((sum, row) => sum + Number(row.balance_amount || 0), 0);
+  const enteredPayment = Number(payForm.paid_amount || 0);
+  const paymentDifference = enteredPayment - selectedBalance;
+
+  const paySelectedAllowances = async () => {
+    if (selectedAllowances.length === 0) {
+      alert('Select at least one expense');
+      return;
+    }
+    if (!enteredPayment || enteredPayment <= 0) {
+      alert('Enter a valid paid amount');
+      return;
+    }
+    try {
+      await attendanceApi.payAllowances({
+        allowance_ids: selectedAllowances,
+        paid_amount: enteredPayment,
+        payment_remark: payForm.payment_remark,
+      });
+      await loadAllowances();
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Failed to update payment');
     }
   };
 
@@ -113,10 +174,16 @@ export default function AttendanceReport() {
           >
             Payroll
           </button>
+          <button
+            className={activeTab === 'allowance' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+            onClick={() => setActiveTab('allowance')}
+          >
+            Daily Allowance
+          </button>
         </div>
       </div>
 
-      {activeTab === 'attendance' && (
+      {(activeTab === 'attendance' || activeTab === 'allowance') && (
         <div className="filter-bar">
           <select className="form-select" style={{ width: 200 }} value={filters.staff_id}
             onChange={e => setFilters({ ...filters, staff_id: e.target.value })}>
@@ -210,6 +277,128 @@ export default function AttendanceReport() {
               </div>
             </>
           )}
+        </>
+      ) : activeTab === 'allowance' ? (
+        <>
+          <div className="stats-grid" style={{ marginBottom: 12 }}>
+            <div className="stat-card">
+              <div className="stat-value">₹{allowanceRows.reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2)}</div>
+              <div className="stat-label">Total Expenses</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">₹{allowanceRows.reduce((sum, row) => sum + Number(row.paid_amount || 0), 0).toFixed(2)}</div>
+              <div className="stat-label">Paid</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">₹{allowanceRows.reduce((sum, row) => sum + Number(row.balance_amount || 0), 0).toFixed(2)}</div>
+              <div className="stat-label">Balance</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">₹{allowanceRows.reduce((sum, row) => sum + Number(row.extra_paid_amount || 0), 0).toFixed(2)}</div>
+              <div className="stat-label">Extra Paid</div>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h3 className="card-title" style={{ marginBottom: 12 }}>Pay Selected Expenses</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
+              <div>
+                <div className="detail-label">Selected</div>
+                <div style={{ fontWeight: 700 }}>{selectedAllowances.length} rows · ₹{selectedBalance.toFixed(2)} balance</div>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Paid Amount</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  value={payForm.paid_amount}
+                  onChange={(e) => setPayForm((prev) => ({ ...prev, paid_amount: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Payment Remark</label>
+                <input
+                  className="form-input"
+                  value={payForm.payment_remark}
+                  onChange={(e) => setPayForm((prev) => ({ ...prev, payment_remark: e.target.value }))}
+                  placeholder="Cash / UPI ref"
+                />
+              </div>
+              <button className="btn btn-success" onClick={paySelectedAllowances}>Paid</button>
+            </div>
+            {selectedAllowances.length > 0 && enteredPayment > 0 ? (
+              <div style={{ marginTop: 10, fontSize: '0.85rem', color: paymentDifference >= 0 ? 'var(--color-success)' : 'var(--color-amber)' }}>
+                {paymentDifference >= 0
+                  ? `Extra paid after clearing balance: ₹${paymentDifference.toFixed(2)}`
+                  : `Balance remaining after payment: ₹${Math.abs(paymentDifference).toFixed(2)}`}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="card">
+            <h3 className="card-title" style={{ marginBottom: 12 }}>Daily Allowance Expenses</h3>
+            {allowanceLoading ? (
+              <div className="loading-center"><div className="spinner" /></div>
+            ) : allowanceRows.length === 0 ? (
+              <div className="empty-state"><p>No expense rows found</p></div>
+            ) : (
+              <div className="table-wrapper" style={{ border: 'none' }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={allowanceRows.length > 0 && selectedAllowances.length === allowanceRows.length}
+                          onChange={(e) => setSelectedAllowances(e.target.checked ? allowanceRows.map((row) => row.allowance_id) : [])}
+                        />
+                      </th>
+                      <th>Date</th>
+                      <th>Staff</th>
+                      <th>Expense Type</th>
+                      <th>Amount</th>
+                      <th>Bill</th>
+                      <th>Remark</th>
+                      <th>Payment Status</th>
+                      <th>Paid</th>
+                      <th>Balance</th>
+                      <th>Extra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allowanceRows.map((row) => (
+                      <tr key={row.allowance_id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedAllowances.includes(row.allowance_id)}
+                            onChange={() => toggleAllowance(row.allowance_id)}
+                          />
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{row.date}</td>
+                        <td>{row.staff_name || row.staff_id}</td>
+                        <td>{formatExpenseType(row.expense_type)}</td>
+                        <td>₹{Number(row.amount || 0).toFixed(2)}</td>
+                        <td>
+                          {row.bill_url ? (
+                            <button className="btn btn-secondary btn-sm" onClick={() => setViewPhoto(row.bill_url)}>
+                              <MdPhoto /> Bill
+                            </button>
+                          ) : '—'}
+                        </td>
+                        <td style={{ maxWidth: 220, fontSize: '0.82rem' }}>{row.remark || '—'}</td>
+                        <td><span className={`badge ${statusBadgeClass(row.payment_status)}`}>{row.payment_status}</span></td>
+                        <td>₹{Number(row.paid_amount || 0).toFixed(2)}</td>
+                        <td>₹{Number(row.balance_amount || 0).toFixed(2)}</td>
+                        <td>₹{Number(row.extra_paid_amount || 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </>
       ) : activeTab === 'leave' ? (
         <>
@@ -376,4 +565,16 @@ export default function AttendanceReport() {
       )}
     </div>
   );
+}
+
+function formatExpenseType(value) {
+  if (value === 'food') return 'Food Expense';
+  if (value === 'petrol') return 'Petrol Expense';
+  return 'Other Expense';
+}
+
+function statusBadgeClass(status) {
+  if (status === 'paid' || status === 'overpaid') return 'badge-complete';
+  if (status === 'partial') return 'badge-in_progress';
+  return 'badge-pending';
 }

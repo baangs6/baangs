@@ -19,12 +19,21 @@ export default function AttendanceScreen() {
   const [remarks, setRemarks] = useState('');
   const [checkoutRemarks, setCheckoutRemarks] = useState('');
   const [locationError, setLocationError] = useState('');
+  const [allowances, setAllowances] = useState([]);
+  const [allowanceForm, setAllowanceForm] = useState({
+    expense_type: 'food',
+    amount: '',
+    remark: '',
+    bill_uri: null,
+  });
+  const [allowanceSaving, setAllowanceSaving] = useState(false);
 
   const staffId = user?.staff_id;
 
   useEffect(() => {
     if (staffId) {
       loadTodayRecord();
+      loadAllowances();
     } else {
       setLoading(false);
     }
@@ -38,6 +47,15 @@ export default function AttendanceScreen() {
       console.log('No attendance record today');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAllowances = async () => {
+    try {
+      const res = await attendanceApi.allowances({ staff_id: staffId, limit: 20 });
+      setAllowances(res.data || []);
+    } catch (e) {
+      console.log('Allowance load failed', e?.response?.data || e?.message || e);
     }
   };
 
@@ -83,6 +101,53 @@ export default function AttendanceScreen() {
       Alert.alert('Camera Error', 'Could not open the camera. Please ensure your device has a working camera.');
     }
     return null;
+  };
+
+  const pickBillPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Camera access is required to capture bill photos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+        allowsEditing: false,
+      });
+      if (!result.canceled && result.assets?.length > 0) {
+        setAllowanceForm((prev) => ({ ...prev, bill_uri: result.assets[0].uri }));
+      }
+    } catch (error) {
+      Alert.alert('Camera Error', 'Could not open the camera.');
+    }
+  };
+
+  const submitAllowance = async () => {
+    const amount = Number(allowanceForm.amount);
+    if (!amount || amount <= 0) {
+      Alert.alert('Invalid Amount', 'Enter a valid expense amount.');
+      return;
+    }
+    setAllowanceSaving(true);
+    try {
+      const res = await attendanceApi.createAllowance({
+        staff_id: staffId,
+        expense_type: allowanceForm.expense_type,
+        amount,
+        remark: allowanceForm.remark,
+      });
+      if (allowanceForm.bill_uri) {
+        await attendanceApi.uploadAllowanceBill(res.data.allowance_id, allowanceForm.bill_uri);
+      }
+      setAllowanceForm({ expense_type: 'food', amount: '', remark: '', bill_uri: null });
+      await loadAllowances();
+      Alert.alert('Saved', 'Daily expense added.');
+    } catch (e) {
+      Alert.alert('Error', e.response?.data?.detail || 'Failed to save expense');
+    } finally {
+      setAllowanceSaving(false);
+    }
   };
 
   const handleCheckIn = async () => {
@@ -322,8 +387,80 @@ export default function AttendanceScreen() {
           )}
         </View>
       )}
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Daily Allowance</Text>
+        <Text style={styles.cardDesc}>Add food, petrol, or other daily expenses with bill photo.</Text>
+
+        <Text style={styles.label}>Expense Type</Text>
+        <View style={styles.segmentRow}>
+          {[
+            ['food', 'Food'],
+            ['petrol', 'Petrol'],
+            ['other', 'Other'],
+          ].map(([value, label]) => (
+            <TouchableOpacity
+              key={value}
+              style={[styles.segmentBtn, allowanceForm.expense_type === value && styles.segmentBtnActive]}
+              onPress={() => setAllowanceForm((prev) => ({ ...prev, expense_type: value }))}
+            >
+              <Text style={[styles.segmentText, allowanceForm.expense_type === value && styles.segmentTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Amount</Text>
+        <TextInput
+          style={[styles.input, styles.compactInput]}
+          value={allowanceForm.amount}
+          onChangeText={(text) => setAllowanceForm((prev) => ({ ...prev, amount: text }))}
+          placeholder="0"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="numeric"
+        />
+
+        <Text style={styles.label}>Remark</Text>
+        <TextInput
+          style={styles.input}
+          value={allowanceForm.remark}
+          onChangeText={(text) => setAllowanceForm((prev) => ({ ...prev, remark: text }))}
+          placeholder="Bill details or notes"
+          placeholderTextColor={colors.textMuted}
+          multiline
+        />
+
+        <TouchableOpacity style={styles.billBtn} onPress={pickBillPhoto}>
+          <Text style={styles.billBtnText}>{allowanceForm.bill_uri ? 'Bill Photo Added' : 'Add Bill Photo'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.checkInBtn} onPress={submitAllowance} disabled={allowanceSaving}>
+          <Text style={styles.checkInBtnText}>{allowanceSaving ? 'Saving...' : 'Save Expense'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Recent Expenses</Text>
+        {allowances.length === 0 ? (
+          <Text style={styles.emptyText}>No expenses added yet.</Text>
+        ) : allowances.map((item) => (
+          <View key={item.allowance_id} style={styles.expenseRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.expenseTitle}>{item.date} · {formatExpenseType(item.expense_type)}</Text>
+              <Text style={styles.expenseMeta}>Rs {Number(item.amount || 0).toFixed(2)} · {item.payment_status}</Text>
+              {item.remark ? <Text style={styles.expenseRemark}>{item.remark}</Text> : null}
+            </View>
+            {item.bill_url ? <Text style={styles.billTag}>Bill</Text> : null}
+          </View>
+        ))}
+      </View>
     </ScrollView>
   );
+}
+
+function formatExpenseType(value) {
+  if (value === 'food') return 'Food Expense';
+  if (value === 'petrol') return 'Petrol Expense';
+  return 'Other Expense';
 }
 
 const styles = StyleSheet.create({
@@ -360,6 +497,52 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border,
     borderRadius: radius.md, padding: spacing.md, color: colors.text,
     marginBottom: spacing.md, fontSize: 13, minHeight: 70, textAlignVertical: 'top',
+  },
+  compactInput: { minHeight: 0, height: 46 },
+  segmentRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface2,
+    alignItems: 'center',
+  },
+  segmentBtnActive: { borderColor: colors.accent, backgroundColor: colors.accentDim },
+  segmentText: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
+  segmentTextActive: { color: colors.accent },
+  billBtn: {
+    backgroundColor: colors.surface2,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  billBtnText: { color: colors.textSecondary, fontWeight: '700', fontSize: 13 },
+  emptyText: { color: colors.textMuted, fontSize: 13, textAlign: 'center', paddingVertical: spacing.md },
+  expenseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface2,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  expenseTitle: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  expenseMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 2, textTransform: 'capitalize' },
+  expenseRemark: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  billTag: {
+    color: colors.success,
+    fontWeight: '700',
+    fontSize: 11,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.successDim,
+    borderRadius: radius.full,
   },
   errorText: { color: colors.danger, fontSize: 12, marginBottom: spacing.sm },
   savingContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, padding: spacing.md },

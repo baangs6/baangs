@@ -53,6 +53,36 @@ async function uploadAttendancePhoto(path, attendanceId, uri, fileName) {
   return { data: payload, status: response.status };
 }
 
+async function uploadFile(path, uri, fileName) {
+  const formData = new FormData();
+
+  if (Platform.OS === 'web') {
+    const resp = await fetch(uri);
+    const blob = await resp.blob();
+    const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+    formData.append('file', file);
+  } else {
+    formData.append('file', {
+      uri,
+      type: 'image/jpeg',
+      name: fileName,
+    });
+  }
+
+  const token = await storage.getItem('token');
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData,
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw { response: { status: response.status, data: payload }, message: payload.detail || 'File upload failed' };
+  }
+  return { data: payload, status: response.status };
+}
+
 api.interceptors.request.use(async (config) => {
   const token = await storage.getItem('token');
   if (token) {
@@ -94,10 +124,14 @@ export const attendanceApi = {
   checkIn: (data) => api.post('/attendance/checkin', data),
   checkOut: (data) => api.post('/attendance/checkout', data),
   list: (params) => api.get('/attendance/', { params }),
+  allowances: (params) => api.get('/attendance/allowances', { params }),
+  createAllowance: (data) => api.post('/attendance/allowances', data),
   uploadCheckinPhoto: (attendanceId, uri) =>
     uploadAttendancePhoto('/attendance/checkin/photo', attendanceId, uri, `checkin_${attendanceId}.jpg`),
   uploadCheckoutPhoto: (attendanceId, uri) =>
     uploadAttendancePhoto('/attendance/checkout/photo', attendanceId, uri, `checkout_${attendanceId}.jpg`),
+  uploadAllowanceBill: (allowanceId, uri) =>
+    uploadFile(`/attendance/allowances/${encodeURIComponent(allowanceId)}/bill`, uri, `allowance_${allowanceId}.jpg`),
 };
 
 export const staffApi = {

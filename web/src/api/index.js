@@ -114,6 +114,8 @@ export const attendanceApi = {
     form.append('file', file);
     return api.post(`/attendance/checkin/photo?attendance_id=${id}`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
+  allowances: (params) => api.get('/attendance/allowances', { params }),
+  payAllowances: (data) => api.patch('/attendance/allowances/pay', data),
 };
 
 // Lookups

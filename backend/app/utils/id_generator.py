@@ -27,6 +27,10 @@ def generate_attendance_id() -> str:
     return f"ATT-{uuid.uuid4().hex[:8].upper()}"
 
 
+def generate_allowance_id() -> str:
+    return f"ALW-{uuid.uuid4().hex[:8].upper()}"
+
+
 def generate_billing_id() -> str:
     return f"BIL-{uuid.uuid4().hex[:8].upper()}"
 
