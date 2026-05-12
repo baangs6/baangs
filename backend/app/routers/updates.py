@@ -16,6 +16,16 @@ def _location_dict(location):
     return location.model_dump() if location else None
 
 
+def _map_location_from_geo(location: dict | None) -> str | None:
+    if not location:
+        return None
+    latitude = location.get("latitude")
+    longitude = location.get("longitude")
+    if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
+        return None
+    return f"{latitude:.6f},{longitude:.6f}"
+
+
 def _normalize_manual_items(value):
     if isinstance(value, list):
         return [item for item in value if isinstance(item, dict)]
@@ -227,11 +237,14 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
 
     job_update = {"status": data.status}
     if data.work_event == "start_work":
+        map_location = _map_location_from_geo(update_doc["location"])
         job_update.update({
             "work_started_at": update_doc["update_time"],
             "work_started_by": staff_name or staff_id,
             "work_start_location": update_doc["location"],
         })
+        if map_location:
+            job_update["map_location"] = map_location
     elif data.work_event == "end_work":
         job_update.update({
             "work_ended_at": update_doc["update_time"],
@@ -240,6 +253,11 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
         })
 
     await db.jobs.update_one({"job_id": data.job_id}, {"$set": job_update})
+    if data.work_event == "start_work" and job_update.get("map_location") and job.get("customer_id"):
+        await db.customers.update_one(
+            {"customer_id": job["customer_id"]},
+            {"$set": {"map_location": job_update["map_location"]}}
+        )
 
     if current_user["role"] == "technician":
         await notify_roles(
