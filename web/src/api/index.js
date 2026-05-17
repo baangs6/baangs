@@ -116,6 +116,12 @@ export const attendanceApi = {
   },
   allowances: (params) => api.get('/attendance/allowances', { params }),
   payAllowances: (data) => api.patch('/attendance/allowances/pay', data),
+  deleteAllowance: (id) => api.delete(`/attendance/allowances/${id}`),
+  uploadAllowanceBill: (id, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post(`/attendance/allowances/${id}/bill`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
 };
 
 // Lookups

@@ -1,9 +1,17 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
+from pydantic import BaseModel
 from typing import List
 from ..auth.utils import get_current_user
 from ..database import get_db
+from ..utils.timezone import now_ist_str
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
+
+
+class PushTokenRegister(BaseModel):
+    token: str
+    device_id: str | None = None
+    platform: str | None = None
 
 
 def _fmt(n: dict) -> dict:
@@ -29,6 +37,34 @@ async def unread_count(current_user: dict = Depends(get_current_user)):
     db = get_db()
     count = await db.notifications.count_documents({"user_id": current_user["user_id"], "is_read": False})
     return {"count": count}
+
+
+@router.post("/push-token")
+async def register_push_token(data: PushTokenRegister, current_user: dict = Depends(get_current_user)):
+    token = data.token.strip()
+    if not (token.startswith("ExponentPushToken[") or token.startswith("ExpoPushToken[")):
+        raise HTTPException(status_code=400, detail="Invalid Expo push token")
+
+    db = get_db()
+    now = now_ist_str()
+    await db.push_tokens.update_one(
+        {"token": token},
+        {
+            "$set": {
+                "token": token,
+                "user_id": current_user["user_id"],
+                "role": current_user.get("role"),
+                "staff_id": current_user.get("staff_id"),
+                "device_id": data.device_id,
+                "platform": data.platform,
+                "status": "active",
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+    return {"message": "Push token registered"}
 
 
 @router.patch("/{notification_id}/read")

@@ -219,12 +219,14 @@ def _collection_names():
         "jobs",
         "daily_updates",
         "attendance",
+        "attendance_allowances",
         "billing",
         "lookups",
         "inventory",
         "inventory_transactions",
         "job_inventory_usage",
         "notifications",
+        "push_tokens",
         "leaves",
         "counters",
     ]
@@ -375,12 +377,14 @@ def _seed_data():
         ],
         "daily_updates": [],
         "attendance": [],
+        "attendance_allowances": [],
         "billing": [],
         "lookups": lookups,
         "inventory": [inventory_doc],
         "inventory_transactions": [transaction_doc],
         "job_inventory_usage": [],
         "notifications": [],
+        "push_tokens": [],
         "leaves": [],
         "counters": [
             {"_id": f"job_{today.replace('-', '')}", "seq": 1},
@@ -498,6 +502,18 @@ def _match_operators(values: list[Any], expected: dict, doc: dict):
                 return False
         elif op == "$ne":
             if any(_normalize(value) == _normalize(operand) for value in candidate_values):
+                return False
+        elif op == "$nin":
+            normalized_operand = [_normalize(item) for item in operand]
+            if any(_normalize(value) in normalized_operand for value in candidate_values):
+                return False
+        elif op == "$in":
+            normalized_operand = [_normalize(item) for item in operand]
+            if not any(_normalize(value) in normalized_operand for value in candidate_values):
+                return False
+        elif op == "$exists":
+            exists = bool(values)
+            if exists != bool(operand):
                 return False
         elif op == "$expr":
             if not _truthy(_eval_expr(operand, doc)):

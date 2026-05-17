@@ -17,6 +17,7 @@ import * as Location from 'expo-location';
 import { jobsApi, updatesApi, billingApi, inventoryApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing, radius } from '../theme';
+import { callPhone, openJobMap } from '../utils/contactActions';
 
 const STATUS_COLORS = {
   pending: colors.warning,
@@ -423,7 +424,22 @@ export default function JobDetailScreen({ route }) {
         <InfoRow label="Name" value={job.customer_name} />
         <InfoRow label="Phone" value={job.phone_number} />
         <InfoRow label="Location" value={job.location || '-'} />
+        <InfoRow label="Map" value={job.map_location || '-'} />
         <InfoRow label="Site Type" value={job.site_type || '-'} />
+        <View style={styles.contactActions}>
+          <TouchableOpacity
+            style={[styles.contactBtn, { borderColor: colors.success }]}
+            onPress={() => callPhone(job.phone_number)}
+          >
+            <Text style={[styles.contactBtnText, { color: colors.success }]}>Call Customer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.contactBtn, { borderColor: colors.info }]}
+            onPress={() => openJobMap(job)}
+          >
+            <Text style={[styles.contactBtnText, { color: colors.info }]}>Open Map</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {isAdmin && (
@@ -916,6 +932,16 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, gap: 12 },
   infoLabel: { fontSize: 12, color: colors.textMuted, textTransform: 'uppercase', fontWeight: '600', width: '36%' },
   infoValue: { fontSize: 13, color: colors.text, flex: 1, textAlign: 'right' },
+  contactActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  contactBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    backgroundColor: colors.surface2,
+  },
+  contactBtnText: { fontSize: 12, fontWeight: '800' },
   actions: { paddingHorizontal: spacing.base, paddingBottom: spacing.md, gap: spacing.sm },
   updateBtn: {
     backgroundColor: colors.accentDim,

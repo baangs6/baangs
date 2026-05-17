@@ -171,6 +171,7 @@ export const inventoryApi = {
 export const notificationsApi = {
   list: (limit = 50) => api.get('/notifications/', { params: { limit } }),
   unreadCount: () => api.get('/notifications/unread-count'),
+  registerPushToken: (data) => api.post('/notifications/push-token', data),
   markRead: (id) => api.patch(`/notifications/${id}/read`),
 };
 

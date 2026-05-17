@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { attendanceApi, staffApi, exportApi, leavesApi } from '../../api';
-import { MdDownload, MdLocationOn, MdPhoto } from 'react-icons/md';
+import { MdDelete, MdDownload, MdLocationOn, MdPayment, MdPhoto, MdUpload } from 'react-icons/md';
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -23,8 +23,10 @@ export default function AttendanceReport() {
   const [payrollLoading, setPayrollLoading] = useState(false);
   const [allowanceRows, setAllowanceRows] = useState([]);
   const [allowanceLoading, setAllowanceLoading] = useState(false);
+  const [allowanceFilters, setAllowanceFilters] = useState({ expense_type: '', payment_status: '' });
   const [selectedAllowances, setSelectedAllowances] = useState([]);
   const [payForm, setPayForm] = useState({ paid_amount: '', payment_remark: '' });
+  const [rowBusy, setRowBusy] = useState('');
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -74,6 +76,8 @@ export default function AttendanceReport() {
       if (filters.staff_id) params.staff_id = filters.staff_id;
       if (filters.date_from) params.date_from = filters.date_from;
       if (filters.date_to) params.date_to = filters.date_to;
+      if (allowanceFilters.expense_type) params.expense_type = allowanceFilters.expense_type;
+      if (allowanceFilters.payment_status) params.payment_status = allowanceFilters.payment_status;
       const res = await attendanceApi.allowances(params);
       setAllowanceRows(res.data || []);
       setSelectedAllowances([]);
@@ -84,7 +88,7 @@ export default function AttendanceReport() {
     } finally {
       setAllowanceLoading(false);
     }
-  }, [filters]);
+  }, [filters, allowanceFilters]);
 
   useEffect(() => {
     if (activeTab === 'allowance') loadAllowances();
@@ -145,6 +149,58 @@ export default function AttendanceReport() {
       await loadAllowances();
     } catch (e) {
       alert(e.response?.data?.detail || 'Failed to update payment');
+    }
+  };
+
+  const paySingleAllowance = async (row) => {
+    const balance = Number(row.balance_amount || 0);
+    if (balance <= 0) return;
+    const input = window.prompt('Paid amount', balance.toFixed(2));
+    if (input === null) return;
+    const paidAmount = Number(input);
+    if (!paidAmount || paidAmount <= 0) {
+      alert('Enter a valid paid amount');
+      return;
+    }
+    const paymentRemark = window.prompt('Payment remark (optional)', '') || '';
+    setRowBusy(row.allowance_id);
+    try {
+      await attendanceApi.payAllowances({
+        allowance_ids: [row.allowance_id],
+        paid_amount: paidAmount,
+        payment_remark: paymentRemark,
+      });
+      await loadAllowances();
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Failed to update payment');
+    } finally {
+      setRowBusy('');
+    }
+  };
+
+  const deleteAllowance = async (row) => {
+    if (!window.confirm(`Delete ${formatExpenseType(row.expense_type)} for ${row.staff_name || row.staff_id}?`)) return;
+    setRowBusy(row.allowance_id);
+    try {
+      await attendanceApi.deleteAllowance(row.allowance_id);
+      await loadAllowances();
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Failed to delete expense');
+    } finally {
+      setRowBusy('');
+    }
+  };
+
+  const uploadAllowanceBill = async (row, file) => {
+    if (!file) return;
+    setRowBusy(row.allowance_id);
+    try {
+      await attendanceApi.uploadAllowanceBill(row.allowance_id, file);
+      await loadAllowances();
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Failed to upload bill');
+    } finally {
+      setRowBusy('');
     }
   };
 
@@ -284,6 +340,35 @@ export default function AttendanceReport() {
         </>
       ) : activeTab === 'allowance' ? (
         <>
+          <div className="filter-bar">
+            <select
+              className="form-select"
+              style={{ width: 180 }}
+              value={allowanceFilters.expense_type}
+              onChange={(e) => setAllowanceFilters((prev) => ({ ...prev, expense_type: e.target.value }))}
+            >
+              <option value="">All Expense Types</option>
+              <option value="food">Food Expense</option>
+              <option value="petrol">Petrol Expense</option>
+              <option value="other">Other Expense</option>
+            </select>
+            <select
+              className="form-select"
+              style={{ width: 180 }}
+              value={allowanceFilters.payment_status}
+              onChange={(e) => setAllowanceFilters((prev) => ({ ...prev, payment_status: e.target.value }))}
+            >
+              <option value="">All Payment Status</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="partial">Partial</option>
+              <option value="paid">Paid</option>
+              <option value="overpaid">Overpaid</option>
+            </select>
+            <button className="btn btn-secondary" onClick={() => setAllowanceFilters({ expense_type: '', payment_status: '' })}>
+              Clear Allowance Filters
+            </button>
+          </div>
+
           <div className="stats-grid" style={{ marginBottom: 12 }}>
             <div className="stat-card">
               <div className="stat-value">₹{allowanceRows.reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2)}</div>
@@ -369,6 +454,7 @@ export default function AttendanceReport() {
                       <th>Paid</th>
                       <th>Balance</th>
                       <th>Extra</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -399,6 +485,37 @@ export default function AttendanceReport() {
                         <td>₹{Number(row.paid_amount || 0).toFixed(2)}</td>
                         <td>₹{Number(row.balance_amount || 0).toFixed(2)}</td>
                         <td>₹{Number(row.extra_paid_amount || 0).toFixed(2)}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <label className="btn btn-secondary btn-sm" style={{ cursor: rowBusy === row.allowance_id ? 'wait' : 'pointer' }}>
+                              <MdUpload /> Bill
+                              <input
+                                type="file"
+                                accept="image/*"
+                                disabled={rowBusy === row.allowance_id}
+                                onChange={(e) => {
+                                  uploadAllowanceBill(row, e.target.files?.[0]);
+                                  e.target.value = '';
+                                }}
+                                style={{ display: 'none' }}
+                              />
+                            </label>
+                            <button
+                              className="btn btn-success btn-sm"
+                              disabled={Number(row.balance_amount || 0) <= 0 || rowBusy === row.allowance_id}
+                              onClick={() => paySingleAllowance(row)}
+                            >
+                              <MdPayment /> Pay
+                            </button>
+                            <button
+                              className="btn btn-danger btn-sm"
+                              disabled={rowBusy === row.allowance_id}
+                              onClick={() => deleteAllowance(row)}
+                            >
+                              <MdDelete /> Delete
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

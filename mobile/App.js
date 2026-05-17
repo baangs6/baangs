@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { View, ActivityIndicator, StatusBar } from 'react-native';
+import { Platform, View, ActivityIndicator, StatusBar } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import Icon from '@expo/vector-icons/MaterialIcons';
+import { notificationsApi } from './src/api';
 import { colors } from './src/theme';
 
 // Screens
@@ -19,6 +22,16 @@ import NotificationsScreen from './src/screens/NotificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
+const navigationRef = React.createRef();
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 function JobsStack() {
   return (
@@ -37,7 +50,76 @@ function JobsStack() {
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const bottomInset = Math.max(insets.bottom, 8);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    let intervalId;
+
+    async function requestNotificationAccess() {
+      if (Platform.OS === 'web' || !user) return;
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('jobs', {
+          name: 'Job notifications',
+          importance: Notifications.AndroidImportance.HIGH,
+        });
+      }
+
+      const existing = await Notifications.getPermissionsAsync();
+      if (existing.status !== 'granted') {
+        const requested = await Notifications.requestPermissionsAsync();
+        if (requested.status !== 'granted') return;
+      }
+
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ||
+        Constants.easConfig?.projectId ||
+        Constants.manifest2?.extra?.eas?.projectId;
+      const tokenResult = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+      await notificationsApi.registerPushToken({
+        token: tokenResult.data,
+        platform: Platform.OS,
+        device_id: Constants.sessionId || Constants.installationId || null,
+      });
+    }
+
+    async function pollNotifications() {
+      try {
+        const countRes = await notificationsApi.unreadCount();
+
+        if (!mounted) return;
+        const nextCount = Number(countRes.data?.count || 0);
+        setUnreadCount(nextCount);
+      } catch (error) {
+        console.warn('Notification poll failed', error);
+      }
+    }
+
+    requestNotificationAccess().catch((error) => console.warn('Notification permission failed', error));
+    pollNotifications();
+    intervalId = setInterval(pollNotifications, 30000);
+
+    return () => {
+      mounted = false;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const jobId = response.notification.request.content.data?.job_id;
+      if (jobId && navigationRef.current?.isReady()) {
+        navigationRef.current.navigate('Jobs', {
+          screen: 'JobDetail',
+          params: { jobId },
+        });
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   return (
     <Tab.Navigator
@@ -68,7 +150,11 @@ function MainTabs() {
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Jobs" component={JobsStack} />
       <Tab.Screen name="Attendance" component={AttendanceScreen} />
-      <Tab.Screen name="Notifications" component={NotificationsScreen} />
+      <Tab.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ tabBarBadge: unreadCount > 0 ? unreadCount : undefined }}
+      />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
@@ -86,7 +172,7 @@ function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
       {user ? <MainTabs /> : <LoginScreen />}
     </NavigationContainer>

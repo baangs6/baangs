@@ -4,6 +4,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { jobsApi, lookupsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing, radius } from '../theme';
+import { callPhone, openJobMap } from '../utils/contactActions';
 
 const STATUS_COLORS = {
   pending: colors.warning, in_progress: colors.info, complete: colors.success, cancelled: colors.danger,
@@ -205,6 +206,26 @@ export default function JobsScreen({ navigation }) {
             </View>
             <Text style={styles.customerName}>{job.customer_name}</Text>
             <Text style={styles.detail}>{job.phone_number} · {job.location || 'No location'}</Text>
+            <View style={styles.quickActions}>
+              <TouchableOpacity
+                style={[styles.quickBtn, { borderColor: colors.success }]}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  callPhone(job.phone_number);
+                }}
+              >
+                <Text style={[styles.quickBtnText, { color: colors.success }]}>Call</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickBtn, { borderColor: colors.info }]}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  openJobMap(job);
+                }}
+              >
+                <Text style={[styles.quickBtnText, { color: colors.info }]}>Map</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.cardFooter}>
               <Text style={styles.workType}>{job.work_type}</Text>
               <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(job.priority) + '22' }]}>
@@ -249,6 +270,16 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
   customerName: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 2 },
   detail: { fontSize: 13, color: colors.textSecondary, marginBottom: spacing.sm },
+  quickActions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  quickBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    backgroundColor: colors.surface2,
+  },
+  quickBtnText: { fontSize: 12, fontWeight: '800' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   workType: { fontSize: 12, color: colors.textMuted, textTransform: 'capitalize' },
   priorityBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.full },

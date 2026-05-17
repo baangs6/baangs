@@ -23,11 +23,23 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#2563eb"
       },
       "edgeToEdgeEnabled": true,
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "INTERNET",
+        "VIBRATE"
+      ],
       "package": "com.anonymous.mobile",
       "versionCode": 5
+    },
+    "notification": {
+      "icon": "./assets/adaptive-icon.png",
+      "color": "#2563eb"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -46,6 +58,7 @@
           "locationAlwaysPermission": "Allow Baangs to use your location."
         }
       ],
+      "expo-notifications",
       "expo-font",
       "@react-native-community/datetimepicker"
     ]

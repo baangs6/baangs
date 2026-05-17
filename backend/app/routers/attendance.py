@@ -214,6 +214,7 @@ async def list_allowances(
     date: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
+    expense_type: Optional[str] = Query(None),
     payment_status: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 200,
@@ -236,6 +237,8 @@ async def list_allowances(
         query["date"] = date_filter
     if payment_status:
         query["payment_status"] = payment_status
+    if expense_type:
+        query["expense_type"] = expense_type
 
     rows = await db.attendance_allowances.find(query).sort("date", -1).skip(skip).limit(limit).to_list(limit)
     return [_fmt_allowance(row) for row in rows]
@@ -269,7 +272,7 @@ async def pay_allowances(data: DailyAllowancePayment, current_user: dict = Depen
         if balance > 0:
             add_amount = min(remaining, balance)
             remaining = round(remaining - add_amount, 2)
-        if index == len(rows) - 1 and remaining > 0:
+        if index == len(payable_rows) - 1 and remaining > 0:
             add_amount = round(add_amount + remaining, 2)
             remaining = 0.0
 
@@ -292,6 +295,19 @@ async def pay_allowances(data: DailyAllowancePayment, current_user: dict = Depen
         updated.append(_fmt_allowance(result))
 
     return updated
+
+
+@router.delete("/allowances/{allowance_id}")
+async def delete_allowance(allowance_id: str, current_user: dict = Depends(require_admin_or_manager)):
+    db = get_db()
+    row = await db.attendance_allowances.find_one({"allowance_id": allowance_id})
+    if not row:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    result = await db.attendance_allowances.delete_one({"allowance_id": allowance_id})
+    if result.deleted_count != 1:
+        raise HTTPException(status_code=500, detail="Failed to delete expense")
+    return {"message": "Expense deleted"}
 
 
 @router.post("/allowances/{allowance_id}/bill")

@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import asyncio
 
 from .config import settings
-from .database import connect_db, close_db, get_db_mode
+from .database import connect_db, close_db, get_db, get_db_mode
 from .utils.cloudinary_helper import configure_cloudinary
+from .utils.job_reminders import job_reminder_loop
 from .routers import auth, users, staff, customers, jobs, updates, billing, attendance, lookups, dashboard, export, inventory, notifications, leaves
 
 
@@ -12,8 +14,16 @@ from .routers import auth, users, staff, customers, jobs, updates, billing, atte
 async def lifespan(app: FastAPI):
     await connect_db()
     configure_cloudinary()
-    yield
-    await close_db()
+    reminder_task = asyncio.create_task(job_reminder_loop(get_db()))
+    try:
+        yield
+    finally:
+        reminder_task.cancel()
+        try:
+            await reminder_task
+        except asyncio.CancelledError:
+            pass
+        await close_db()
 
 
 app = FastAPI(
