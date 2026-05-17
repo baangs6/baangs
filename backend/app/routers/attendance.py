@@ -320,7 +320,9 @@ async def upload_allowance_bill(
     row = await db.attendance_allowances.find_one({"allowance_id": allowance_id})
     if not row:
         raise HTTPException(status_code=404, detail="Expense not found")
-    if current_user["role"] == "technician" and row.get("staff_id") != current_user.get("staff_id"):
+    if current_user["role"] != "technician":
+        raise HTTPException(status_code=403, detail="Only technicians can upload allowance bills")
+    if row.get("staff_id") != current_user.get("staff_id"):
         raise HTTPException(status_code=403, detail="Access denied")
 
     image_bytes = await file.read()

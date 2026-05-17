@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { attendanceApi, staffApi, exportApi, leavesApi } from '../../api';
-import { MdDelete, MdDownload, MdLocationOn, MdPayment, MdPhoto, MdUpload } from 'react-icons/md';
+import { MdDelete, MdDownload, MdLocationOn, MdPayment, MdPhoto } from 'react-icons/md';
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -186,19 +186,6 @@ export default function AttendanceReport() {
       await loadAllowances();
     } catch (e) {
       alert(e.response?.data?.detail || 'Failed to delete expense');
-    } finally {
-      setRowBusy('');
-    }
-  };
-
-  const uploadAllowanceBill = async (row, file) => {
-    if (!file) return;
-    setRowBusy(row.allowance_id);
-    try {
-      await attendanceApi.uploadAllowanceBill(row.allowance_id, file);
-      await loadAllowances();
-    } catch (e) {
-      alert(e.response?.data?.detail || 'Failed to upload bill');
     } finally {
       setRowBusy('');
     }
@@ -474,9 +461,15 @@ export default function AttendanceReport() {
                         <td>₹{Number(row.amount || 0).toFixed(2)}</td>
                         <td>
                           {row.bill_url ? (
-                            <button className="btn btn-secondary btn-sm" onClick={() => setViewPhoto(row.bill_url)} style={{ padding: 4 }}>
+                            <a
+                              href={row.bill_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Open bill"
+                              style={{ display: 'inline-block', padding: 4, border: '1px solid var(--color-border)', borderRadius: 6 }}
+                            >
                               <img src={row.bill_url} alt="Bill" style={{ width: 42, height: 32, objectFit: 'cover', borderRadius: 4 }} />
-                            </button>
+                            </a>
                           ) : '—'}
                         </td>
                         <td style={{ maxWidth: 220, fontSize: '0.82rem' }}>{row.remark || '—'}</td>
@@ -487,19 +480,6 @@ export default function AttendanceReport() {
                         <td>₹{Number(row.extra_paid_amount || 0).toFixed(2)}</td>
                         <td>
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <label className="btn btn-secondary btn-sm" style={{ cursor: rowBusy === row.allowance_id ? 'wait' : 'pointer' }}>
-                              <MdUpload /> Bill
-                              <input
-                                type="file"
-                                accept="image/*"
-                                disabled={rowBusy === row.allowance_id}
-                                onChange={(e) => {
-                                  uploadAllowanceBill(row, e.target.files?.[0]);
-                                  e.target.value = '';
-                                }}
-                                style={{ display: 'none' }}
-                              />
-                            </label>
                             <button
                               className="btn btn-success btn-sm"
                               disabled={Number(row.balance_amount || 0) <= 0 || rowBusy === row.allowance_id}
