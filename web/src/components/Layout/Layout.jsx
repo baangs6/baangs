@@ -67,39 +67,28 @@ export default function Layout() {
 
   return (
     <div className="app-layout">
-      {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <h1>⚡ Baangs</h1>
+          <h1><span className="brand-mark">B</span> Baangs</h1>
           <span>CCTV Field Service</span>
-          <div style={{ marginTop: 8, position: 'relative' }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => setNotifOpen((v) => !v)} style={{ width: '100%', justifyContent: 'space-between' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><MdNotifications /> Notifications</span>
+          <div className="notification-wrap">
+            <button className="notification-trigger" onClick={() => setNotifOpen((v) => !v)}>
+              <span><MdNotifications /> Notifications</span>
               {notifCount > 0 ? <span className="badge badge-pending">{notifCount}</span> : null}
             </button>
             {notifOpen && (
-              <div style={{ position: 'absolute', left: 0, top: '100%', marginTop: 6, width: 320, maxHeight: 360, overflow: 'auto', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, zIndex: 30, padding: 8 }}>
+              <div className="notification-menu">
                 {notifications.length === 0 ? (
-                  <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', padding: 8 }}>No notifications</div>
+                  <div className="notification-empty">No notifications</div>
                 ) : notifications.map((n) => (
                   <button
                     key={n.notification_id}
                     onClick={() => openNotification(n)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      border: 'none',
-                      background: n.is_read ? 'transparent' : 'rgba(59,130,246,0.12)',
-                      borderRadius: 6,
-                      padding: 8,
-                      marginBottom: 6,
-                      cursor: 'pointer',
-                      color: 'inherit',
-                    }}
+                    className={`notification-item ${n.is_read ? '' : 'unread'}`}
                   >
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{n.title}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{n.message}</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: 2 }}>{n.created_at?.slice(0, 16).replace('T', ' ')}</div>
+                    <strong>{n.title}</strong>
+                    <p>{n.message}</p>
+                    <small>{n.created_at?.slice(0, 16).replace('T', ' ')}</small>
                   </button>
                 ))}
               </div>
@@ -176,7 +165,6 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Main content */}
       <main className="main-content">
         <div className="page-content">
           <Outlet />
