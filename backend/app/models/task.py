@@ -18,12 +18,14 @@ class SubTaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     assignee_user_ids: List[str] = Field(default_factory=list)
     status: TaskStatus = TaskStatus.pending
+    due_date: Optional[str] = None
 
 
 class SubTaskUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     assignee_user_ids: Optional[List[str]] = None
     status: Optional[TaskStatus] = None
+    due_date: Optional[str] = None
 
 
 class TaskCreate(BaseModel):

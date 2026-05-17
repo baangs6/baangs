@@ -63,6 +63,7 @@ def _format_subtask(subtask: dict, users_by_id: dict) -> dict:
         "subtask_id": subtask["subtask_id"],
         "title": subtask["title"],
         "status": subtask.get("status", "pending"),
+        "due_date": subtask.get("due_date"),
         "assignee_user_ids": assignee_ids,
         "assignee_names": [_user_name(users_by_id.get(uid)) or uid for uid in assignee_ids],
         "created_at": subtask.get("created_at"),
@@ -153,6 +154,7 @@ async def create_task(data: TaskCreate, current_user: dict = Depends(get_current
             "subtask_id": generate_subtask_id(),
             "title": item.title,
             "status": _enum_value(item.status),
+            "due_date": item.due_date,
             "assignee_user_ids": subtask_assignees,
             "created_at": now,
             "updated_at": now,
@@ -230,6 +232,7 @@ async def add_subtask(task_id: str, data: SubTaskCreate, current_user: dict = De
         "subtask_id": generate_subtask_id(),
         "title": data.title,
         "status": _enum_value(data.status),
+        "due_date": data.due_date,
         "assignee_user_ids": assignee_ids,
         "created_at": now,
         "updated_at": now,
@@ -259,6 +262,8 @@ async def update_subtask(task_id: str, subtask_id: str, data: SubTaskUpdate, cur
                 subtask["title"] = payload["title"]
             if "status" in payload:
                 subtask["status"] = _enum_value(payload["status"])
+            if "due_date" in payload:
+                subtask["due_date"] = payload["due_date"]
             if "assignee_user_ids" in payload:
                 subtask["assignee_user_ids"] = await _validate_assignees(db, payload["assignee_user_ids"])
             subtask["updated_at"] = now_ist_str()
