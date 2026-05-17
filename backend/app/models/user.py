@@ -46,6 +46,7 @@ class UserResponse(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     staff_id: Optional[str] = None
+    profile_photo_url: Optional[str] = None
     created_at: str
 
 

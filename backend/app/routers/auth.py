@@ -2,10 +2,86 @@ from fastapi import APIRouter, HTTPException, Depends
 from ..models.user import LoginRequest, TokenResponse, SetupRequest, UserResponse, UserRole, UserStatus
 from ..auth.utils import hash_password, verify_password, create_access_token, get_current_user
 from ..database import get_db
-from ..utils.id_generator import generate_user_id
-from ..utils.timezone import now_ist_str
+from ..utils.id_generator import generate_attendance_id, generate_user_id
+from ..utils.timezone import now_ist_str, today_ist_str
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+AUTO_ATTENDANCE_ROLES = {"admin", "manager", "sales"}
+
+
+def _attendance_staff_id(user: dict) -> str:
+    return user.get("staff_id") or user["user_id"]
+
+
+def _attendance_staff_name(user: dict) -> str:
+    return user.get("full_name") or user.get("username") or "Unknown"
+
+
+async def _user_response(db, user: dict) -> dict:
+    photo_url = None
+    if user.get("staff_id"):
+        staff = await db.staff.find_one({"staff_id": user.get("staff_id")})
+        photo_url = staff.get("photo_url") if staff else None
+    return {
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "role": user["role"],
+        "status": user["status"],
+        "full_name": user.get("full_name"),
+        "phone": user.get("phone"),
+        "staff_id": user.get("staff_id"),
+        "profile_photo_url": photo_url,
+        "created_at": user["created_at"],
+    }
+
+
+async def _auto_check_in(db, user: dict):
+    if user.get("role") not in AUTO_ATTENDANCE_ROLES:
+        return
+    today = today_ist_str()
+    staff_id = _attendance_staff_id(user)
+    existing = await db.attendance.find_one({"staff_id": staff_id, "date": today})
+    if existing:
+        return
+    await db.attendance.insert_one({
+        "attendance_id": generate_attendance_id(),
+        "staff_id": staff_id,
+        "staff_name": _attendance_staff_name(user),
+        "date": today,
+        "checkin_time": now_ist_str(),
+        "checkout_time": None,
+        "checkin_latitude": None,
+        "checkin_longitude": None,
+        "checkout_latitude": None,
+        "checkout_longitude": None,
+        "checkin_photo_url": None,
+        "checkout_photo_url": None,
+        "remarks": "Auto login attendance",
+        "checkout_remarks": None,
+        "is_checked_out": False,
+        "user_id": user.get("user_id"),
+        "source": "web_login",
+    })
+
+
+async def _auto_check_out(db, user: dict):
+    if user.get("role") not in AUTO_ATTENDANCE_ROLES:
+        return
+    today = today_ist_str()
+    staff_id = _attendance_staff_id(user)
+    await db.attendance.find_one_and_update(
+        {"staff_id": staff_id, "date": today, "is_checked_out": False},
+        {"$set": {
+            "checkout_time": now_ist_str(),
+            "checkout_latitude": None,
+            "checkout_longitude": None,
+            "checkout_photo_url": None,
+            "checkout_remarks": "Auto logout attendance",
+            "is_checked_out": True,
+        }},
+        return_document=True,
+    )
 
 
 @router.get("/setup-status")
@@ -51,19 +127,12 @@ async def first_time_setup(data: SetupRequest):
         )
 
     token = create_access_token({"sub": data.username})
+    await _auto_check_in(db, user_doc)
+    user_payload = await _user_response(db, user_doc)
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {
-            "user_id": user_doc["user_id"],
-            "username": user_doc["username"],
-            "role": user_doc["role"],
-            "status": user_doc["status"],
-            "full_name": user_doc["full_name"],
-            "phone": user_doc["phone"],
-            "staff_id": None,
-            "created_at": user_doc["created_at"],
-        }
+        "user": user_payload,
     }
 
 
@@ -92,32 +161,24 @@ async def login(data: LoginRequest):
         elif data.platform == "web":
             pass
 
+    await _auto_check_in(db, user)
     token = create_access_token({"sub": data.username})
+    user_payload = await _user_response(db, user)
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {
-            "user_id": user["user_id"],
-            "username": user["username"],
-            "role": user["role"],
-            "status": user["status"],
-            "full_name": user.get("full_name"),
-            "phone": user.get("phone"),
-            "staff_id": user.get("staff_id"),
-            "created_at": user["created_at"],
-        }
+        "user": user_payload,
     }
 
 
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
-    return {
-        "user_id": current_user["user_id"],
-        "username": current_user["username"],
-        "role": current_user["role"],
-        "status": current_user["status"],
-        "full_name": current_user.get("full_name"),
-        "phone": current_user.get("phone"),
-        "staff_id": current_user.get("staff_id"),
-        "created_at": current_user["created_at"],
-    }
+    db = get_db()
+    return await _user_response(db, current_user)
+
+
+@router.post("/logout")
+async def logout(current_user: dict = Depends(get_current_user)):
+    db = get_db()
+    await _auto_check_out(db, current_user)
+    return {"message": "Logged out"}

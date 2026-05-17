@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from datetime import datetime
 from ..auth.utils import get_current_user, require_admin_or_manager
@@ -39,6 +39,8 @@ async def summary(
     date_to: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user)
 ):
+    if current_user["role"] == "sales":
+        raise HTTPException(status_code=403, detail="Sales users can access Tasks only")
     db = get_db()
     jobs_date_query = _date_range_filter(date_from, date_to, "scheduled_date")
 
@@ -118,6 +120,8 @@ async def jobs_by_priority(
     date_to: Optional[str] = Query(None),
     _=Depends(require_admin_or_manager)
 ):
+    if current_user["role"] == "sales":
+        raise HTTPException(status_code=403, detail="Sales users can access Tasks only")
     db = get_db()
     match_query = _date_range_filter(date_from, date_to, "scheduled_date")
     pipeline = [

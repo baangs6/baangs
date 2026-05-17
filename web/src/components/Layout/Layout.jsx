@@ -4,7 +4,7 @@ import { useAuth } from '../../context/useAuth';
 import { notificationsApi } from '../../api';
 import {
   MdDashboard, MdWork, MdPeople, MdAttachMoney,
-  MdLocationOn, MdSettings, MdLogout, MdSupervisorAccount,
+  MdLocationOn, MdLogout, MdSupervisorAccount,
   MdEngineering, MdListAlt, MdInventory, MdAssessment, MdNotifications, MdTaskAlt
 } from 'react-icons/md';
 
@@ -15,8 +15,8 @@ export default function Layout() {
   const [notifCount, setNotifCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
   };
 
@@ -97,21 +97,24 @@ export default function Layout() {
         </div>
 
         <nav className="sidebar-nav">
-          <div className="nav-section-title">Overview</div>
-          <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <MdDashboard className="nav-icon" /> Dashboard
-          </NavLink>
+          {!isSales && <>
+            <div className="nav-section-title">Overview</div>
+            <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <MdDashboard className="nav-icon" /> Dashboard
+            </NavLink>
 
-          <div className="nav-section-title">Operations</div>
-          <NavLink to="/jobs" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <MdWork className="nav-icon" /> Jobs
-          </NavLink>
-          <NavLink to="/customers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <MdPeople className="nav-icon" /> Customers
-          </NavLink>
-          <NavLink to="/staff" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <MdEngineering className="nav-icon" /> Staff
-          </NavLink>
+            <div className="nav-section-title">Operations</div>
+            <NavLink to="/jobs" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <MdWork className="nav-icon" /> Jobs
+            </NavLink>
+            <NavLink to="/customers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <MdPeople className="nav-icon" /> Customers
+            </NavLink>
+            <NavLink to="/staff" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <MdEngineering className="nav-icon" /> Staff
+            </NavLink>
+          </>}
+          {isSales && <div className="nav-section-title">Workspace</div>}
           {canUseTasks && (
             <NavLink to="/tasks" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <MdTaskAlt className="nav-icon" /> Tasks
@@ -135,10 +138,12 @@ export default function Layout() {
             </NavLink>
           </>}
 
-          <div className="nav-section-title">HR</div>
-          <NavLink to="/attendance" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <MdLocationOn className="nav-icon" /> Attendance
-          </NavLink>
+          {!isSales && <>
+            <div className="nav-section-title">HR</div>
+            <NavLink to="/attendance" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <MdLocationOn className="nav-icon" /> Attendance
+            </NavLink>
+          </>}
 
           {isAdmin && <>
             <div className="nav-section-title">Admin</div>
@@ -151,21 +156,28 @@ export default function Layout() {
           </>}
         </nav>
 
-        <div className="sidebar-footer">
-          <div className="user-info">
-            <div className="user-avatar">{user?.full_name?.[0] || user?.username?.[0] || 'U'}</div>
-            <div>
-              <div className="user-name">{user?.full_name || user?.username}</div>
-              <div className="user-role">{user?.role}</div>
-            </div>
-          </div>
-          <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleLogout}>
-            <MdLogout /> Logout
-          </button>
-        </div>
       </aside>
 
       <main className="main-content">
+        <div className="app-topbar">
+          <div className="topbar-spacer" />
+          <div className="topbar-profile">
+            <div className="topbar-avatar">
+              {user?.profile_photo_url ? (
+                <img src={user.profile_photo_url} alt={user?.full_name || user?.username || 'Profile'} />
+              ) : (
+                <span>{user?.full_name?.[0] || user?.username?.[0] || 'U'}</span>
+              )}
+            </div>
+            <div className="topbar-user-copy">
+              <strong>{user?.full_name || user?.username}</strong>
+              <span>{user?.role}</span>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
+              <MdLogout /> Logout
+            </button>
+          </div>
+        </div>
         <div className="page-content">
           <Outlet />
         </div>

@@ -47,7 +47,14 @@ export function AuthProvider({ children }) {
     return userData;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      if (localStorage.getItem('token')) {
+        await authApi.logout();
+      }
+    } catch {
+      // Clear the browser session even if the server-side checkout fails.
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setToken(null);

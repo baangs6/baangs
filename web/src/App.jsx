@@ -38,6 +38,18 @@ function AppRoutes() {
   if (!isSetup) return <Routes><Route path="*" element={<Setup />} /></Routes>;
   if (!user) return <Routes><Route path="*" element={<Login />} /></Routes>;
 
+  if (user.role === 'sales') {
+    return (
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Navigate to="/tasks" replace />} />
+          <Route path="tasks" element={<Tasks />} />
+          <Route path="*" element={<Navigate to="/tasks" replace />} />
+        </Route>
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
       <Route path="/" element={<Layout />}>

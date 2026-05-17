@@ -34,6 +34,7 @@ export const authApi = {
   setupStatus: () => api.get('/auth/setup-status'),
   setup: (data) => api.post('/auth/setup', data),
   login: (data) => api.post('/auth/login', data),
+  logout: () => api.post('/auth/logout'),
   me: () => api.get('/auth/me'),
 };
 

@@ -67,6 +67,8 @@ async def list_jobs(
     current_user: dict = Depends(get_current_user)
 ):
     db = get_db()
+    if current_user["role"] == "sales":
+        raise HTTPException(status_code=403, detail="Sales users can access Tasks only")
     
     # Auto-update unattended pending jobs
     today_str = today_ist_str()
@@ -211,6 +213,8 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
 @router.get("/{job_id}", response_model=JobResponse)
 async def get_job(job_id: str, current_user: dict = Depends(get_current_user)):
     db = get_db()
+    if current_user["role"] == "sales":
+        raise HTTPException(status_code=403, detail="Sales users can access Tasks only")
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -230,6 +234,8 @@ async def get_job(job_id: str, current_user: dict = Depends(get_current_user)):
 @router.put("/{job_id}", response_model=JobResponse)
 async def update_job(job_id: str, data: JobUpdate, current_user: dict = Depends(get_current_user)):
     db = get_db()
+    if current_user["role"] == "sales":
+        raise HTTPException(status_code=403, detail="Sales users can access Tasks only")
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
