@@ -505,6 +505,7 @@ input, select, textarea { font-family: inherit; }
 .badge-admin        { background: var(--color-accent-dim); color: var(--color-accent); }
 .badge-technician   { background: var(--color-secondary-dim); color: var(--color-secondary); }
 .badge-manager      { background: var(--color-amber-dim); color: var(--color-amber); }
+.badge-sales        { background: var(--color-success-dim); color: var(--color-success); }
 .badge-low          { background: var(--color-success-dim); color: var(--color-success); }
 .badge-medium       { background: var(--color-info-dim); color: var(--color-info); }
 .badge-high         { background: var(--color-warning-dim); color: var(--color-warning); }

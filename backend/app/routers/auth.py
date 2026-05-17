@@ -83,7 +83,7 @@ async def login(data: LoginRequest):
                 status_code=403, 
                 detail="Staff accounts can only log in via the mobile app"
             )
-    elif user["role"] in [UserRole.admin, UserRole.manager]:
+    elif user["role"] in [UserRole.admin, UserRole.manager, UserRole.sales]:
         if data.platform == "mobile":
             # For now, allow admins on mobile too, but if user meant ONLY mobile for staff 
             # and ONLY web for admin, we could block admin on mobile.

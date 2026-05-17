@@ -7,6 +7,7 @@ class UserRole(str, Enum):
     admin = "admin"
     technician = "technician"
     manager = "manager"
+    sales = "sales"
 
 
 class PlatformType(str, Enum):
