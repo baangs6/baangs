@@ -499,6 +499,12 @@ input, select, textarea { font-family: inherit; }
 .badge-pending      { background: var(--color-warning-dim); color: var(--color-warning); }
 .badge-in_progress  { background: var(--color-info-dim); color: var(--color-info); }
 .badge-complete     { background: var(--color-success-dim); color: var(--color-success); }
+.badge-completed    { background: var(--color-success-dim); color: var(--color-success); }
+.badge-on_track     { background: var(--color-info-dim); color: var(--color-info); }
+.badge-at_risk      { background: var(--color-warning-dim); color: var(--color-warning); }
+.badge-off_track    { background: var(--color-danger-dim); color: var(--color-danger); }
+.badge-paused       { background: var(--color-secondary-dim); color: var(--color-secondary); }
+.badge-canceled     { background: var(--color-danger-dim); color: var(--color-danger); }
 .badge-cancelled    { background: var(--color-danger-dim); color: var(--color-danger); }
 .badge-active       { background: var(--color-success-dim); color: var(--color-success); }
 .badge-inactive     { background: var(--color-danger-dim); color: var(--color-danger); }

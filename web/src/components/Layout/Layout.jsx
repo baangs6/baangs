@@ -5,7 +5,7 @@ import { notificationsApi } from '../../api';
 import {
   MdDashboard, MdWork, MdPeople, MdAttachMoney,
   MdLocationOn, MdSettings, MdLogout, MdSupervisorAccount,
-  MdEngineering, MdListAlt, MdInventory, MdAssessment, MdNotifications
+  MdEngineering, MdListAlt, MdInventory, MdAssessment, MdNotifications, MdTaskAlt
 } from 'react-icons/md';
 
 export default function Layout() {
@@ -22,6 +22,8 @@ export default function Layout() {
 
   const isAdmin = user?.role === 'admin';
   const isManager = user?.role === 'manager';
+  const isSales = user?.role === 'sales';
+  const canUseTasks = isAdmin || isManager || isSales;
 
   useEffect(() => {
     let mounted = true;
@@ -58,6 +60,8 @@ export default function Layout() {
     }
     const jobId = n?.meta?.job_id;
     if (jobId) navigate(`/jobs/${jobId}`);
+    const taskId = n?.meta?.task_id;
+    if (taskId) navigate('/tasks');
     setNotifOpen(false);
   };
 
@@ -119,6 +123,11 @@ export default function Layout() {
           <NavLink to="/staff" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             <MdEngineering className="nav-icon" /> Staff
           </NavLink>
+          {canUseTasks && (
+            <NavLink to="/tasks" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <MdTaskAlt className="nav-icon" /> Tasks
+            </NavLink>
+          )}
 
           {(isAdmin || isManager) && <>
             <div className="nav-section-title">Stock</div>

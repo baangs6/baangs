@@ -21,6 +21,7 @@ import StaffList from './pages/Staff/StaffList';
 import StaffFormPage from './pages/Staff/StaffFormPage';
 import InventoryDashboard from './pages/Inventory/InventoryDashboard';
 import Reports from './pages/Reports/Reports';
+import Tasks from './pages/Tasks/Tasks';
 
 function AppRoutes() {
   const { user, loading, isSetup } = useAuth();
@@ -53,6 +54,7 @@ function AppRoutes() {
         <Route path="staff" element={<StaffList />} />
         <Route path="staff/new" element={<StaffFormPage />} />
         <Route path="staff/:staffId" element={<StaffFormPage />} />
+        <Route path="tasks" element={<Tasks />} />
         <Route path="users" element={<UserManagement />} />
         <Route path="settings" element={<LookupManager />} />
       </Route>

@@ -228,6 +228,7 @@ def _collection_names():
         "notifications",
         "push_tokens",
         "leaves",
+        "tasks",
         "counters",
     ]
 
@@ -386,6 +387,7 @@ def _seed_data():
         "notifications": [],
         "push_tokens": [],
         "leaves": [],
+        "tasks": [],
         "counters": [
             {"_id": f"job_{today.replace('-', '')}", "seq": 1},
         ],
@@ -474,7 +476,11 @@ def _match_values(values: list[Any], expected: Any, doc: dict):
         return _match_operators(values, expected, doc)
 
     normalized_expected = _normalize(expected)
-    return any(_normalize(value) == normalized_expected for value in values)
+    return any(
+        (_normalize(value) == normalized_expected)
+        or (isinstance(value, list) and normalized_expected in [_normalize(item) for item in value])
+        for value in values
+    )
 
 
 def _match_operators(values: list[Any], expected: dict, doc: dict):

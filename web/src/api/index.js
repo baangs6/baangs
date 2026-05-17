@@ -175,4 +175,14 @@ export const leavesApi = {
   decide: (leaveId, decision, note='') => api.patch(`/leaves/${leaveId}/decision`, { decision, note }),
 };
 
+export const tasksApi = {
+  assignees: () => api.get('/tasks/assignees'),
+  list: (params) => api.get('/tasks/', { params }),
+  create: (data) => api.post('/tasks/', data),
+  update: (id, data) => api.put(`/tasks/${id}`, data),
+  addSubtask: (id, data) => api.post(`/tasks/${id}/subtasks`, data),
+  updateSubtask: (taskId, subtaskId, data) => api.patch(`/tasks/${taskId}/subtasks/${subtaskId}`, data),
+  addComment: (id, data) => api.post(`/tasks/${id}/comments`, data),
+};
+
 export default api;

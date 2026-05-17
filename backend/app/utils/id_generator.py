@@ -56,3 +56,15 @@ def generate_transaction_id() -> str:
 
 def generate_usage_id() -> str:
     return f"USG-{uuid.uuid4().hex[:8].upper()}"
+
+
+def generate_task_id() -> str:
+    return f"TSK-{uuid.uuid4().hex[:8].upper()}"
+
+
+def generate_subtask_id() -> str:
+    return f"SUB-{uuid.uuid4().hex[:8].upper()}"
+
+
+def generate_task_comment_id() -> str:
+    return f"TCM-{uuid.uuid4().hex[:8].upper()}"
