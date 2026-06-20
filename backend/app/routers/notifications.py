@@ -79,3 +79,10 @@ async def mark_read(notification_id: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=404, detail="Notification not found")
     return {"message": "Marked as read"}
 
+
+@router.delete("/clear")
+async def clear_notifications(current_user: dict = Depends(get_current_user)):
+    db = get_db()
+    result = await db.notifications.delete_many({"user_id": current_user["user_id"]})
+    return {"message": "Notifications cleared", "deleted_count": result.deleted_count}
+

@@ -27,6 +27,7 @@ class StaffCreate(BaseModel):
     create_login: bool = False
     username: Optional[str] = None
     password: Optional[str] = None
+    user_role: Optional[str] = "technician"
 
 
 class StaffUpdate(BaseModel):
@@ -52,6 +53,10 @@ class StaffUpdate(BaseModel):
     aadhaar_number: Optional[str] = None
     photo_url: Optional[str] = None
     is_active: Optional[bool] = None
+    create_login: Optional[bool] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    user_role: Optional[str] = None
 
 
 class StaffResponse(BaseModel):
@@ -78,4 +83,7 @@ class StaffResponse(BaseModel):
     aadhaar_number: Optional[str] = None
     photo_url: Optional[str] = None
     is_active: bool = True
+    has_login: bool = False
+    username: Optional[str] = None
+    user_role: Optional[str] = None
     created_at: str

@@ -4,12 +4,12 @@ import { staffApi } from '../../api';
 import { MdArrowBack } from 'react-icons/md';
 
 const EMPTY_FORM = {
-  name: '', phone_number: '', skill: '', dob: '', doj: '', email_id: '', address: '',
+  staff_id: '', name: '', phone_number: '', skill: '', dob: '', doj: '', email_id: '', address: '',
   emergency_contact_name: '', emergency_contact_phone: '',
   salary_type: 'monthly', monthly_salary: 0, daily_wage: 0, overtime_rate_per_hour: 0, allowance: 0, deduction: 0,
   bank_account_holder: '', bank_account_number: '', bank_ifsc: '', pan_number: '', aadhaar_number: '',
   photo_url: '',
-  create_login: false, username: '', password: ''
+  has_login: false, create_login: false, username: '', password: '', user_role: 'technician'
 };
 
 export default function StaffFormPage() {
@@ -133,6 +133,10 @@ export default function StaffFormPage() {
 
         <div className="form-grid">
           <div className="form-group">
+            <label className="form-label">Staff ID</label>
+            <input className="form-input" value={form.staff_id || ''} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))} placeholder="Leave blank to auto-generate" />
+          </div>
+          <div className="form-group">
             <label className="form-label">Full Name</label>
             <input className="form-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
           </div>
@@ -224,29 +228,38 @@ export default function StaffFormPage() {
         </div>
       </div>
 
-      {isNew && (
-        <div className="card" style={{ marginTop: 12 }}>
-          <h3 className="card-title" style={{ marginBottom: 12 }}>Mobile Login</h3>
+      <div className="card" style={{ marginTop: 12 }}>
+        <h3 className="card-title" style={{ marginBottom: 12 }}>System Login & Role</h3>
+        {!form.has_login && (
           <div className="form-group" style={{ marginBottom: 12 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
               <input type="checkbox" checked={form.create_login || false} onChange={e => setForm(f => ({ ...f, create_login: e.target.checked }))} />
-              <span>Create Mobile Login Credentials</span>
+              <span>Create System Login Credentials</span>
             </label>
           </div>
-          {form.create_login && (
-            <div className="form-grid">
-              <div className="form-group">
-                <label className="form-label">Username</label>
-                <input className="form-input" value={form.username || ''} onChange={e => setForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s/g, '') }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Password</label>
-                <input className="form-input" value={form.password || ''} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
-              </div>
+        )}
+        {(form.create_login || form.has_login) && (
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">System Role</label>
+              <select className="form-select" value={form.user_role || 'technician'} onChange={e => setForm(f => ({ ...f, user_role: e.target.value }))}>
+                <option value="technician">Technician</option>
+                <option value="admin">Admin / Dispatcher</option>
+                <option value="sales">Sales</option>
+                <option value="manager">Manager / Viewer</option>
+              </select>
             </div>
-          )}
-        </div>
-      )}
+            <div className="form-group">
+              <label className="form-label">Username</label>
+              <input className="form-input" disabled={form.has_login} value={form.username || ''} onChange={e => setForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s/g, '') }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{form.has_login ? 'Change Password (optional)' : 'Password'}</label>
+              <input className="form-input" type="password" value={form.password || ''} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+            </div>
+          </div>
+        )}
+      </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
         <button className="btn btn-secondary" onClick={() => navigate('/staff')}>Cancel</button>

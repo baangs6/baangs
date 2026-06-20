@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Dict, Any
+import re
 from ..models.inventory import (
     InventoryItemCreate,
     InventoryItemUpdate,
@@ -103,29 +104,46 @@ async def get_transactions(limit: int = 100, current_user: dict = Depends(requir
 
 @router.get("/search")
 async def search_item(
-    model_number: str = Query(...),
-    serial_number: str = Query(...),
+    model_number: str | None = Query(None),
+    serial_number: str | None = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
     db = get_db()
 
-    model = model_number.strip()
-    serial = serial_number.strip()
-    if not model or not serial:
-        raise HTTPException(status_code=400, detail="Both model_number and serial_number are required")
+    model = (model_number or "").strip()
+    serial = (serial_number or "").strip()
+    if not model and not serial:
+        raise HTTPException(status_code=400, detail="Enter model number or serial number")
 
-    item = await db.inventory.find_one({
-        "status": InventoryStatus.ACTIVE,
-        "model_number": {"$regex": f"^{model}$", "$options": "i"},
-        "serial_number": {"$regex": f"(^|\\s*,\\s*){serial}(\\s*,\\s*|$)", "$options": "i"},
-    })
-    if not item:
-        raise HTTPException(status_code=404, detail="No inventory found for the entered model and serial number")
+    query: dict[str, Any] = {"status": InventoryStatus.ACTIVE}
+    if model:
+        query["model_number"] = {"$regex": f"^{re.escape(model)}$", "$options": "i"}
+    if serial:
+        serial_regex = f"(^|\\s*,\\s*){re.escape(serial)}(\\s*,\\s*|$)"
+        query["$or"] = [
+            {"serial_number": {"$regex": serial_regex, "$options": "i"}},
+            {"serial_numbers": {"$regex": f"^{re.escape(serial)}$", "$options": "i"}},
+        ]
 
-    item["_id"] = str(item.get("_id", item.get("barcode")))
-    if current_user["role"] == "technician":
-        return InventoryItemTechResponse(**item).dict(by_alias=True)
-    return InventoryItemInDB(**item).dict(by_alias=True)
+    items = await db.inventory.find(query).limit(20).to_list(20)
+    if not items:
+        if serial and not model:
+            raise HTTPException(status_code=404, detail="No inventory found for this serial number")
+        raise HTTPException(status_code=404, detail="No inventory found for the entered details")
+
+    def fmt(item: dict):
+        item["_id"] = str(item.get("_id", item.get("barcode")))
+        item.setdefault("model_number", "")
+        item.setdefault("unit_type", "Pcs")
+        item.setdefault("category", "General")
+        if current_user["role"] == "technician":
+            return InventoryItemTechResponse(**item).dict(by_alias=True)
+        return InventoryItemInDB(**item).dict(by_alias=True)
+
+    result = [fmt(item) for item in items]
+    if len(result) == 1:
+        return result[0]
+    return {"matches": result}
 
 
 @router.get("/{barcode}")

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { notificationsApi } from '../api';
 import { colors, spacing, radius } from '../theme';
 
 export default function NotificationsScreen({ navigation }) {
   const [rows, setRows] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const load = async () => {
     try {
@@ -41,14 +42,50 @@ export default function NotificationsScreen({ navigation }) {
     }
   };
 
+  const clearAll = () => {
+    if (rows.length === 0 || clearing) return;
+    Alert.alert(
+      'Clear notifications',
+      'Remove all notifications from this device account?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            setClearing(true);
+            try {
+              await notificationsApi.clear();
+              setRows([]);
+            } catch (e) {
+              Alert.alert('Error', e?.response?.data?.detail || 'Failed to clear notifications');
+            } finally {
+              setClearing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScrollView
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.accent} />}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Notifications</Text>
-        <Text style={styles.sub}>Job alerts and updates</Text>
+        <View>
+          <Text style={styles.title}>Notifications</Text>
+          <Text style={styles.sub}>Job alerts and updates</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.clearBtn, (rows.length === 0 || clearing) && styles.clearBtnDisabled]}
+          onPress={clearAll}
+          disabled={rows.length === 0 || clearing}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.clearBtnText}>{clearing ? 'Clearing...' : 'Clear'}</Text>
+        </TouchableOpacity>
       </View>
 
       {rows.length === 0 ? (
@@ -74,9 +111,19 @@ export default function NotificationsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  header: { padding: spacing.xl, paddingBottom: spacing.md },
+  header: { padding: spacing.xl, paddingBottom: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
   title: { fontSize: 24, fontWeight: '800', color: colors.text },
   sub: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  clearBtn: {
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.dangerDim,
+  },
+  clearBtnDisabled: { opacity: 0.45 },
+  clearBtnText: { color: colors.danger, fontSize: 12, fontWeight: '800' },
   empty: { padding: spacing.xl, alignItems: 'center' },
   emptyText: { color: colors.textMuted },
   item: {

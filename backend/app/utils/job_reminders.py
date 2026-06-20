@@ -71,3 +71,44 @@ async def job_reminder_loop(db, interval_seconds: int = 60):
         except Exception as exc:
             print(f"Job reminder loop failed: {exc}")
         await asyncio.sleep(interval_seconds)
+
+
+async def send_logout_reminder(db):
+    """Send a logout reminder to admin and sales users Mon-Sat at 17:00 IST."""
+    now = now_ist()
+    # weekday(): Monday=0 ... Saturday=5, Sunday=6
+    if now.weekday() == 6:
+        return  # Skip Sunday
+    if now.hour != 17 or now.minute != 0:
+        return
+
+    # Deduplicate: only fire once per calendar day
+    today = now.strftime("%Y-%m-%d")
+    already = await db.reminder_log.find_one({"type": "logout_reminder", "date": today})
+    if already:
+        return
+
+    await db.reminder_log.insert_one({"type": "logout_reminder", "date": today})
+    await notify_users_by_roles(db, ["admin", "sales"])
+    print(f"[{today}] Logout reminder sent to admin & sales.")
+
+
+async def notify_users_by_roles(db, roles):
+    from .notifications import notify_roles
+    await notify_roles(
+        db,
+        roles,
+        "\u23f0 End of Day Reminder",
+        "It's 5 PM \u2014 please save your work and log out. Have a great evening!",
+        {"type": "logout_reminder"},
+    )
+
+
+async def logout_reminder_loop(db, interval_seconds: int = 60):
+    """Check every minute whether it is time to send the 5 PM logout reminder."""
+    while True:
+        try:
+            await send_logout_reminder(db)
+        except Exception as exc:
+            print(f"Logout reminder loop failed: {exc}")
+        await asyncio.sleep(interval_seconds)

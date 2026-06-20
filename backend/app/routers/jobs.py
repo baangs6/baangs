@@ -69,7 +69,7 @@ async def list_jobs(
     db = get_db()
     if current_user["role"] == "sales":
         raise HTTPException(status_code=403, detail="Sales users can access Tasks only")
-    
+
     # Auto-update unattended pending jobs
     today_str = today_ist_str()
     await db.jobs.update_many(
@@ -220,12 +220,12 @@ async def get_job(job_id: str, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Job not found")
     if current_user["role"] == "technician" and job.get("assigned_staff_id") != current_user.get("staff_id"):
         raise HTTPException(status_code=403, detail="Access denied")
-        
+
     usage_cursor = db.job_inventory_usage.find({"job_id": job_id})
     usage = await usage_cursor.to_list(100)
     for u in usage:
         u["_id"] = str(u["_id"])
-        
+
     formatted = _format_job(job)
     formatted["inventory_used"] = usage
     return formatted
@@ -259,13 +259,22 @@ async def update_job(job_id: str, data: JobUpdate, current_user: dict = Depends(
         return_document=True
     )
     if current_user["role"] == "technician" and update_data:
-        await notify_roles(
-            db,
-            ["admin"],
-            "Job Updated by Technician",
-            f"{job_id} updated by {current_user.get('full_name') or current_user.get('username')}",
-            {"job_id": job_id, "type": "job_updated_by_technician"},
-        )
+        if update_data.get("status") == "completed":
+            await notify_roles(
+                db,
+                ["admin", "manager"],
+                "✅ Job Completed",
+                f"{job_id} completed by {current_user.get('full_name') or current_user.get('username')} — {job.get('customer_name', '')}",
+                {"job_id": job_id, "type": "job_completed"},
+            )
+        else:
+            await notify_roles(
+                db,
+                ["admin"],
+                "Job Updated by Technician",
+                f"{job_id} updated by {current_user.get('full_name') or current_user.get('username')}",
+                {"job_id": job_id, "type": "job_updated_by_technician"},
+            )
     return _format_job(result)
 
 

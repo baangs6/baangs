@@ -21,6 +21,7 @@ def _format_customer(c: dict) -> dict:
         "first_request_date": c.get("first_request_date"),
         "latest_request_date": c.get("latest_request_date"),
         "total_jobs": c.get("total_jobs", 0),
+        "receive_notifications": c.get("receive_notifications", True),
         "customer_key": c["customer_key"],
     }
 
@@ -64,6 +65,7 @@ async def create_or_get_customer(data: CustomerCreate, _=Depends(require_admin))
         "first_request_date": today_ist_str(),
         "latest_request_date": today_ist_str(),
         "total_jobs": 0,
+        "receive_notifications": data.receive_notifications if data.receive_notifications is not None else True,
         "customer_key": customer_key,
     }
     await db.customers.insert_one(customer_doc)

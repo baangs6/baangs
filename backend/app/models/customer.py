@@ -9,6 +9,7 @@ class CustomerCreate(BaseModel):
     location: Optional[str] = None
     map_location: Optional[str] = None
     site_type: Optional[str] = None
+    receive_notifications: Optional[bool] = True
 
 
 class CustomerUpdate(BaseModel):
@@ -18,6 +19,7 @@ class CustomerUpdate(BaseModel):
     location: Optional[str] = None
     map_location: Optional[str] = None
     site_type: Optional[str] = None
+    receive_notifications: Optional[bool] = None
 
 
 class CustomerResponse(BaseModel):
@@ -31,4 +33,5 @@ class CustomerResponse(BaseModel):
     first_request_date: Optional[str] = None
     latest_request_date: Optional[str] = None
     total_jobs: int = 0
+    receive_notifications: bool = True
     customer_key: str

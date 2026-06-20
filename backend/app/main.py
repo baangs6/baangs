@@ -6,7 +6,7 @@ import asyncio
 from .config import settings
 from .database import connect_db, close_db, get_db, get_db_mode
 from .utils.cloudinary_helper import configure_cloudinary
-from .utils.job_reminders import job_reminder_loop
+from .utils.job_reminders import job_reminder_loop, logout_reminder_loop
 from .routers import auth, users, staff, customers, jobs, updates, billing, attendance, lookups, dashboard, export, inventory, notifications, leaves, tasks
 
 
@@ -15,14 +15,17 @@ async def lifespan(app: FastAPI):
     await connect_db()
     configure_cloudinary()
     reminder_task = asyncio.create_task(job_reminder_loop(get_db()))
+    logout_task = asyncio.create_task(logout_reminder_loop(get_db()))
     try:
         yield
     finally:
         reminder_task.cancel()
-        try:
-            await reminder_task
-        except asyncio.CancelledError:
-            pass
+        logout_task.cancel()
+        for t in [reminder_task, logout_task]:
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
         await close_db()
 
 

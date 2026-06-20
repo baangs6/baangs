@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { inventoryApi, staffApi, customersApi } from '../../api';
 import { MdAdd, MdHistory, MdInventory, MdTrendingUp, MdSummarize, MdSell, MdEdit, MdSearch, MdCloudUpload, MdFileDownload, MdFilterList } from 'react-icons/md';
 import './InventoryDashboard.css';
@@ -6,7 +6,7 @@ import './InventoryDashboard.css';
 export default function InventoryDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
-  
+
   // Data States
   const [summary, setSummary] = useState(null);
   const [items, setItems] = useState([]);
@@ -28,6 +28,7 @@ export default function InventoryDashboard() {
   const [soldDetails, setSoldDetails] = useState([]);
   const [staff, setStaff] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [selectedItem, setSelectedItem] = useState(null);
 
   // Form States
   const [logForm, setLogForm] = useState({
@@ -112,8 +113,8 @@ export default function InventoryDashboard() {
     if (!editForm.item_name || !editForm.model_number) return alert('Fill required fields');
     setSaving(true);
     try {
-      const payload = { 
-        ...editForm, 
+      const payload = {
+        ...editForm,
         serial_numbers: editSerials.filter(s => s.trim() !== ''),
         serial_number: editSerials.filter(s => s.trim() !== '').join(', ')
       };
@@ -137,7 +138,7 @@ export default function InventoryDashboard() {
       i.tax_percentage,
       i.minimum_stock_level
     ]);
-    
+
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -239,12 +240,12 @@ export default function InventoryDashboard() {
 
   const handleLogSubmit = async (e) => {
     e.preventDefault();
-    if (!logForm.model_number || !logForm.quantity_changed) return alert('Select a Model Number and enter Quantity');
-    
-    // Resolve barcode from model_number
-    const matchedItem = items.find(i => i.model_number === logForm.model_number);
-    if (!matchedItem) return alert('No item found with that Model Number');
-    
+    if (!logForm.model_number || !logForm.quantity_changed) return alert('Select an Item and enter Quantity');
+
+    // Resolve barcode
+    const matchedItem = items.find(i => i.model_number === logForm.model_number || i.item_name === logForm.model_number || i.barcode === logForm.model_number);
+    if (!matchedItem) return alert('No item found matching that search term');
+
     try {
       const payload = {
         ...logForm,
@@ -354,21 +355,9 @@ export default function InventoryDashboard() {
       })()}
 
       {activeTab === 'master' && (
-        <div className="tab-content">
-          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <div className="search-box-container" style={{ position: 'relative', flex: 1, minWidth: 250, maxWidth: 400 }}>
-              <MdSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Search items, models or serials..." 
-                style={{ paddingLeft: 40 }}
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
-            </div>
-            
-            <div style={{ display: 'flex', gap: 10 }}>
+        <div className="tab-content" style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 10, marginLeft: 'auto' }}>
               <button className="btn btn-secondary" onClick={handleExport} title="Export to CSV">
                 <MdFileDownload /> Export
               </button>
@@ -377,7 +366,7 @@ export default function InventoryDashboard() {
                   <MdCloudUpload /> Bulk Upload
                 </button>
                 <input id="bulk-input" type="file" accept=".csv" style={{ display: 'none' }} onChange={handleBulkUpload} />
-                <button 
+                <button
                   onClick={downloadTemplate}
                   style={{ position: 'absolute', top: '100%', right: 0, background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: '0.7rem', cursor: 'pointer', padding: '4px 0' }}
                 >
@@ -389,68 +378,112 @@ export default function InventoryDashboard() {
               </button>
             </div>
           </div>
-          <div className="excel-table-container">
-            <table className="excel-table">
-              <thead>
-                <tr>
-                  <th>Date & Time</th>
-                  <th>Item ID</th>
-                  <th>Item Name</th>
-                  <th>Model Number</th>
-                  <th>Serial Number</th>
-                  <th>Purchase Price</th>
-                  <th>Selling Price</th>
-                  <th>Profit</th>
-                  <th>Tax Value</th>
-                  <th>Initial Qty</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+
+          <div style={{ display: 'flex', gap: '24px', flex: 1, minHeight: '400px' }}>
+            {/* Left Sidebar - Item List */}
+            <div style={{ width: '320px', display: 'flex', flexDirection: 'column', gap: '12px', borderRight: '1px solid #e2e8f0', paddingRight: '16px' }}>
+              <div className="search-box-container" style={{ position: 'relative' }}>
+                <MdSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Search items, models or serials..."
+                  style={{ paddingLeft: 40 }}
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div style={{ overflowY: 'auto', flex: 1, border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc', maxHeight: '500px' }}>
                 {items
-                  .filter(item => 
+                  .filter(item =>
                     (item.item_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (item.model_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (item.barcode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (item.serial_number || '').toLowerCase().includes(searchTerm.toLowerCase())
                   )
-                  .map(item => {
-                    const profit = item.selling_price - item.purchase_price;
-                    const taxPct = item.tax_percentage || 18;
-                    const taxVal = item.selling_price * (taxPct / 100);
-                    return (
-                      <tr key={item.barcode}>
-                        <td style={{ fontSize: '0.78rem', color: '#64748b' }}>{formatDate(item.created_at)}</td>
-                        <td className="cell-bold">{item.barcode}</td>
-                        <td className="cell-highlight">{item.item_name}</td>
-                        <td className="cell-highlight">{item.model_number}</td>
-                        <td style={{ fontSize: '0.8rem' }}>
-                          {item.serial_numbers && item.serial_numbers.length > 0
-                            ? item.serial_numbers.map((sn, i) => (
-                                <span key={i} style={{ display: 'inline-block', background: '#e0f2fe', color: '#0369a1', borderRadius: 4, padding: '1px 6px', margin: '1px 2px', fontSize: '0.75rem' }}>{sn}</span>
-                              ))
-                            : item.serial_number || '-'
-                          }
-                        </td>
-                        <td>{formatCurrency(item.purchase_price)}</td>
-                        <td>{formatCurrency(item.selling_price)}</td>
-                        <td>{formatCurrency(profit)}</td>
-                        <td>{formatCurrency(taxVal)}</td>
-                        <td className="cell-highlight">{item.opening_quantity}</td>
-                        <td>
-                          <button className="btn-icon" style={{ color: 'var(--color-primary)' }} onClick={() => handleEditClick(item)}>
-                            <MdEdit />
-                          </button>
-                        </td>
+                  .map(item => (
+                    <div
+                      key={item.barcode}
+                      onClick={() => setSelectedItem(item)}
+                      style={{
+                        padding: '12px 16px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #e2e8f0',
+                        background: selectedItem?.barcode === item.barcode ? '#e0f2fe' : 'transparent',
+                        borderLeft: selectedItem?.barcode === item.barcode ? '4px solid #0284c7' : '4px solid transparent',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.item_name}</div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>Model: {item.model_number}</div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            {/* Right Side - Details Table */}
+            <div style={{ flex: 1, overflowX: 'auto' }}>
+              {selectedItem ? (
+                <div className="excel-table-container">
+                  <h3 style={{ marginBottom: '16px', color: '#334155' }}>Details for {selectedItem.item_name}</h3>
+                  <table className="excel-table">
+                    <thead>
+                      <tr>
+                        <th>Date of Purchase</th>
+                        <th>Serial Number</th>
+                        <th>Purchase Price</th>
+                        <th>Selling Price</th>
+                        <th>Profit</th>
+                        <th>Tax Value</th>
+                        <th>Initial Qty</th>
+                        <th>Actions</th>
                       </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const profit = selectedItem.selling_price - selectedItem.purchase_price;
+                        const taxPct = selectedItem.tax_percentage || 18;
+                        const taxVal = selectedItem.selling_price * (taxPct / 100);
+                        return (
+                          <tr>
+                            <td style={{ fontSize: '0.85rem' }}>{formatDate(selectedItem.created_at)}</td>
+                            <td style={{ fontSize: '0.8rem' }}>
+                              {selectedItem.serial_numbers && selectedItem.serial_numbers.length > 0
+                                ? selectedItem.serial_numbers.map((sn, i) => (
+                                    <span key={i} style={{ display: 'inline-block', background: '#f1f5f9', color: '#475569', borderRadius: 4, padding: '2px 6px', margin: '2px', border: '1px solid #cbd5e1' }}>{sn}</span>
+                                  ))
+                                : selectedItem.serial_number || '-'
+                              }
+                            </td>
+                            <td style={{ fontWeight: 500 }}>{formatCurrency(selectedItem.purchase_price)}</td>
+                            <td style={{ fontWeight: 500 }}>{formatCurrency(selectedItem.selling_price)}</td>
+                            <td style={{ fontWeight: 600, color: profit >= 0 ? '#16a34a' : '#dc2626' }}>{formatCurrency(profit)}</td>
+                            <td>{formatCurrency(taxVal)}</td>
+                            <td className="cell-bold">{selectedItem.opening_quantity}</td>
+                            <td>
+                              <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => handleEditClick(selectedItem)}>
+                                <MdEdit style={{ marginRight: '4px' }} /> Edit
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })()}
+                    </tbody>
+                  </table>
+                  <p style={{ marginTop: 12, fontSize: '0.8rem', fontStyle: 'italic', color: '#64748b' }}>
+                    * Item ID ({selectedItem.barcode}) is generated automatically. Tax % is user input; Profit and Tax Value calculate automatically.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '300px', backgroundColor: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '8px', color: '#64748b' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <MdInventory style={{ fontSize: '3rem', color: '#94a3b8', marginBottom: '8px' }} />
+                    <p>Select an item from the left to view details</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <p style={{ marginTop: 12, fontSize: '0.8rem', fontStyle: 'italic', color: '#64748b' }}>
-            * Item ID is generated automatically. Tax % is user input; Profit and Tax Value calculate automatically.
-          </p>
         </div>
       )}
 
@@ -470,7 +503,26 @@ export default function InventoryDashboard() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Item Name</label>
-                  <input className="form-input" value={createForm.item_name} onChange={e => setCreateForm({...createForm, item_name: e.target.value})} placeholder="e.g. 2MP Camera" />
+                  <input
+                    className="form-input"
+                    list="existing-item-names"
+                    value={createForm.item_name}
+                    onChange={e => {
+                      const val = e.target.value;
+                      const existingItem = items.find(i => i.item_name === val);
+                      setCreateForm({
+                        ...createForm,
+                        item_name: val,
+                        model_number: existingItem ? existingItem.model_number : createForm.model_number
+                      });
+                    }}
+                    placeholder="e.g. 2MP Camera"
+                  />
+                  <datalist id="existing-item-names">
+                    {[...new Set(items.map(i => i.item_name).filter(Boolean))].map((name, idx) => (
+                      <option key={idx} value={name} />
+                    ))}
+                  </datalist>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Model Number <span style={{ color: 'red' }}>*</span></label>
@@ -626,14 +678,22 @@ export default function InventoryDashboard() {
             <h3 style={{ marginBottom: 16 }}>Log New Transaction</h3>
             <form onSubmit={handleLogSubmit} className="inv-input-group">
               <div className="form-group">
-                <label className="form-label">Model Number</label>
-                <select className="form-input" value={logForm.model_number} onChange={e => setLogForm({...logForm, model_number: e.target.value})}>
-                  <option value="">Select Model Number</option>
-                  {/* Unique model numbers */}
-                  {[...new Map(items.map(i => [i.model_number, i])).values()].map(i => (
-                    <option key={i.model_number} value={i.model_number}>{i.model_number} — {i.item_name}</option>
+                <label className="form-label">Search Item</label>
+                <input
+                  className="form-input"
+                  list="log-item-search"
+                  value={logForm.model_number}
+                  onChange={e => setLogForm({...logForm, model_number: e.target.value})}
+                  placeholder="Search by model, name or barcode..."
+                />
+                <datalist id="log-item-search">
+                  {items.map(i => (
+                    <option key={i.barcode} value={i.model_number}>{i.item_name} ({i.barcode})</option>
                   ))}
-                </select>
+                  {items.map(i => (
+                    <option key={i.barcode + '_name'} value={i.item_name}>{i.model_number}</option>
+                  ))}
+                </datalist>
               </div>
               <div className="form-group">
                 <label className="form-label">Type</label>
@@ -718,8 +778,8 @@ export default function InventoryDashboard() {
       {activeTab === 'summary' && (
         <div className="tab-content">
           <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
-            <button 
-              className={`btn ${showSummaryFilters ? 'btn-primary' : 'btn-secondary'}`} 
+            <button
+              className={`btn ${showSummaryFilters ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setShowSummaryFilters(!showSummaryFilters)}
               style={{ display: 'flex', alignItems: 'center', gap: 8 }}
             >
@@ -756,7 +816,7 @@ export default function InventoryDashboard() {
               </thead>
               <tbody>
                 {stockSummary
-                  .filter(s => 
+                  .filter(s =>
                     s.model_number.toLowerCase().includes(summaryFilters.model_number.toLowerCase()) &&
                     s.item_name.toLowerCase().includes(summaryFilters.item_name.toLowerCase()) &&
                     s.initial_quantity.toString().includes(summaryFilters.initial_quantity) &&

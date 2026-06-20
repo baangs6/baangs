@@ -54,6 +54,7 @@ export default function JobDetailScreen({ route }) {
   const [scanTarget, setScanTarget] = useState('model');
   const [qtyInput, setQtyInput] = useState('1');
   const [foundItem, setFoundItem] = useState(null);
+  const [modelOptions, setModelOptions] = useState([]);
   const [searchingItem, setSearchingItem] = useState(false);
 
   const [manualItemForm, setManualItemForm] = useState(EMPTY_MANUAL_ITEM);
@@ -111,6 +112,7 @@ export default function JobDetailScreen({ route }) {
     setModelInput('');
     setSerialInput('');
     setFoundItem(null);
+    setModelOptions([]);
     setQtyInput('1');
     setManualItemForm(EMPTY_MANUAL_ITEM);
     setManualSerials(['']);
@@ -222,24 +224,40 @@ export default function JobDetailScreen({ route }) {
     }
   };
 
-  const lookupItem = async () => {
-    const model = modelInput.trim();
-    const serial = serialInput.trim();
-    if (!model || !serial) {
-      Alert.alert('Missing Input', 'Enter both model number and serial number');
+  const lookupItem = async (nextModel = modelInput, nextSerial = serialInput) => {
+    const model = nextModel.trim();
+    const serial = nextSerial.trim();
+    if (!model && !serial) {
+      Alert.alert('Missing Input', 'Enter model number or serial number');
       return;
     }
     setSearchingItem(true);
     try {
       const res = await inventoryApi.search(model, serial);
-      setFoundItem(res.data);
+      const matches = Array.isArray(res.data?.matches) ? res.data.matches : [];
+      if (matches.length > 0) {
+        setFoundItem(null);
+        setModelOptions(matches);
+      } else {
+        setFoundItem(res.data);
+        setModelOptions([]);
+        if (res.data?.model_number) setModelInput(res.data.model_number);
+      }
       setQtyInput('1');
     } catch (error) {
       setFoundItem(null);
-      Alert.alert('Not Found', error.response?.data?.detail || 'No inventory found for this model and serial number');
+      setModelOptions([]);
+      Alert.alert('Not Found', error.response?.data?.detail || 'No inventory found for the entered details');
     } finally {
       setSearchingItem(false);
     }
+  };
+
+  const selectModelOption = (item) => {
+    setFoundItem(item);
+    setModelOptions([]);
+    setModelInput(item.model_number || '');
+    setQtyInput('1');
   };
 
   const addKnownInventory = () => {
@@ -288,6 +306,7 @@ export default function JobDetailScreen({ route }) {
     setModelInput('');
     setSerialInput('');
     setFoundItem(null);
+    setModelOptions([]);
     setQtyInput('1');
   };
 
@@ -296,12 +315,11 @@ export default function JobDetailScreen({ route }) {
     const serialList = manualSerials.map((s) => s.trim()).filter(Boolean);
     if (
       !manualItemForm.item_name.trim() ||
-      !manualItemForm.model_number.trim() ||
       serialList.length === 0 ||
       !quantityUsed ||
       quantityUsed <= 0
     ) {
-      Alert.alert('Missing Details', 'Enter item name, model number, serial number and valid quantity');
+      Alert.alert('Missing Details', 'Enter item name, serial number and valid quantity');
       return;
     }
     if (!Number.isInteger(quantityUsed)) {
@@ -384,6 +402,7 @@ export default function JobDetailScreen({ route }) {
     if (!data) return;
     if (scanTarget === 'serial') {
       setSerialInput(data);
+      lookupItem(modelInput, data);
     } else if (scanTarget.startsWith('manual_serial_')) {
       const idx = Number(scanTarget.replace('manual_serial_', ''));
       if (!Number.isNaN(idx)) {
@@ -626,7 +645,7 @@ export default function JobDetailScreen({ route }) {
               <View style={styles.row}>
                 <TextInput
                   style={[styles.input, styles.rowInput]}
-                  placeholder="Type model number"
+                  placeholder="Type model number (optional)"
                   value={modelInput}
                   onChangeText={setModelInput}
                   placeholderTextColor={colors.textMuted}
@@ -655,6 +674,25 @@ export default function JobDetailScreen({ route }) {
                   <Text style={styles.findBtnText}>Find</Text>
                 )}
               </TouchableOpacity>
+
+              {modelOptions.length > 0 ? (
+                <View style={styles.foundCard}>
+                  <Text style={styles.foundName}>Select model for serial {serialInput.trim()}</Text>
+                  {modelOptions.map((item) => (
+                    <TouchableOpacity
+                      key={item.barcode}
+                      style={styles.modelOption}
+                      activeOpacity={0.75}
+                      onPress={() => selectModelOption(item)}
+                    >
+                      <Text style={styles.modelOptionTitle}>{item.model_number || 'No model number'}</Text>
+                      <Text style={styles.foundStock}>
+                        {item.item_name} | Stock: {item.current_quantity} {item.unit_type}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
 
               {foundItem ? (
                 <View style={styles.foundCard}>
@@ -724,7 +762,7 @@ export default function JobDetailScreen({ route }) {
               <View style={styles.row}>
                 <TextInput
                   style={[styles.input, styles.rowInput]}
-                  placeholder="Model number"
+                  placeholder="Model number (optional)"
                   value={manualItemForm.model_number}
                   onChangeText={(text) => setManualItemForm((prev) => ({ ...prev, model_number: text }))}
                   placeholderTextColor={colors.textMuted}
@@ -1032,6 +1070,13 @@ const styles = StyleSheet.create({
   },
   foundName: { color: colors.text, fontWeight: '700', fontSize: 13 },
   foundStock: { color: colors.textSecondary, fontSize: 11, marginBottom: spacing.xs },
+  modelOption: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  modelOptionTitle: { color: colors.accent, fontWeight: '800', fontSize: 13, marginBottom: 2 },
   selectedRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

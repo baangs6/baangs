@@ -25,8 +25,18 @@ export default function Layout() {
   const isSales = user?.role === 'sales';
   const canUseTasks = isAdmin || isManager || isSales;
 
+  const prevNotifIds = useState(() => new Set())[0];
+
+  // Request browser notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
+    let isFirstLoad = true;
     const load = async () => {
       try {
         const [listRes, countRes] = await Promise.all([
@@ -34,8 +44,28 @@ export default function Layout() {
           notificationsApi.unreadCount(),
         ]);
         if (!mounted) return;
-        setNotifications(listRes.data || []);
+        const incoming = listRes.data || [];
+        setNotifications(incoming);
         setNotifCount(Number(countRes.data?.count || 0));
+
+        // Fire browser notifications for newly arrived unread items (skip first load)
+        if (!isFirstLoad && 'Notification' in window && Notification.permission === 'granted') {
+          incoming.forEach((n) => {
+            if (!n.is_read && !prevNotifIds.has(n.notification_id)) {
+              const browserNotif = new Notification(n.title || 'Baangs', {
+                body: n.message,
+                icon: '/favicon.ico',
+                tag: n.notification_id,
+              });
+              browserNotif.onclick = () => {
+                window.focus();
+                if (n.meta?.job_id) window.location.hash = `/jobs/${n.meta.job_id}`;
+              };
+            }
+          });
+        }
+        isFirstLoad = false;
+        incoming.forEach((n) => prevNotifIds.add(n.notification_id));
       } catch {
         // no-op
       }

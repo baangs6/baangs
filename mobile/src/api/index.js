@@ -165,7 +165,12 @@ export const usersApi = {
 
 export const inventoryApi = {
   get: (barcode) => api.get(`/inventory/${barcode}`),
-  search: (model_number, serial_number) => api.get('/inventory/search', { params: { model_number, serial_number } }),
+  search: (model_number, serial_number) => api.get('/inventory/search', {
+    params: {
+      ...(model_number ? { model_number } : {}),
+      ...(serial_number ? { serial_number } : {}),
+    },
+  }),
 };
 
 export const notificationsApi = {
@@ -173,6 +178,7 @@ export const notificationsApi = {
   unreadCount: () => api.get('/notifications/unread-count'),
   registerPushToken: (data) => api.post('/notifications/push-token', data),
   markRead: (id) => api.patch(`/notifications/${id}/read`),
+  clear: () => api.delete('/notifications/clear'),
 };
 
 export const leavesApi = {

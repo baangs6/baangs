@@ -52,14 +52,14 @@ async def list_staff(_=Depends(require_any)):
 @router.post("/", response_model=StaffResponse)
 async def create_staff(data: StaffCreate, _=Depends(require_admin)):
     db = get_db()
-    
+
     if data.create_login:
         if not data.username or not data.password:
             raise HTTPException(status_code=400, detail="Username and password are required to create a login")
         existing_user = await db.users.find_one({"username": data.username})
         if existing_user:
             raise HTTPException(status_code=400, detail="Username already exists")
-            
+
     staff_id = generate_staff_id()
     staff_doc = {
         "staff_id": staff_id,
@@ -88,13 +88,13 @@ async def create_staff(data: StaffCreate, _=Depends(require_admin)):
         "created_at": now_ist_str(),
     }
     await db.staff.insert_one(staff_doc)
-    
+
     if data.create_login:
         user_doc = {
             "user_id": generate_user_id(),
             "username": data.username,
             "password_hash": hash_password(data.password),
-            "role": "technician",
+            "role": data.user_role or "technician",
             "status": "active",
             "full_name": data.name,
             "phone": data.phone_number,
@@ -102,7 +102,7 @@ async def create_staff(data: StaffCreate, _=Depends(require_admin)):
             "created_at": now_ist_str(),
         }
         await db.users.insert_one(user_doc)
-        
+
     return _format_staff(staff_doc)
 
 
@@ -112,21 +112,81 @@ async def get_staff(staff_id: str, _=Depends(require_any)):
     s = await db.staff.find_one({"staff_id": staff_id})
     if not s:
         raise HTTPException(status_code=404, detail="Staff not found")
-    return _format_staff(s)
+
+    res = _format_staff(s)
+
+    # Check if a user is linked
+    user = await db.users.find_one({"staff_id": staff_id})
+    if user:
+        res["has_login"] = True
+        res["username"] = user["username"]
+        res["user_role"] = user["role"]
+
+    return res
 
 
 @router.put("/{staff_id}", response_model=StaffResponse)
 async def update_staff(staff_id: str, data: StaffUpdate, _=Depends(require_admin)):
     db = get_db()
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
-    result = await db.staff.find_one_and_update(
-        {"staff_id": staff_id},
-        {"$set": update_data},
-        return_document=True
-    )
-    if not result:
-        raise HTTPException(status_code=404, detail="Staff not found")
-    return _format_staff(result)
+
+    create_login = update_data.pop("create_login", None)
+    username = update_data.pop("username", None)
+    password = update_data.pop("password", None)
+    user_role = update_data.pop("user_role", None)
+
+    if update_data:
+        result = await db.staff.find_one_and_update(
+            {"staff_id": staff_id},
+            {"$set": update_data},
+            return_document=True
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail="Staff not found")
+    else:
+        result = await db.staff.find_one({"staff_id": staff_id})
+        if not result:
+            raise HTTPException(status_code=404, detail="Staff not found")
+
+    existing_user = await db.users.find_one({"staff_id": staff_id})
+
+    if create_login and not existing_user:
+        if not username or not password:
+            raise HTTPException(status_code=400, detail="Username and password required")
+        if await db.users.find_one({"username": username}):
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        user_doc = {
+            "user_id": generate_user_id(),
+            "username": username,
+            "password_hash": hash_password(password),
+            "role": user_role or "technician",
+            "status": "active",
+            "full_name": result["name"],
+            "phone": result["phone_number"],
+            "staff_id": staff_id,
+            "created_at": now_ist_str(),
+        }
+        await db.users.insert_one(user_doc)
+    elif existing_user:
+        # Update existing user role or password
+        user_updates = {}
+        if user_role:
+            user_updates["role"] = user_role
+        if password:
+            user_updates["password_hash"] = hash_password(password)
+
+        if user_updates:
+            await db.users.update_one({"staff_id": staff_id}, {"$set": user_updates})
+
+    res = _format_staff(result)
+    updated_user = await db.users.find_one({"staff_id": staff_id})
+    if updated_user:
+        res["has_login"] = True
+        res["username"] = updated_user["username"]
+        res["user_role"] = updated_user["role"]
+
+    return res
 
 
 @router.delete("/{staff_id}")

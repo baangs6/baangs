@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Platform, Switch } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../context/AuthContext';
-import { colors, spacing, radius } from '../theme';
+import { useTheme, spacing, radius } from '../theme';
 import { leavesApi } from '../api';
 
 function toYmd(date) {
@@ -35,6 +35,8 @@ function normalizeDateInput(value) {
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
+  const { colors, themeMode, setThemeMode } = useTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [leaveForm, setLeaveForm] = React.useState({ leave_type: 'casual', from_date: '', to_date: '', reason: '' });
   const [leaveTypeOpen, setLeaveTypeOpen] = React.useState(false);
   const [showFromPicker, setShowFromPicker] = React.useState(false);
@@ -120,6 +122,27 @@ export default function SettingsScreen() {
 
       <Text style={styles.sectionTitle}>Account Actions</Text>
       <View style={styles.card}>
+        <View style={styles.themeRow}>
+          <View style={styles.themeTextWrap}>
+            <Text style={styles.actionBtnTextNeutral}>Dark Theme</Text>
+            <Text style={styles.detail}>Use dark colors for the app shell and screens.</Text>
+          </View>
+          <Switch
+            value={themeMode === 'dark'}
+            onValueChange={(enabled) => setThemeMode(enabled ? 'dark' : 'light')}
+            trackColor={{ false: colors.border, true: colors.accentDim }}
+            thumbColor={themeMode === 'dark' ? colors.accent : colors.textMuted}
+          />
+        </View>
+        <TouchableOpacity
+          style={styles.themeSystemBtn}
+          activeOpacity={0.75}
+          onPress={() => setThemeMode(themeMode === 'system' ? 'light' : 'system')}
+        >
+          <Text style={styles.themeSystemText}>
+            {themeMode === 'system' ? 'Using System Theme' : 'Use System Theme'}
+          </Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={handleLogout} activeOpacity={0.7}>
           <Text style={styles.actionBtnText}>Logout</Text>
           <Text style={styles.actionIcon}>🚪</Text>
@@ -274,7 +297,7 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { padding: spacing.xl, paddingBottom: spacing.md },
   headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
@@ -301,7 +324,25 @@ const styles = StyleSheet.create({
   },
   actionBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.base },
   actionBtnText: { color: colors.danger, fontSize: 15, fontWeight: '600' },
+  actionBtnTextNeutral: { color: colors.text, fontSize: 15, fontWeight: '700' },
   actionIcon: { fontSize: 16 },
+  themeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.base,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: spacing.md,
+  },
+  themeTextWrap: { flex: 1 },
+  themeSystemBtn: {
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  themeSystemText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
   input: {
     backgroundColor: colors.surface2,
     color: colors.text,

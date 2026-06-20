@@ -9,7 +9,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import Icon from '@expo/vector-icons/MaterialIcons';
 import { notificationsApi } from './src/api';
-import { colors } from './src/theme';
+import { ThemeProvider, useTheme } from './src/theme';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -34,6 +34,7 @@ Notifications.setNotificationHandler({
 });
 
 function JobsStack() {
+  const { colors } = useTheme();
   return (
     <Stack.Navigator
       screenOptions={{
@@ -49,6 +50,7 @@ function JobsStack() {
 }
 
 function MainTabs() {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const bottomInset = Math.max(insets.bottom, 8);
@@ -61,9 +63,17 @@ function MainTabs() {
     async function requestNotificationAccess() {
       if (Platform.OS === 'web' || !user) return;
       if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default notifications',
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        });
         await Notifications.setNotificationChannelAsync('jobs', {
           name: 'Job notifications',
           importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
         });
       }
 
@@ -161,6 +171,7 @@ function MainTabs() {
 }
 
 function AppNavigator() {
+  const { colors, themeMode } = useTheme();
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -172,8 +183,8 @@ function AppNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+    <NavigationContainer ref={navigationRef} key={themeMode}>
+      <StatusBar barStyle={themeMode === 'light' ? 'dark-content' : 'light-content'} backgroundColor={colors.bg} />
       {user ? <MainTabs /> : <LoginScreen />}
     </NavigationContainer>
   );
@@ -182,9 +193,11 @@ function AppNavigator() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <AppNavigator />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppNavigator />
+        </AuthProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
