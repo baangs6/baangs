@@ -1130,8 +1130,10 @@ input, select, textarea { font-family: inherit; }
   inset: 0;
   background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(8px);
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
   z-index: 9999;
   padding: var(--sp-4);
   animation: fadeIn 0.2s ease;
@@ -1150,6 +1152,7 @@ input, select, textarea { font-family: inherit; }
   animation: fadeIn 0.25s ease;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .modal-lg { max-width: 800px; }

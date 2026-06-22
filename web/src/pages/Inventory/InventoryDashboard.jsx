@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { inventoryApi, staffApi, customersApi } from '../../api';
-import { MdAdd, MdHistory, MdInventory, MdTrendingUp, MdSummarize, MdSell, MdEdit, MdSearch, MdCloudUpload, MdFileDownload, MdFilterList } from 'react-icons/md';
+import { MdAdd, MdHistory, MdInventory, MdTrendingUp, MdSummarize, MdSell, MdEdit, MdSearch, MdCloudUpload, MdFileDownload, MdFilterList, MdDelete } from 'react-icons/md';
 import './InventoryDashboard.css';
 
 export default function InventoryDashboard() {
@@ -44,6 +44,8 @@ export default function InventoryDashboard() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
   const defaultForm = {
     barcode: '', item_name: '', model_number: '',
     category: 'General', unit_type: 'Pcs', purchase_price: 0,
@@ -85,7 +87,8 @@ export default function InventoryDashboard() {
     // Validate serial count matches quantity
     const filledSerials = serialNumbers.filter(s => s.trim() !== '');
     if (filledSerials.length !== createForm.opening_quantity) {
-      return alert(`Serial number count (${filledSerials.length}) must match Initial Quantity (${createForm.opening_quantity}). Please scan or type all serial numbers.`);
+      const confirmProceed = window.confirm(`You have entered ${filledSerials.length} serial numbers, but the Initial Quantity is ${createForm.opening_quantity}. Are you sure serial numbers are not available for all items?`);
+      if (!confirmProceed) return;
     }
     setSaving(true);
     try {
@@ -123,6 +126,26 @@ export default function InventoryDashboard() {
       await loadData();
     } catch {
       alert('Failed to update item');
+    }
+    setSaving(false);
+  };
+
+  const handleDeleteClick = (item) => {
+    setItemToDelete(item);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    setSaving(true);
+    try {
+      await inventoryApi.deactivate(itemToDelete.barcode);
+      setShowDeleteConfirm(false);
+      setItemToDelete(null);
+      setSelectedItem(null);
+      await loadData();
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Failed to delete item');
     }
     setSaving(false);
   };
@@ -461,10 +484,19 @@ export default function InventoryDashboard() {
                             <td>{formatCurrency(taxVal)}</td>
                             <td className="cell-bold">{selectedItem.opening_quantity}</td>
                             <td>
-                              <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => handleEditClick(selectedItem)}>
-                                <MdEdit style={{ marginRight: '4px' }} /> Edit
-                              </button>
-                            </td>
+                               <div style={{ display: 'flex', gap: '8px' }}>
+                                 <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => handleEditClick(selectedItem)}>
+                                   <MdEdit style={{ marginRight: '4px' }} /> Edit
+                                 </button>
+                                 <button
+                                   className="btn"
+                                   style={{ padding: '6px 12px', fontSize: '0.85rem', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
+                                   onClick={() => handleDeleteClick(selectedItem)}
+                                 >
+                                   <MdDelete style={{ marginRight: '4px' }} /> Delete
+                                 </button>
+                               </div>
+                             </td>
                           </tr>
                         );
                       })()}
@@ -592,7 +624,7 @@ export default function InventoryDashboard() {
                 ))}
                 {serialNumbers.filter(s => s.trim()).length !== createForm.opening_quantity && (
                   <p style={{ color: '#f59e0b', fontSize: '0.8rem', margin: '4px 0 0' }}>
-                    ⚠ Serial number count must match Initial Quantity ({createForm.opening_quantity}) before saving.
+                    ⚠ Serial number count is less than Initial Quantity ({createForm.opening_quantity}). You can proceed if serials are unavailable.
                   </p>
                 )}
               </div>
@@ -672,6 +704,48 @@ export default function InventoryDashboard() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && itemToDelete && (
+        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <MdDelete /> Delete Item
+              </h3>
+              <button className="btn-icon" onClick={() => setShowDeleteConfirm(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+                <div style={{ fontSize: '3rem', marginBottom: 12 }}>⚠️</div>
+                <p style={{ fontSize: '1rem', color: '#1e293b', fontWeight: 600, marginBottom: 8 }}>
+                  Are you sure you want to delete this item?
+                </p>
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', marginTop: 12, textAlign: 'left' }}>
+                  <div style={{ fontWeight: 700, color: '#0f172a' }}>{itemToDelete.item_name}</div>
+                  <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 4 }}>Model: {itemToDelete.model_number}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 2 }}>ID: {itemToDelete.barcode}</div>
+                </div>
+                <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 12 }}>
+                  This will deactivate the item and remove it from the active inventory list.
+                </p>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)} disabled={saving}>Cancel</button>
+              <button
+                className="btn"
+                style={{ background: '#dc2626', color: '#fff', border: 'none' }}
+                onClick={handleConfirmDelete}
+                disabled={saving}
+              >
+                {saving ? 'Deleting...' : 'Yes, Delete Item'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'log' && (
         <div className="tab-content">
           <div className="inv-form-card">

@@ -1,7 +1,144 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jobsApi, staffApi, lookupsApi, customersApi } from '../../api';
-import { MdArrowBack, MdUpload } from 'react-icons/md';
+import { MdArrowBack, MdUpload, MdClose, MdExpandMore } from 'react-icons/md';
+
+// ── Multi-select technician picker ──────────────────────────────────────────
+function TechnicianPicker({ staff, primaryId, additionalIds, onChangePrimary, onChangeAdditional }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const activeStaff = staff.filter(s => s.is_active);
+  const allSelected = [primaryId, ...additionalIds].filter(Boolean);
+
+  const toggleAdditional = (id) => {
+    if (id === primaryId) return; // can't add primary as additional
+    if (additionalIds.includes(id)) {
+      onChangeAdditional(additionalIds.filter(x => x !== id));
+    } else {
+      onChangeAdditional([...additionalIds, id]);
+    }
+  };
+
+  const getLabel = (id) => {
+    const s = activeStaff.find(x => x.staff_id === id);
+    return s ? `${s.name} (${s.skill || 'General'})` : id;
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      {/* Primary technician */}
+      <div style={{ marginBottom: 8 }}>
+        <label className="form-label" style={{ marginBottom: 4 }}>Primary Technician *</label>
+        <select
+          className="form-select"
+          value={primaryId}
+          onChange={e => {
+            const newPrimary = e.target.value;
+            onChangePrimary(newPrimary);
+            // remove new primary from additional if it was there
+            onChangeAdditional(additionalIds.filter(x => x !== newPrimary));
+          }}
+          required
+        >
+          <option value="">Select Technician</option>
+          {activeStaff.map(s => (
+            <option key={s.staff_id} value={s.staff_id}>
+              {s.name} ({s.skill || 'General'})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Additional technicians */}
+      <div>
+        <label className="form-label" style={{ marginBottom: 4 }}>
+          Additional Technicians
+          {additionalIds.length > 0 && (
+            <span style={{ marginLeft: 8, background: '#2563eb', color: '#fff', borderRadius: 10, padding: '1px 8px', fontSize: '0.75rem' }}>
+              +{additionalIds.length}
+            </span>
+          )}
+        </label>
+
+        {/* Selected additional tags */}
+        {additionalIds.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            {additionalIds.map(id => (
+              <span key={id} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.3)',
+                borderRadius: 20, padding: '3px 10px', fontSize: '0.8rem', color: '#1d4ed8'
+              }}>
+                {getLabel(id)}
+                <MdClose
+                  style={{ cursor: 'pointer', fontSize: '0.9rem' }}
+                  onClick={() => onChangeAdditional(additionalIds.filter(x => x !== id))}
+                />
+              </span>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 8,
+            background: 'var(--color-surface)', cursor: 'pointer', fontSize: '0.875rem',
+            color: 'var(--color-text-muted)'
+          }}
+        >
+          <span>{additionalIds.length === 0 ? 'Add more technicians...' : `${additionalIds.length} additional selected`}</span>
+          <MdExpandMore style={{ transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }} />
+        </button>
+
+        {open && (
+          <div style={{
+            position: 'absolute', zIndex: 200, left: 0, right: 0,
+            background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+            borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+            maxHeight: 220, overflowY: 'auto', marginTop: 4
+          }}>
+            {activeStaff.filter(s => s.staff_id !== primaryId).map(s => {
+              const checked = additionalIds.includes(s.staff_id);
+              return (
+                <label key={s.staff_id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 14px', cursor: 'pointer',
+                  background: checked ? 'rgba(37,99,235,0.06)' : 'transparent',
+                  borderBottom: '1px solid var(--color-border)',
+                  transition: 'background 0.15s'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleAdditional(s.staff_id)}
+                    style={{ accentColor: '#2563eb', width: 16, height: 16 }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{s.name}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{s.skill || 'General'}</div>
+                  </div>
+                </label>
+              );
+            })}
+            {activeStaff.filter(s => s.staff_id !== primaryId).length === 0 && (
+              <div style={{ padding: 14, color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>No other active technicians</div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function JobCreate() {
   const navigate = useNavigate();
@@ -15,6 +152,7 @@ export default function JobCreate() {
     customer_name: '', phone_number: '', location: '', map_location: '', site_type: '',
     work_type: '', complaint: '', priority: 'medium',
     scheduled_date: '', preferred_time: '', assigned_staff_id: '',
+    additional_staff_ids: [],
     next_schedule_date: '',
   });
 
@@ -153,12 +291,14 @@ export default function JobCreate() {
               <label className="form-label">Preferred Time</label>
               <input className="form-input" type="time" value={form.preferred_time} onChange={e => set('preferred_time', e.target.value)} />
             </div>
-            <div className="form-group">
-              <label className="form-label">Assign Technician *</label>
-              <select className="form-select" value={form.assigned_staff_id} onChange={e => set('assigned_staff_id', e.target.value)} required>
-                <option value="">Select Technician</option>
-                {staff.filter(s => s.is_active).map(s => <option key={s.staff_id} value={s.staff_id}>{s.name} ({s.skill || 'General'})</option>)}
-              </select>
+            <div className="form-group form-full">
+              <TechnicianPicker
+                staff={staff}
+                primaryId={form.assigned_staff_id}
+                additionalIds={form.additional_staff_ids}
+                onChangePrimary={v => set('assigned_staff_id', v)}
+                onChangeAdditional={v => set('additional_staff_ids', v)}
+              />
             </div>
             <div className="form-group">
               <label className="form-label">Next Schedule Date</label>

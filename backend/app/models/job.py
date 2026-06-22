@@ -32,6 +32,7 @@ class JobCreate(BaseModel):
     scheduled_date: Optional[str] = None
     preferred_time: Optional[str] = None
     assigned_staff_id: Optional[str] = None
+    additional_staff_ids: Optional[List[str]] = Field(default_factory=list)
     next_schedule_date: Optional[str] = None
     photo_url: Optional[str] = None
 
@@ -46,6 +47,7 @@ class JobUpdate(BaseModel):
     scheduled_date: Optional[str] = None
     preferred_time: Optional[str] = None
     assigned_staff_id: Optional[str] = None
+    additional_staff_ids: Optional[List[str]] = None
     status: Optional[JobStatus] = None
     next_schedule_date: Optional[str] = None
     photo_url: Optional[str] = None
@@ -66,6 +68,8 @@ class JobResponse(BaseModel):
     preferred_time: Optional[str] = None
     assigned_staff_id: Optional[str] = None
     assigned_staff_name: Optional[str] = None
+    additional_staff_ids: Optional[List[str]] = Field(default_factory=list)
+    additional_staff_names: Optional[List[str]] = Field(default_factory=list)
     status: str
     work_started_at: Optional[str] = None
     work_started_by: Optional[str] = None

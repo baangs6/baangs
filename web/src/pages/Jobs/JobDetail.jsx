@@ -1,7 +1,139 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { jobsApi, updatesApi, billingApi, staffApi, lookupsApi } from '../../api';
-import { MdArrowBack, MdEdit, MdAttachMoney, MdVerified } from 'react-icons/md';
+import { MdArrowBack, MdEdit, MdAttachMoney, MdVerified, MdClose, MdExpandMore } from 'react-icons/md';
+
+// ── Multi-select technician picker ──────────────────────────────────────────
+function TechnicianPicker({ staff, primaryId, additionalIds, onChangePrimary, onChangeAdditional }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const activeStaff = staff.filter(s => s.is_active);
+
+  const toggleAdditional = (id) => {
+    if (id === primaryId) return;
+    if (additionalIds.includes(id)) {
+      onChangeAdditional(additionalIds.filter(x => x !== id));
+    } else {
+      onChangeAdditional([...additionalIds, id]);
+    }
+  };
+
+  const getLabel = (id) => {
+    const s = activeStaff.find(x => x.staff_id === id);
+    return s ? `${s.name} (${s.skill || 'General'})` : id;
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div style={{ marginBottom: 8 }}>
+        <label className="form-label" style={{ marginBottom: 4 }}>Primary Technician *</label>
+        <select
+          className="form-select"
+          value={primaryId}
+          onChange={e => {
+            const newPrimary = e.target.value;
+            onChangePrimary(newPrimary);
+            onChangeAdditional(additionalIds.filter(x => x !== newPrimary));
+          }}
+          required
+        >
+          <option value="">Select Technician</option>
+          {activeStaff.map(s => (
+            <option key={s.staff_id} value={s.staff_id}>
+              {s.name} ({s.skill || 'General'})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="form-label" style={{ marginBottom: 4 }}>
+          Additional Technicians
+          {additionalIds.length > 0 && (
+            <span style={{ marginLeft: 8, background: '#2563eb', color: '#fff', borderRadius: 10, padding: '1px 8px', fontSize: '0.75rem' }}>
+              +{additionalIds.length}
+            </span>
+          )}
+        </label>
+
+        {additionalIds.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            {additionalIds.map(id => (
+              <span key={id} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.3)',
+                borderRadius: 20, padding: '3px 10px', fontSize: '0.8rem', color: '#1d4ed8'
+              }}>
+                {getLabel(id)}
+                <MdClose
+                  style={{ cursor: 'pointer', fontSize: '0.9rem' }}
+                  onClick={() => onChangeAdditional(additionalIds.filter(x => x !== id))}
+                />
+              </span>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 8,
+            background: 'var(--color-surface)', cursor: 'pointer', fontSize: '0.875rem',
+            color: 'var(--color-text-muted)'
+          }}
+        >
+          <span>{additionalIds.length === 0 ? 'Add more technicians...' : `${additionalIds.length} additional selected`}</span>
+          <MdExpandMore style={{ transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }} />
+        </button>
+
+        {open && (
+          <div style={{
+            position: 'absolute', zIndex: 200, left: 0, right: 0,
+            background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+            borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+            maxHeight: 220, overflowY: 'auto', marginTop: 4
+          }}>
+            {activeStaff.filter(s => s.staff_id !== primaryId).map(s => {
+              const checked = additionalIds.includes(s.staff_id);
+              return (
+                <label key={s.staff_id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 14px', cursor: 'pointer',
+                  background: checked ? 'rgba(37,99,235,0.06)' : 'transparent',
+                  borderBottom: '1px solid var(--color-border)',
+                  transition: 'background 0.15s'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleAdditional(s.staff_id)}
+                    style={{ accentColor: '#2563eb', width: 16, height: 16 }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{s.name}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{s.skill || 'General'}</div>
+                  </div>
+                </label>
+              );
+            })}
+            {activeStaff.filter(s => s.staff_id !== primaryId).length === 0 && (
+              <div style={{ padding: 14, color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>No other active technicians</div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const STATUS_LABELS = {
   pending: 'Pending',
@@ -160,6 +292,7 @@ export default function JobDetail() {
       work_type: job.work_type,
       priority: job.priority,
       assigned_staff_id: job.assigned_staff_id || '',
+      additional_staff_ids: job.additional_staff_ids || [],
       scheduled_date: job.scheduled_date || '',
       preferred_time: job.preferred_time || '',
       complaint: job.complaint || ''
@@ -250,6 +383,9 @@ export default function JobDetail() {
         <div className="detail-grid">
           <div className="detail-item"><span className="detail-label">Work Type</span><span className="detail-value">{job.work_type}</span></div>
           <div className="detail-item"><span className="detail-label">Assigned To</span><span className="detail-value">{job.assigned_staff_name || 'Unassigned'}</span></div>
+          {job.additional_staff_names?.length > 0 && (
+            <div className="detail-item"><span className="detail-label">Additional Techs</span><span className="detail-value">{job.additional_staff_names.join(', ')}</span></div>
+          )}
           <div className="detail-item"><span className="detail-label">Scheduled</span><span className="detail-value">{job.scheduled_date || '-'}</span></div>
           <div className="detail-item"><span className="detail-label">Requested</span><span className="detail-value">{job.service_request_date?.slice(0, 10)}</span></div>
         </div>
@@ -496,12 +632,14 @@ export default function JobDetail() {
                       {(lookups.service_types || []).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Assign Technician *</label>
-                    <select className="form-select" value={editForm.assigned_staff_id} onChange={e => setEditForm(f => ({ ...f, assigned_staff_id: e.target.value }))} required>
-                      <option value="">Select Technician</option>
-                      {staff.filter(s => s.is_active).map(s => <option key={s.staff_id} value={s.staff_id}>{s.name} ({s.skill || 'General'})</option>)}
-                    </select>
+                  <div className="form-group form-full">
+                    <TechnicianPicker
+                      staff={staff}
+                      primaryId={editForm.assigned_staff_id || ''}
+                      additionalIds={editForm.additional_staff_ids || []}
+                      onChangePrimary={v => setEditForm(f => ({ ...f, assigned_staff_id: v }))}
+                      onChangeAdditional={v => setEditForm(f => ({ ...f, additional_staff_ids: v }))}
+                    />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Location / Address</label>

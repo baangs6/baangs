@@ -27,6 +27,8 @@ def _format_job(j: dict, staff_name: str = None) -> dict:
         "preferred_time": j.get("preferred_time"),
         "assigned_staff_id": j.get("assigned_staff_id"),
         "assigned_staff_name": staff_name or j.get("assigned_staff_name"),
+        "additional_staff_ids": j.get("additional_staff_ids") or [],
+        "additional_staff_names": j.get("additional_staff_names") or [],
         "status": j["status"],
         "work_started_at": j.get("work_started_at"),
         "work_started_by": j.get("work_started_by"),
@@ -167,12 +169,20 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
         }
         await db.customers.insert_one(customer_doc)
 
-    # Get staff name
+    # Get primary staff name
     staff_name = None
     if data.assigned_staff_id:
         staff = await db.staff.find_one({"staff_id": data.assigned_staff_id})
         if staff:
             staff_name = staff["name"]
+
+    # Get additional staff names
+    additional_staff_names = []
+    additional_staff_ids = data.additional_staff_ids or []
+    for sid in additional_staff_ids:
+        s = await db.staff.find_one({"staff_id": sid})
+        if s:
+            additional_staff_names.append(s["name"])
 
     # Generate Job ID
     seq = await get_sequence_for_today(db)
@@ -193,6 +203,8 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
         "preferred_time": data.preferred_time,
         "assigned_staff_id": data.assigned_staff_id,
         "assigned_staff_name": staff_name,
+        "additional_staff_ids": additional_staff_ids,
+        "additional_staff_names": additional_staff_names,
         "status": "pending",
         "service_request_date": today_ist_str(),
         "next_schedule_date": data.next_schedule_date,
@@ -203,8 +215,11 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
     title = "New Job Created"
     msg = f"{job_id} - {data.customer_name} ({data.work_type})"
     await notify_roles(db, ["admin"], title, msg, {"job_id": job_id, "type": "job_created"})
-    if data.assigned_staff_id:
-        tech_user = await db.users.find_one({"staff_id": data.assigned_staff_id, "role": "technician", "status": "active"})
+    # Notify all assigned technicians
+    all_staff_ids = [data.assigned_staff_id] if data.assigned_staff_id else []
+    all_staff_ids += additional_staff_ids
+    for sid in all_staff_ids:
+        tech_user = await db.users.find_one({"staff_id": sid, "role": "technician", "status": "active"})
         if tech_user and tech_user.get("user_id"):
             await notify_users(db, [tech_user["user_id"]], title, msg, {"job_id": job_id, "type": "job_assigned"})
     return _format_job(job_doc, staff_name)
@@ -252,6 +267,13 @@ async def update_job(job_id: str, data: JobUpdate, current_user: dict = Depends(
             staff = await db.staff.find_one({"staff_id": update_data["assigned_staff_id"]})
             if staff:
                 update_data["assigned_staff_name"] = staff["name"]
+        if "additional_staff_ids" in update_data:
+            names = []
+            for sid in update_data["additional_staff_ids"]:
+                s = await db.staff.find_one({"staff_id": sid})
+                if s:
+                    names.append(s["name"])
+            update_data["additional_staff_names"] = names
 
     result = await db.jobs.find_one_and_update(
         {"job_id": job_id},

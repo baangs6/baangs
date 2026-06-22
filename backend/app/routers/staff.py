@@ -134,6 +134,14 @@ async def update_staff(staff_id: str, data: StaffUpdate, _=Depends(require_admin
     username = update_data.pop("username", None)
     password = update_data.pop("password", None)
     user_role = update_data.pop("user_role", None)
+    new_staff_id = update_data.pop("staff_id", None)
+
+    if new_staff_id and new_staff_id != staff_id:
+        # Check no other staff already has this ID
+        conflict = await db.staff.find_one({"staff_id": new_staff_id})
+        if conflict:
+            raise HTTPException(status_code=400, detail=f"Staff ID '{new_staff_id}' is already taken")
+        update_data["staff_id"] = new_staff_id
 
     if update_data:
         result = await db.staff.find_one_and_update(
@@ -147,6 +155,9 @@ async def update_staff(staff_id: str, data: StaffUpdate, _=Depends(require_admin
         result = await db.staff.find_one({"staff_id": staff_id})
         if not result:
             raise HTTPException(status_code=404, detail="Staff not found")
+
+    # Use the new staff_id for all subsequent lookups
+    effective_staff_id = new_staff_id if (new_staff_id and new_staff_id != staff_id) else staff_id
 
     existing_user = await db.users.find_one({"staff_id": staff_id})
 
@@ -164,23 +175,25 @@ async def update_staff(staff_id: str, data: StaffUpdate, _=Depends(require_admin
             "status": "active",
             "full_name": result["name"],
             "phone": result["phone_number"],
-            "staff_id": staff_id,
+            "staff_id": effective_staff_id,
             "created_at": now_ist_str(),
         }
         await db.users.insert_one(user_doc)
     elif existing_user:
-        # Update existing user role or password
+        # Update existing user role, password, and staff_id reference
         user_updates = {}
         if user_role:
             user_updates["role"] = user_role
         if password:
             user_updates["password_hash"] = hash_password(password)
+        if effective_staff_id != staff_id:
+            user_updates["staff_id"] = effective_staff_id
 
         if user_updates:
             await db.users.update_one({"staff_id": staff_id}, {"$set": user_updates})
 
     res = _format_staff(result)
-    updated_user = await db.users.find_one({"staff_id": staff_id})
+    updated_user = await db.users.find_one({"staff_id": effective_staff_id})
     if updated_user:
         res["has_login"] = True
         res["username"] = updated_user["username"]

@@ -31,6 +31,7 @@ class StaffCreate(BaseModel):
 
 
 class StaffUpdate(BaseModel):
+    staff_id: Optional[str] = None
     name: Optional[str] = None
     phone_number: Optional[str] = None
     skill: Optional[str] = None
