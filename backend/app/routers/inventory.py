@@ -117,13 +117,22 @@ async def search_item(
 
     query: dict[str, Any] = {"status": InventoryStatus.ACTIVE}
     if model:
-        query["model_number"] = {"$regex": f"^{re.escape(model)}$", "$options": "i"}
+        search_regex = re.escape(model)
+        query["$or"] = [
+            {"model_number": {"$regex": search_regex, "$options": "i"}},
+            {"item_name": {"$regex": search_regex, "$options": "i"}},
+            {"barcode": {"$regex": f"^{search_regex}$", "$options": "i"}},
+        ]
     if serial:
         serial_regex = f"(^|\\s*,\\s*){re.escape(serial)}(\\s*,\\s*|$)"
-        query["$or"] = [
+        serial_query = [
             {"serial_number": {"$regex": serial_regex, "$options": "i"}},
             {"serial_numbers": {"$regex": f"^{re.escape(serial)}$", "$options": "i"}},
         ]
+        if "$or" in query:
+            query["$and"] = [{"$or": query.pop("$or")}, {"$or": serial_query}]
+        else:
+            query["$or"] = serial_query
 
     items = await db.inventory.find(query).limit(20).to_list(20)
     if not items:

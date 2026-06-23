@@ -3,14 +3,15 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, A
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { jobsApi, lookupsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, useTheme } from '../theme';
 import { callPhone, openJobMap } from '../utils/contactActions';
 
-const STATUS_COLORS = {
-  pending: colors.warning, in_progress: colors.info, complete: colors.success, cancelled: colors.danger,
-};
-
 export default function JobsScreen({ navigation }) {
+  const theme = useTheme();
+  const styles = React.useMemo(() => createStyles(theme.colors), [theme.colors]);
+  const STATUS_COLORS = React.useMemo(() => ({
+    pending: colors.warning, in_progress: colors.info, complete: colors.success, cancelled: colors.danger,
+  }), [theme.colors]);
   const { user } = useAuth();
   const [jobs, setJobs] = useState([]);
   const [filter, setFilter] = useState('all');
@@ -246,7 +247,7 @@ function getPriorityColor(p) {
   return { low: colors.success, medium: colors.info, high: colors.warning, urgent: colors.danger }[p] || colors.textMuted;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' },
   header: { padding: spacing.xl, paddingBottom: spacing.md },

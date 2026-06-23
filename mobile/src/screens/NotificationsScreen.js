@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { notificationsApi } from '../api';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, useTheme } from '../theme';
 
 export default function NotificationsScreen({ navigation }) {
+  const theme = useTheme();
+  const styles = React.useMemo(() => createStyles(theme.colors), [theme.colors]);
   const [rows, setRows] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -109,7 +111,7 @@ export default function NotificationsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { padding: spacing.xl, paddingBottom: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
   title: { fontSize: 24, fontWeight: '800', color: colors.text },

@@ -73,42 +73,139 @@ async def job_reminder_loop(db, interval_seconds: int = 60):
         await asyncio.sleep(interval_seconds)
 
 
-async def send_logout_reminder(db):
-    """Send a logout reminder to admin and sales users Mon-Sat at 17:00 IST."""
+def _normalize_role(role):
+    return (role or "").strip().lower()
+
+
+def _matches_role_group(user, role_group):
+    if role_group == "admin_sales":
+        return _normalize_role(user.get("role")) in {"admin", "sales"}
+    if role_group == "others":
+        return _normalize_role(user.get("role")) not in {"admin", "sales"}
+    return True
+
+
+async def _active_staff_users_needing_attendance(db, today: str, mode: str, role_group: str = "all"):
+    users = await db.users.find({
+        "status": "active",
+        "staff_id": {"$nin": [None, ""]},
+    }).to_list(2000)
+    if not users:
+        return []
+
+    staff_ids = [u.get("staff_id") for u in users if u.get("staff_id")]
+    active_staff = await db.staff.find({
+        "staff_id": {"$in": staff_ids},
+        "is_active": {"$ne": False},
+    }).to_list(2000)
+    active_staff_ids = {s.get("staff_id") for s in active_staff if s.get("staff_id")}
+
+    rows = await db.attendance.find({"date": today, "staff_id": {"$in": list(active_staff_ids)}}).to_list(2000)
+    attendance_by_staff = {row.get("staff_id"): row for row in rows}
+
+    targets = []
+    for user in users:
+        if not _matches_role_group(user, role_group):
+            continue
+        staff_id = user.get("staff_id")
+        if staff_id not in active_staff_ids:
+            continue
+        attendance = attendance_by_staff.get(staff_id)
+        if mode == "login" and not attendance:
+            targets.append(user)
+        elif mode == "logout" and attendance and not attendance.get("is_checked_out"):
+            targets.append(user)
+    return targets
+
+
+async def _send_attendance_reminder(
+    db,
+    reminder_type: str,
+    hour: int,
+    minute: int,
+    title: str,
+    message: str,
+    mode: str,
+    role_group: str = "all",
+):
     now = now_ist()
-    # weekday(): Monday=0 ... Saturday=5, Sunday=6
-    if now.weekday() == 6:
-        return  # Skip Sunday
-    if now.hour != 17 or now.minute != 0:
+    if now.hour != hour or now.minute != minute:
         return
 
-    # Deduplicate: only fire once per calendar day
     today = now.strftime("%Y-%m-%d")
-    already = await db.reminder_log.find_one({"type": "logout_reminder", "date": today})
+    already = await db.reminder_log.find_one({"type": reminder_type, "date": today})
     if already:
         return
 
-    await db.reminder_log.insert_one({"type": "logout_reminder", "date": today})
-    await notify_users_by_roles(db, ["admin", "sales"])
-    print(f"[{today}] Logout reminder sent to admin & sales.")
+    target_users = await _active_staff_users_needing_attendance(db, today, mode, role_group)
+    await db.reminder_log.insert_one({
+        "type": reminder_type,
+        "date": today,
+        "target_count": len(target_users),
+        "created_at": now_ist_str(),
+    })
+    user_ids = [u.get("user_id") for u in target_users if u.get("user_id")]
+    if not user_ids:
+        return
 
-
-async def notify_users_by_roles(db, roles):
-    from .notifications import notify_roles
-    await notify_roles(
+    await notify_users(
         db,
-        roles,
-        "\u23f0 End of Day Reminder",
-        "It's 5 PM \u2014 please save your work and log out. Have a great evening!",
-        {"type": "logout_reminder"},
+        user_ids,
+        title,
+        message,
+        {"type": reminder_type},
+    )
+    print(f"[{today}] {reminder_type} sent to {len(user_ids)} user(s).")
+
+
+async def send_attendance_login_reminder(db):
+    """At 10:00 IST, remind active staff who have not checked in today."""
+    await _send_attendance_reminder(
+        db,
+        "attendance_login_reminder",
+        10,
+        0,
+        "Attendance Login Reminder",
+        "Please check in for today.",
+        "login",
+    )
+
+
+async def send_admin_sales_logout_reminder(db):
+    """At 17:00 IST, remind admin and sales staff who checked in but have not checked out."""
+    await _send_attendance_reminder(
+        db,
+        "attendance_logout_reminder_admin_sales",
+        17,
+        0,
+        "Attendance Logout Reminder",
+        "Please check out for today before closing your work.",
+        "logout",
+        "admin_sales",
+    )
+
+
+async def send_other_staff_logout_reminder(db):
+    """At 20:00 IST, remind non-admin/sales staff who checked in but have not checked out."""
+    await _send_attendance_reminder(
+        db,
+        "attendance_logout_reminder_others",
+        20,
+        0,
+        "Attendance Logout Reminder",
+        "Please check out for today before closing your work.",
+        "logout",
+        "others",
     )
 
 
 async def logout_reminder_loop(db, interval_seconds: int = 60):
-    """Check every minute whether it is time to send the 5 PM logout reminder."""
+    """Check every minute for attendance login/logout reminders."""
     while True:
         try:
-            await send_logout_reminder(db)
+            await send_attendance_login_reminder(db)
+            await send_admin_sales_logout_reminder(db)
+            await send_other_staff_logout_reminder(db)
         except Exception as exc:
-            print(f"Logout reminder loop failed: {exc}")
+            print(f"Attendance reminder loop failed: {exc}")
         await asyncio.sleep(interval_seconds)

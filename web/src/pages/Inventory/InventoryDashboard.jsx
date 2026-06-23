@@ -49,21 +49,32 @@ export default function InventoryDashboard() {
   const defaultForm = {
     barcode: '', item_name: '', model_number: '',
     category: 'General', unit_type: 'Pcs', purchase_price: 0,
-    selling_price: 0, tax_percentage: 18, opening_quantity: 1,
+    selling_price: 0, tax_percentage: 18, opening_quantity: 0,
     minimum_stock_level: 5
   };
   const [createForm, setCreateForm] = useState(defaultForm);
   const [serialNumbers, setSerialNumbers] = useState(['']);
 
   const handleQtyChange = (val) => {
-    const qty = parseFloat(val) || 1;
+    let qty;
+    if (val === '') {
+      qty = '';
+    } else {
+      qty = parseInt(val, 10);
+      if (isNaN(qty)) qty = '';
+    }
     setCreateForm(f => ({ ...f, opening_quantity: qty }));
-    // Resize serial number list to match quantity
-    setSerialNumbers(prev => {
-      const newList = [...prev];
-      while (newList.length < qty) newList.push('');
-      return newList.slice(0, qty);
-    });
+
+    // Only resize serial list if a valid positive number is entered
+    if (typeof qty === 'number' && qty > 0) {
+      setSerialNumbers(prev => {
+        const newList = [...prev];
+        while (newList.length < qty) newList.push('');
+        return newList.slice(0, qty);
+      });
+    } else if (qty === 0) {
+      setSerialNumbers([]);
+    }
   };
 
   const addSerial = () => {
@@ -92,11 +103,16 @@ export default function InventoryDashboard() {
     }
     setSaving(true);
     try {
-      const payload = { ...createForm, serial_numbers: filledSerials, serial_number: filledSerials.join(', ') };
+      const payload = {
+        ...createForm,
+        opening_quantity: typeof createForm.opening_quantity === 'number' ? createForm.opening_quantity : 0,
+        serial_numbers: filledSerials,
+        serial_number: filledSerials.join(', ')
+      };
       await inventoryApi.create(payload);
       setShowCreateModal(false);
       setCreateForm(defaultForm);
-      setSerialNumbers(['']);
+      setSerialNumbers([]);
       await loadData();
     } catch (e) {
       const detail = e.response?.data?.detail;
@@ -574,7 +590,7 @@ export default function InventoryDashboard() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Initial Quantity</label>
-                  <input type="number" min="1" className="form-input" value={createForm.opening_quantity} onChange={e => handleQtyChange(e.target.value)} />
+                  <input type="number" min="0" className="form-input" value={createForm.opening_quantity === '' ? '' : createForm.opening_quantity} onChange={e => handleQtyChange(e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Min Stock Level (Alert Quantity)</label>
@@ -602,7 +618,7 @@ export default function InventoryDashboard() {
                     + Add
                   </button>
                 </div>
-                {serialNumbers.map((sn, idx) => (
+                {createForm.opening_quantity > 0 && serialNumbers.map((sn, idx) => (
                   <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                     <span style={{ minWidth: 24, color: '#64748b', fontSize: '0.85rem', fontWeight: 600 }}>#{idx + 1}</span>
                     <input
@@ -622,7 +638,7 @@ export default function InventoryDashboard() {
                     )}
                   </div>
                 ))}
-                {serialNumbers.filter(s => s.trim()).length !== createForm.opening_quantity && (
+                {createForm.opening_quantity > 0 && serialNumbers.filter(s => s.trim()).length !== createForm.opening_quantity && (
                   <p style={{ color: '#f59e0b', fontSize: '0.8rem', margin: '4px 0 0' }}>
                     ⚠ Serial number count is less than Initial Quantity ({createForm.opening_quantity}). You can proceed if serials are unavailable.
                   </p>

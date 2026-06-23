@@ -164,6 +164,7 @@ export const usersApi = {
 };
 
 export const inventoryApi = {
+  list: () => api.get('/inventory/'),
   get: (barcode) => api.get(`/inventory/${barcode}`),
   search: (model_number, serial_number) => api.get('/inventory/search', {
     params: {

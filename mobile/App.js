@@ -8,7 +8,7 @@ import { Platform, View, ActivityIndicator, StatusBar } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import Icon from '@expo/vector-icons/MaterialIcons';
-import { notificationsApi } from './src/api';
+import { attendanceApi, notificationsApi } from './src/api';
 import { ThemeProvider, useTheme } from './src/theme';
 
 // Screens
@@ -16,9 +16,10 @@ import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import JobsScreen from './src/screens/JobsScreen';
 import JobDetailScreen from './src/screens/JobDetailScreen';
-import AttendanceScreen from './src/screens/AttendanceScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import RequiredCheckInScreen from './src/screens/RequiredCheckInScreen';
+import FinanceScreen from './src/screens/FinanceScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -66,13 +67,22 @@ function MainTabs() {
         await Notifications.setNotificationChannelAsync('default', {
           name: 'Default notifications',
           importance: Notifications.AndroidImportance.HIGH,
+          sound: 'attendance-reminder.wav',
           vibrationPattern: [0, 250, 250, 250],
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
         });
         await Notifications.setNotificationChannelAsync('jobs', {
           name: 'Job notifications',
           importance: Notifications.AndroidImportance.HIGH,
+          sound: 'attendance-reminder.wav',
           vibrationPattern: [0, 250, 250, 250],
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        });
+        await Notifications.setNotificationChannelAsync('attendance-reminders', {
+          name: 'Attendance reminders',
+          importance: Notifications.AndroidImportance.HIGH,
+          sound: 'attendance-reminder.wav',
+          vibrationPattern: [0, 350, 180, 350],
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
         });
       }
@@ -140,7 +150,7 @@ function MainTabs() {
           let iconName;
           if (route.name === 'Dashboard') iconName = 'dashboard';
           else if (route.name === 'Jobs') iconName = 'work';
-          else if (route.name === 'Attendance') iconName = 'location-on';
+          else if (route.name === 'Finance') iconName = 'account-balance-wallet';
           else if (route.name === 'Notifications') iconName = 'notifications';
           else if (route.name === 'Settings') iconName = 'settings';
           return <Icon name={iconName} size={size} color={color} />;
@@ -159,7 +169,7 @@ function MainTabs() {
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Jobs" component={JobsStack} />
-      <Tab.Screen name="Attendance" component={AttendanceScreen} />
+      <Tab.Screen name="Finance" component={FinanceScreen} />
       <Tab.Screen
         name="Notifications"
         component={NotificationsScreen}
@@ -173,6 +183,48 @@ function MainTabs() {
 function AppNavigator() {
   const { colors, themeMode } = useTheme();
   const { user, loading } = useAuth();
+  const [attendanceReady, setAttendanceReady] = useState(false);
+  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [checkingAttendance, setCheckingAttendance] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function checkTodayAttendance() {
+      if (!user) {
+        setAttendanceReady(false);
+        setTodayAttendance(null);
+        return;
+      }
+
+      if (!user.staff_id) {
+        setAttendanceReady(true);
+        setTodayAttendance(null);
+        return;
+      }
+
+      setCheckingAttendance(true);
+      try {
+        const res = await attendanceApi.today(user.staff_id);
+        if (mounted) {
+          setTodayAttendance(res.data);
+          setAttendanceReady(!!res.data?.checkin_photo_url);
+        }
+      } catch (error) {
+        if (mounted) {
+          setTodayAttendance(null);
+          setAttendanceReady(false);
+        }
+      } finally {
+        if (mounted) setCheckingAttendance(false);
+      }
+    }
+
+    checkTodayAttendance();
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   if (loading) {
     return (
@@ -185,7 +237,25 @@ function AppNavigator() {
   return (
     <NavigationContainer ref={navigationRef} key={themeMode}>
       <StatusBar barStyle={themeMode === 'light' ? 'dark-content' : 'light-content'} backgroundColor={colors.bg} />
-      {user ? <MainTabs /> : <LoginScreen />}
+      {user ? (
+        checkingAttendance ? (
+          <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.accent} />
+          </View>
+        ) : attendanceReady ? (
+          <MainTabs />
+        ) : (
+          <RequiredCheckInScreen
+            existingAttendance={todayAttendance}
+            onCheckedIn={() => {
+              setTodayAttendance(null);
+              setAttendanceReady(true);
+            }}
+          />
+        )
+      ) : (
+        <LoginScreen />
+      )}
     </NavigationContainer>
   );
 }

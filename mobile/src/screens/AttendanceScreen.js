@@ -7,9 +7,11 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { attendanceApi } from '../api';
 import { useAuth } from '../context/AuthContext';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, useTheme } from '../theme';
 
 export default function AttendanceScreen() {
+  const theme = useTheme();
+  const styles = React.useMemo(() => createStyles(theme.colors), [theme.colors]);
   const { user } = useAuth();
   const [todayRecord, setTodayRecord] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -476,7 +478,7 @@ function formatExpenseType(value) {
   return 'Other Expense';
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
   warningIcon: { fontSize: 48, marginBottom: spacing.base },

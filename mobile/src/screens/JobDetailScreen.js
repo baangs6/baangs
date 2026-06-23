@@ -16,15 +16,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import { jobsApi, updatesApi, billingApi, inventoryApi } from '../api';
 import { useAuth } from '../context/AuthContext';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, useTheme } from '../theme';
 import { callPhone, openJobMap } from '../utils/contactActions';
-
-const STATUS_COLORS = {
-  pending: colors.warning,
-  in_progress: colors.info,
-  complete: colors.success,
-  cancelled: colors.danger,
-};
 
 const EMPTY_MANUAL_ITEM = {
   barcode: '',
@@ -35,6 +28,14 @@ const EMPTY_MANUAL_ITEM = {
 };
 
 export default function JobDetailScreen({ route }) {
+  const theme = useTheme();
+  const styles = React.useMemo(() => createStyles(theme.colors), [theme.colors]);
+  const STATUS_COLORS = React.useMemo(() => ({
+    pending: colors.warning,
+    in_progress: colors.info,
+    complete: colors.success,
+    cancelled: colors.danger,
+  }), [theme.colors]);
   const { jobId } = route.params;
   const { user } = useAuth();
 
@@ -55,6 +56,7 @@ export default function JobDetailScreen({ route }) {
   const [qtyInput, setQtyInput] = useState('1');
   const [foundItem, setFoundItem] = useState(null);
   const [modelOptions, setModelOptions] = useState([]);
+  const [inventorySuggestions, setInventorySuggestions] = useState([]);
   const [searchingItem, setSearchingItem] = useState(false);
 
   const [manualItemForm, setManualItemForm] = useState(EMPTY_MANUAL_ITEM);
@@ -99,6 +101,15 @@ export default function JobDetailScreen({ route }) {
   useEffect(() => {
     load();
   }, [jobId]);
+
+  const loadInventorySuggestions = async () => {
+    try {
+      const res = await inventoryApi.list();
+      setInventorySuggestions(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.warn('Inventory suggestions failed', error);
+    }
+  };
 
   const clearUpdateDraft = () => {
     setUpdateForm({
@@ -315,21 +326,20 @@ export default function JobDetailScreen({ route }) {
     const serialList = manualSerials.map((s) => s.trim()).filter(Boolean);
     if (
       !manualItemForm.item_name.trim() ||
-      serialList.length === 0 ||
       !quantityUsed ||
       quantityUsed <= 0
     ) {
-      Alert.alert('Missing Details', 'Enter item name, serial number and valid quantity');
+      Alert.alert('Missing Details', 'Enter item name and valid quantity');
       return;
     }
     if (!Number.isInteger(quantityUsed)) {
       Alert.alert('Invalid Quantity', 'Quantity must be a whole number for serial-based manual items');
       return;
     }
-    if (serialList.length !== quantityUsed) {
+    if (serialList.length > 0 && serialList.length !== quantityUsed) {
       Alert.alert(
         'Serial Count Mismatch',
-        `Quantity is ${quantityUsed}, but serial count is ${serialList.length}. Enter exactly ${quantityUsed} serial number(s).`
+        `Quantity is ${quantityUsed}, but serial count is ${serialList.length}. Enter exactly ${quantityUsed} serial number(s), or leave all serial numbers blank.`
       );
       return;
     }
@@ -359,10 +369,10 @@ export default function JobDetailScreen({ route }) {
         ...prev.manual_inventory_items,
         {
           // Manual flow rule: barcode follows serial input
-          barcode: serialList.join(', '),
+          barcode: serialList.length > 0 ? serialList.join(', ') : null,
           item_name: manualItemForm.item_name.trim(),
           model_number: manualItemForm.model_number.trim(),
-          serial_number: serialList.join(', '),
+          serial_number: serialList.length > 0 ? serialList.join(', ') : null,
           quantity_used: quantityUsed,
         },
       ],
@@ -440,11 +450,11 @@ export default function JobDetailScreen({ route }) {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Customer</Text>
-        <InfoRow label="Name" value={job.customer_name} />
-        <InfoRow label="Phone" value={job.phone_number} />
-        <InfoRow label="Location" value={job.location || '-'} />
-        <InfoRow label="Map" value={job.map_location || '-'} />
-        <InfoRow label="Site Type" value={job.site_type || '-'} />
+        <InfoRow styles={styles} label="Name" value={job.customer_name} />
+        <InfoRow styles={styles} label="Phone" value={job.phone_number} />
+        <InfoRow styles={styles} label="Location" value={job.location || '-'} />
+        <InfoRow styles={styles} label="Map" value={job.map_location || '-'} />
+        <InfoRow styles={styles} label="Site Type" value={job.site_type || '-'} />
         <View style={styles.contactActions}>
           <TouchableOpacity
             style={[styles.contactBtn, { borderColor: colors.success }]}
@@ -464,21 +474,21 @@ export default function JobDetailScreen({ route }) {
       {isAdmin && (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Work Tracking</Text>
-          <InfoRow label="Started At" value={formatDateTime(job.work_started_at)} />
-          <InfoRow label="Started By" value={job.work_started_by || '-'} />
-          <InfoRow label="Start Location" value={formatLocation(job.work_start_location)} />
-          <InfoRow label="Ended At" value={formatDateTime(job.work_ended_at)} />
-          <InfoRow label="Ended By" value={job.work_ended_by || '-'} />
-          <InfoRow label="End Location" value={formatLocation(job.work_end_location)} />
+          <InfoRow styles={styles} label="Started At" value={formatDateTime(job.work_started_at)} />
+          <InfoRow styles={styles} label="Started By" value={job.work_started_by || '-'} />
+          <InfoRow styles={styles} label="Start Location" value={formatLocation(job.work_start_location)} />
+          <InfoRow styles={styles} label="Ended At" value={formatDateTime(job.work_ended_at)} />
+          <InfoRow styles={styles} label="Ended By" value={job.work_ended_by || '-'} />
+          <InfoRow styles={styles} label="End Location" value={formatLocation(job.work_end_location)} />
         </View>
       )}
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Job Details</Text>
-        <InfoRow label="Work Type" value={job.work_type} />
-        <InfoRow label="Priority" value={job.priority} />
-        <InfoRow label="Scheduled" value={job.scheduled_date || '-'} />
-        <InfoRow label="Preferred Time" value={job.preferred_time || '-'} />
+        <InfoRow styles={styles} label="Work Type" value={job.work_type} />
+        <InfoRow styles={styles} label="Priority" value={job.priority} />
+        <InfoRow styles={styles} label="Scheduled" value={job.scheduled_date || '-'} />
+        <InfoRow styles={styles} label="Preferred Time" value={job.preferred_time || '-'} />
         {job.complaint ? <Text style={styles.complaint}>{job.complaint}</Text> : null}
       </View>
 
@@ -497,7 +507,13 @@ export default function JobDetailScreen({ route }) {
           )}
 
           {canUpdateStatus && (
-            <TouchableOpacity style={styles.updateBtn} onPress={() => setShowUpdateModal(true)}>
+            <TouchableOpacity
+              style={styles.updateBtn}
+              onPress={() => {
+                setShowUpdateModal(true);
+                loadInventorySuggestions();
+              }}
+            >
               <Text style={styles.updateBtnText}>Update Status</Text>
             </TouchableOpacity>
           )}
@@ -641,24 +657,61 @@ export default function JobDetailScreen({ route }) {
 
             <View style={styles.subCard}>
               <Text style={styles.label}>Hardware Used</Text>
-              <Text style={styles.label}>Model Number</Text>
+              <Text style={styles.label}>Model Number / Item Name</Text>
               <View style={styles.row}>
                 <TextInput
                   style={[styles.input, styles.rowInput]}
-                  placeholder="Type model number (optional)"
+                  placeholder="Type model number or item name"
                   value={modelInput}
-                  onChangeText={setModelInput}
+                  onFocus={loadInventorySuggestions}
+                  onChangeText={(text) => {
+                    setModelInput(text);
+                    setFoundItem(null);
+                    setModelOptions([]);
+                  }}
                   placeholderTextColor={colors.textMuted}
                 />
                 <TouchableOpacity style={[styles.findBtn, { backgroundColor: colors.info }]} onPress={() => openScanner('model')}>
                   <Text style={styles.findBtnText}>Scan</Text>
                 </TouchableOpacity>
               </View>
+              {modelInput.trim().length > 0 ? (
+                <View style={styles.suggestionBox}>
+                  {inventorySuggestions
+                    .filter((item) => {
+                      const q = modelInput.trim().toLowerCase();
+                      return (
+                        String(item.model_number || '').toLowerCase().includes(q) ||
+                        String(item.item_name || '').toLowerCase().includes(q) ||
+                        String(item.barcode || '').toLowerCase().includes(q)
+                      );
+                    })
+                    .slice(0, 6)
+                    .map((item) => (
+                      <TouchableOpacity
+                        key={`known-suggest-${item.barcode}`}
+                        style={styles.suggestionItem}
+                        activeOpacity={0.75}
+                        onPress={() => {
+                          setModelInput(item.model_number || item.item_name || item.barcode || '');
+                          setSerialInput('');
+                          setFoundItem(null);
+                          setModelOptions([]);
+                        }}
+                      >
+                        <Text style={styles.suggestionTitle}>{item.model_number || item.item_name || item.barcode}</Text>
+                        <Text style={styles.suggestionMeta}>
+                          {item.item_name}{item.barcode ? ` | ${item.barcode}` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                </View>
+              ) : null}
               <Text style={styles.label}>Serial Number</Text>
               <View style={styles.row}>
                 <TextInput
                   style={[styles.input, styles.rowInput]}
-                  placeholder="Type serial number"
+                  placeholder="Type serial number (optional)"
                   value={serialInput}
                   onChangeText={setSerialInput}
                   placeholderTextColor={colors.textMuted}
@@ -677,7 +730,9 @@ export default function JobDetailScreen({ route }) {
 
               {modelOptions.length > 0 ? (
                 <View style={styles.foundCard}>
-                  <Text style={styles.foundName}>Select model for serial {serialInput.trim()}</Text>
+                  <Text style={styles.foundName}>
+                    {serialInput.trim() ? `Select item for serial ${serialInput.trim()}` : 'Select matching item'}
+                  </Text>
                   {modelOptions.map((item) => (
                     <TouchableOpacity
                       key={item.barcode}
@@ -741,6 +796,28 @@ export default function JobDetailScreen({ route }) {
                 onChangeText={(text) => setManualItemForm((prev) => ({ ...prev, item_name: text }))}
                 placeholderTextColor={colors.textMuted}
               />
+              {manualItemForm.item_name.trim().length > 0 ? (
+                <View style={styles.suggestionBox}>
+                  {inventorySuggestions
+                    .filter((item) => String(item.item_name || '').toLowerCase().includes(manualItemForm.item_name.trim().toLowerCase()))
+                    .slice(0, 6)
+                    .map((item) => (
+                      <TouchableOpacity
+                        key={`manual-suggest-${item.barcode}`}
+                        style={styles.suggestionItem}
+                        activeOpacity={0.75}
+                        onPress={() => setManualItemForm((prev) => ({
+                          ...prev,
+                          item_name: item.item_name || prev.item_name,
+                          model_number: item.model_number || prev.model_number,
+                        }))}
+                      >
+                        <Text style={styles.suggestionTitle}>{item.item_name}</Text>
+                        {!!item.model_number && <Text style={styles.suggestionMeta}>Model: {item.model_number}</Text>}
+                      </TouchableOpacity>
+                    ))}
+                </View>
+              ) : null}
               <View style={styles.row}>
                 <TextInput
                   style={styles.input}
@@ -912,7 +989,7 @@ export default function JobDetailScreen({ route }) {
   );
 }
 
-function InfoRow({ label, value }) {
+function InfoRow({ label, value, styles }) {
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -936,7 +1013,7 @@ function formatLocation(location) {
   return `${lat}, ${lng}${acc}`;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' },
   jobHeader: {
@@ -1077,6 +1154,23 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   modelOptionTitle: { color: colors.accent, fontWeight: '800', fontSize: 13, marginBottom: 2 },
+  suggestionBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  suggestionTitle: { color: colors.text, fontWeight: '700', fontSize: 13 },
+  suggestionMeta: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
   selectedRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

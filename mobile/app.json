@@ -35,7 +35,7 @@
         "VIBRATE"
       ],
       "package": "com.anonymous.mobile",
-      "versionCode": 5
+      "versionCode": 8
     },
     "notification": {
       "icon": "./assets/adaptive-icon.png",
@@ -58,7 +58,14 @@
           "locationAlwaysPermission": "Allow Baangs to use your location."
         }
       ],
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/attendance-reminder.wav"
+          ]
+        }
+      ],
       "expo-font",
       "@react-native-community/datetimepicker"
     ]

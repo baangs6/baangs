@@ -161,7 +161,8 @@ async def login(data: LoginRequest):
         elif data.platform == "web":
             pass
 
-    await _auto_check_in(db, user)
+    if data.platform != "mobile":
+        await _auto_check_in(db, user)
     token = create_access_token({"sub": data.username})
     user_payload = await _user_response(db, user)
     return {
