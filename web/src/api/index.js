@@ -169,6 +169,7 @@ export const notificationsApi = {
   list: (limit = 30) => api.get('/notifications/', { params: { limit } }),
   unreadCount: () => api.get('/notifications/unread-count'),
   markRead: (id) => api.patch(`/notifications/${id}/read`),
+  clear: () => api.delete('/notifications/clear'),
 };
 
 export const leavesApi = {

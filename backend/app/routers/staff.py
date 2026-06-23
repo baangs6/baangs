@@ -205,14 +205,23 @@ async def update_staff(staff_id: str, data: StaffUpdate, _=Depends(require_admin
 @router.delete("/{staff_id}")
 async def delete_staff(staff_id: str, _=Depends(require_admin)):
     db = get_db()
-    result = await db.staff.find_one_and_update(
-        {"staff_id": staff_id},
-        {"$set": {"is_active": False}},
-        return_document=True
-    )
-    if not result:
+    staff = await db.staff.find_one({"staff_id": staff_id})
+    if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
-    return {"message": "Staff deactivated"}
+
+    linked_users = await db.users.find({"staff_id": staff_id}).to_list(100)
+    linked_user_ids = [user.get("user_id") for user in linked_users if user.get("user_id")]
+
+    result = await db.staff.delete_one({"staff_id": staff_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    if linked_user_ids:
+        await db.users.delete_many({"user_id": {"$in": linked_user_ids}})
+        await db.push_tokens.delete_many({"user_id": {"$in": linked_user_ids}})
+        await db.notifications.delete_many({"user_id": {"$in": linked_user_ids}})
+
+    return {"message": "Staff deleted", "staff_id": staff_id, "deleted_user_count": len(linked_user_ids)}
 
 
 @router.post("/{staff_id}/photo")

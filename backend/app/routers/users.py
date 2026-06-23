@@ -130,4 +130,6 @@ async def delete_user(
     result = await db.users.delete_one({"user_id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
+    await db.push_tokens.delete_many({"user_id": user_id})
+    await db.notifications.delete_many({"user_id": user_id})
     return {"message": "User deleted", "user_id": user_id}

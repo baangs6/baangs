@@ -95,6 +95,17 @@ export default function Layout() {
     setNotifOpen(false);
   };
 
+  const clearNotifications = async () => {
+    try {
+      await notificationsApi.clear();
+      setNotifications([]);
+      setNotifCount(0);
+      prevNotifIds.clear();
+    } catch {
+      // no-op
+    }
+  };
+
   return (
     <div className="app-layout">
       <aside className="sidebar">
@@ -108,6 +119,13 @@ export default function Layout() {
             </button>
             {notifOpen && (
               <div className="notification-menu">
+                {notifications.length > 0 && (
+                  <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button className="btn btn-secondary btn-sm" onClick={clearNotifications}>
+                      Clear All
+                    </button>
+                  </div>
+                )}
                 {notifications.length === 0 ? (
                   <div className="notification-empty">No notifications</div>
                 ) : notifications.map((n) => (

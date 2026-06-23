@@ -24,8 +24,14 @@ export default function StaffList() {
   useEffect(() => { fetchStaff(); }, []);
 
   const deleteStaff = async (id) => {
-    if (!confirm('Delete this staff member?')) return;
+    if (!confirm('Delete this staff member permanently? Linked login will also be deleted.')) return;
     await staffApi.delete(id);
+    await fetchStaff();
+  };
+
+  const deleteUser = async (id) => {
+    if (!confirm('Delete this user permanently?')) return;
+    await usersApi.delete(id);
     await fetchStaff();
   };
 
@@ -59,6 +65,7 @@ export default function StaffList() {
                   .filter(u => ['admin', 'sales'].includes(u.role) && !staff.some(s => s.staff_id === u.staff_id))
                   .map(u => ({
                     staff_id: u.user_id,
+                    user_id: u.user_id,
                     name: u.full_name || u.username,
                     phone_number: u.phone,
                     skill: u.role.toUpperCase(),
@@ -91,7 +98,10 @@ export default function StaffList() {
                   <td><span className={`badge badge-${s.is_active ? 'active' : 'inactive'}`}>{s.is_active ? 'Active' : 'Inactive'}</span></td>
                   <td>
                     {s.is_user ? (
-                      <button className="btn btn-secondary btn-sm" onClick={() => navigate('/users')}>Manage User</button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => navigate('/users')}>Manage User</button>
+                        <button className="btn btn-danger btn-sm" onClick={() => deleteUser(s.user_id)}><MdDelete /> Delete</button>
+                      </div>
                     ) : (
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/staff/${s.staff_id}`)}><MdEdit /> Edit</button>

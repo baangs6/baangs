@@ -64,12 +64,24 @@ function MainTabs() {
     async function requestNotificationAccess() {
       if (Platform.OS === 'web' || !user) return;
       if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelGroupAsync('baangs-notifications', {
+          name: 'Baangs notifications',
+        });
+        await Notifications.setNotificationChannelAsync('baangs-stack', {
+          name: 'Baangs notifications',
+          importance: Notifications.AndroidImportance.HIGH,
+          sound: 'attendance-reminder.wav',
+          vibrationPattern: [0, 250, 250, 250],
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          groupId: 'baangs-notifications',
+        });
         await Notifications.setNotificationChannelAsync('default', {
           name: 'Default notifications',
           importance: Notifications.AndroidImportance.HIGH,
           sound: 'attendance-reminder.wav',
           vibrationPattern: [0, 250, 250, 250],
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          groupId: 'baangs-notifications',
         });
         await Notifications.setNotificationChannelAsync('jobs', {
           name: 'Job notifications',
@@ -77,6 +89,7 @@ function MainTabs() {
           sound: 'attendance-reminder.wav',
           vibrationPattern: [0, 250, 250, 250],
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          groupId: 'baangs-notifications',
         });
         await Notifications.setNotificationChannelAsync('attendance-reminders', {
           name: 'Attendance reminders',
@@ -84,6 +97,7 @@ function MainTabs() {
           sound: 'attendance-reminder.wav',
           vibrationPattern: [0, 350, 180, 350],
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          groupId: 'baangs-notifications',
         });
       }
 

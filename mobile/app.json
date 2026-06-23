@@ -35,7 +35,7 @@
         "VIBRATE"
       ],
       "package": "com.anonymous.mobile",
-      "versionCode": 8
+      "versionCode": 9
     },
     "notification": {
       "icon": "./assets/adaptive-icon.png",

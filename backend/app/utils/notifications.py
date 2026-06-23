@@ -22,12 +22,7 @@ async def send_push_to_users(db, user_ids: Iterable[str], title: str, message: s
         return
 
     data = meta or {}
-    is_attendance_reminder = data.get("type") in {
-        "attendance_login_reminder",
-        "attendance_logout_reminder_admin_sales",
-        "attendance_logout_reminder_others",
-    }
-    channel_id = "attendance-reminders" if is_attendance_reminder else "jobs"
+    channel_id = "baangs-stack"
     sound = "attendance-reminder.wav"
 
     token_rows = await db.push_tokens.find({"user_id": {"$in": clean_user_ids}, "status": "active"}).to_list(1000)
@@ -43,6 +38,7 @@ async def send_push_to_users(db, user_ids: Iterable[str], title: str, message: s
             "body": message,
             "data": data,
             "channelId": channel_id,
+            "categoryId": "baangs_notifications",
         })
 
     if not messages:
