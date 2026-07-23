@@ -145,12 +145,35 @@ async def summary(
 async def field_staff_status(_=Depends(require_admin_or_manager)):
     db = get_db()
     today = today_ist_str()
-    staff_rows = await db.staff.find({"is_active": True}).to_list(500)
-    attendance_rows = await db.attendance.find({"date": today}).to_list(1000)
+    technician_users = await db.users.find({
+        "role": "technician",
+        "status": "active",
+        "staff_id": {"$ne": None},
+    }).to_list(500)
+    technician_staff_ids = [user.get("staff_id") for user in technician_users if user.get("staff_id")]
+
+    if not technician_staff_ids:
+        return []
+
+    staff_rows = await db.staff.find({
+        "staff_id": {"$in": technician_staff_ids},
+        "is_active": True,
+    }).to_list(500)
+    staff_by_id = {staff.get("staff_id"): staff for staff in staff_rows}
+
+    attendance_rows = await db.attendance.find({
+        "date": today,
+        "staff_id": {"$in": technician_staff_ids},
+        "checkin_time": {"$ne": None},
+    }).to_list(1000)
     attendance_by_staff = {row.get("staff_id"): row for row in attendance_rows}
+    checked_in_staff_ids = list(attendance_by_staff.keys())
+
+    if not checked_in_staff_ids:
+        return []
 
     active_jobs = await db.jobs.find({
-        "assigned_staff_id": {"$ne": None},
+        "assigned_staff_id": {"$in": checked_in_staff_ids},
         "status": {"$in": ["pending", "in_progress"]},
     }).sort("work_started_at", -1).to_list(2000)
 
@@ -161,12 +184,12 @@ async def field_staff_status(_=Depends(require_admin_or_manager)):
             latest_job_by_staff[staff_id] = job
 
     result = []
-    for staff in staff_rows:
-        staff_id = staff.get("staff_id")
+    for staff_id in checked_in_staff_ids:
+        staff = staff_by_id.get(staff_id, {})
         attendance = attendance_by_staff.get(staff_id)
         job = latest_job_by_staff.get(staff_id)
 
-        status = "Not checked in"
+        status = "Checked in"
         location = None
         last_update_time = None
         source = None
@@ -174,17 +197,15 @@ async def field_staff_status(_=Depends(require_admin_or_manager)):
         customer_name = None
         job_status = None
 
-        if attendance:
-            if attendance.get("checkout_time"):
-                status = "Checked out"
-                location = _location_payload(attendance.get("checkout_latitude"), attendance.get("checkout_longitude"))
-                last_update_time = attendance.get("checkout_time")
-                source = "Attendance checkout"
-            else:
-                status = "Checked in"
-                location = _location_payload(attendance.get("checkin_latitude"), attendance.get("checkin_longitude"))
-                last_update_time = attendance.get("checkin_time")
-                source = "Attendance check-in"
+        if attendance.get("checkout_time"):
+            status = "Checked out"
+            location = _location_payload(attendance.get("checkout_latitude"), attendance.get("checkout_longitude"))
+            last_update_time = attendance.get("checkout_time")
+            source = "Attendance checkout"
+        else:
+            location = _location_payload(attendance.get("checkin_latitude"), attendance.get("checkin_longitude"))
+            last_update_time = attendance.get("checkin_time")
+            source = "Attendance check-in"
 
         if job:
             job_id = job.get("job_id")
@@ -200,9 +221,6 @@ async def field_staff_status(_=Depends(require_admin_or_manager)):
                 location = _job_location_payload(job.get("work_start_location"))
                 last_update_time = job.get("work_started_at") or last_update_time
                 source = "Job check-in"
-            elif not attendance:
-                status = "Assigned"
-                source = "Assigned job"
 
         result.append({
             "staff_id": staff_id,
@@ -218,7 +236,7 @@ async def field_staff_status(_=Depends(require_admin_or_manager)):
             "source": source,
         })
 
-    return result
+    return sorted(result, key=lambda item: item.get("last_update_time") or "", reverse=True)
 
 
 @router.get("/jobs-by-priority")

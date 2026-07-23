@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { dashboardApi, exportApi } from '../api';
+import { useNavigate } from 'react-router-dom';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -62,6 +63,7 @@ function formatDashboardTime(value) {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [jobsByStatus, setJobsByStatus] = useState([]);
   const [jobsByPriority, setJobsByPriority] = useState([]);
@@ -198,7 +200,7 @@ export default function Dashboard() {
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <h3 className="card-title">Field Staff Status</h3>
+          <h3 className="card-title">Today Checked-In Technicians</h3>
         </div>
         {fieldStaff.length > 0 ? (
           <div className="table-wrapper" style={{ border: 'none' }}>
@@ -227,10 +229,15 @@ export default function Dashboard() {
                     </td>
                     <td>
                       {staff.job_id ? (
-                        <>
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() => navigate(`/jobs/${staff.job_id}`)}
+                          style={{ textAlign: 'left' }}
+                        >
                           <div style={{ fontWeight: 600 }}>{staff.job_id}</div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{staff.customer_name || '-'}</div>
-                        </>
+                        </button>
                       ) : (
                         <span style={{ color: 'var(--color-text-muted)' }}>No active job</span>
                       )}
@@ -252,7 +259,7 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
-        ) : <div className="empty-state"><p>No field staff status yet</p></div>}
+        ) : <div className="empty-state"><p>No technicians checked in today</p></div>}
       </div>
 
       {/* Charts Row 1 */}

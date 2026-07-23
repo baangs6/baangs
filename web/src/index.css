@@ -377,6 +377,19 @@ input, select, textarea { font-family: inherit; }
 
 .btn-icon:hover { color: var(--color-text); }
 
+.link-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--color-primary);
+}
+
 /* =========================================================
    CARDS
    ========================================================= */
