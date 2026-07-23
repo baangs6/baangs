@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { jobsApi } from '../../api';
+import { jobsApi, staffApi } from '../../api';
 import { MdAdd, MdSearch, MdFilterList, MdRefresh } from 'react-icons/md';
 
 const STATUS_LABELS = { pending: 'Pending', in_progress: 'In Progress', complete: 'Complete', cancelled: 'Cancelled' };
@@ -9,8 +9,9 @@ const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 export default function JobList() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ search: '', status: '', priority: '', work_type: '', site_type: '', date_from: '', date_to: '' });
+  const [filters, setFilters] = useState({ search: '', status: '', priority: '', work_type: '', site_type: '', assigned_staff_id: '', date_from: '', date_to: '' });
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -21,6 +22,7 @@ export default function JobList() {
       if (filters.priority) params.priority = filters.priority;
       if (filters.work_type) params.work_type = filters.work_type;
       if (filters.site_type) params.site_type = filters.site_type;
+      if (filters.assigned_staff_id) params.assigned_staff_id = filters.assigned_staff_id;
       if (filters.date_from) params.date_from = filters.date_from;
       if (filters.date_to) params.date_to = filters.date_to;
       const res = await jobsApi.list(params);
@@ -33,6 +35,18 @@ export default function JobList() {
   }, [filters]);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
+
+  useEffect(() => {
+    let ignore = false;
+    staffApi.list()
+      .then((res) => {
+        if (!ignore) setStaff(res.data || []);
+      })
+      .catch(console.error);
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   return (
     <div className="animate-fade">
@@ -76,6 +90,14 @@ export default function JobList() {
           <option value="Office">Office</option>
           <option value="Shop">Shop</option>
           <option value="Land">Land</option>
+        </select>
+        <select className="form-select" style={{ width: 180 }} value={filters.assigned_staff_id}
+          onChange={e => setFilters({ ...filters, assigned_staff_id: e.target.value })}>
+          <option value="">All Assigned To</option>
+          <option value="__unassigned">Unassigned</option>
+          {staff.filter(s => s.is_active).map(s => (
+            <option key={s.staff_id} value={s.staff_id}>{s.name} ({s.staff_id})</option>
+          ))}
         </select>
         <input type="date" className="form-input" style={{ width: 140 }} value={filters.date_from}
           onChange={e => setFilters({ ...filters, date_from: e.target.value })} title="From Date" />

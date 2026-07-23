@@ -102,7 +102,9 @@ async def list_jobs(
         query["priority"] = priority
     if work_type:
         query["work_type"] = work_type
-    if assigned_staff_id:
+    if assigned_staff_id == "__unassigned":
+        query["assigned_staff_id"] = None
+    elif assigned_staff_id:
         query["assigned_staff_id"] = assigned_staff_id
     if site_type:
         query["site_type"] = site_type

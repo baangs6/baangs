@@ -118,7 +118,7 @@ async def summary(
 async def jobs_by_priority(
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
-    _=Depends(require_admin_or_manager)
+    current_user: dict = Depends(require_admin_or_manager)
 ):
     if current_user["role"] == "sales":
         raise HTTPException(status_code=403, detail="Sales users can access Tasks only")

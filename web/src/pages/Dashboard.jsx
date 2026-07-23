@@ -69,18 +69,18 @@ export default function Dashboard() {
           date_from: dateFilter.from,
           date_to: dateFilter.to,
         };
-        const [sumRes, statusRes, priorityRes, revenueRes, techRes] = await Promise.all([
+        const [sumRes, statusRes, priorityRes, revenueRes, techRes] = await Promise.allSettled([
           dashboardApi.summary(params),
           dashboardApi.jobsByStatus(params),
           dashboardApi.jobsByPriority(params),
           dashboardApi.monthlyRevenue(params),
           dashboardApi.technicianPerformance(params),
         ]);
-        setSummary(sumRes.data);
-        setJobsByStatus(statusRes.data);
-        setJobsByPriority(priorityRes.data);
-        setMonthlyRevenue(revenueRes.data);
-        setTechPerf(techRes.data);
+        if (sumRes.status === 'fulfilled') setSummary(sumRes.value.data);
+        if (statusRes.status === 'fulfilled') setJobsByStatus(statusRes.value.data);
+        if (priorityRes.status === 'fulfilled') setJobsByPriority(priorityRes.value.data);
+        if (revenueRes.status === 'fulfilled') setMonthlyRevenue(revenueRes.value.data);
+        if (techRes.status === 'fulfilled') setTechPerf(techRes.value.data);
       } catch (e) {
         console.error(e);
       } finally {
