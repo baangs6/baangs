@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import datetime
 from ..auth.utils import get_current_user, require_admin_or_manager
 from ..database import get_db
+from ..utils.timezone import today_ist_str
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -31,6 +32,32 @@ def _technician_name_match(technician_name: Optional[str], staff_name: Optional[
         return True
     needle = technician_name.strip().lower()
     return needle == (staff_name or "").strip().lower() or needle == (staff_id or "").strip().lower()
+
+
+def _location_payload(latitude, longitude):
+    if latitude is None or longitude is None:
+        return None
+    return {"latitude": latitude, "longitude": longitude}
+
+
+def _job_location_payload(location):
+    if not location:
+        return None
+    latitude = location.get("latitude")
+    longitude = location.get("longitude")
+    if latitude is None or longitude is None:
+        return None
+    return {
+        "latitude": latitude,
+        "longitude": longitude,
+        "accuracy": location.get("accuracy"),
+    }
+
+
+def _map_url(location):
+    if not location:
+        return None
+    return f"https://maps.google.com/?q={location['latitude']},{location['longitude']}"
 
 
 @router.get("/summary")
@@ -112,6 +139,86 @@ async def summary(
             "collected": billing.get("total_collected", 0),
         }
     }
+
+
+@router.get("/field-staff-status")
+async def field_staff_status(_=Depends(require_admin_or_manager)):
+    db = get_db()
+    today = today_ist_str()
+    staff_rows = await db.staff.find({"is_active": True}).to_list(500)
+    attendance_rows = await db.attendance.find({"date": today}).to_list(1000)
+    attendance_by_staff = {row.get("staff_id"): row for row in attendance_rows}
+
+    active_jobs = await db.jobs.find({
+        "assigned_staff_id": {"$ne": None},
+        "status": {"$in": ["pending", "in_progress"]},
+    }).sort("work_started_at", -1).to_list(2000)
+
+    latest_job_by_staff = {}
+    for job in active_jobs:
+        staff_id = job.get("assigned_staff_id")
+        if staff_id and staff_id not in latest_job_by_staff:
+            latest_job_by_staff[staff_id] = job
+
+    result = []
+    for staff in staff_rows:
+        staff_id = staff.get("staff_id")
+        attendance = attendance_by_staff.get(staff_id)
+        job = latest_job_by_staff.get(staff_id)
+
+        status = "Not checked in"
+        location = None
+        last_update_time = None
+        source = None
+        job_id = None
+        customer_name = None
+        job_status = None
+
+        if attendance:
+            if attendance.get("checkout_time"):
+                status = "Checked out"
+                location = _location_payload(attendance.get("checkout_latitude"), attendance.get("checkout_longitude"))
+                last_update_time = attendance.get("checkout_time")
+                source = "Attendance checkout"
+            else:
+                status = "Checked in"
+                location = _location_payload(attendance.get("checkin_latitude"), attendance.get("checkin_longitude"))
+                last_update_time = attendance.get("checkin_time")
+                source = "Attendance check-in"
+
+        if job:
+            job_id = job.get("job_id")
+            customer_name = job.get("customer_name")
+            job_status = job.get("status")
+            if job.get("work_end_location"):
+                status = "Job checked out"
+                location = _job_location_payload(job.get("work_end_location"))
+                last_update_time = job.get("work_ended_at") or last_update_time
+                source = "Job checkout"
+            elif job.get("work_start_location"):
+                status = "On job"
+                location = _job_location_payload(job.get("work_start_location"))
+                last_update_time = job.get("work_started_at") or last_update_time
+                source = "Job check-in"
+            elif not attendance:
+                status = "Assigned"
+                source = "Assigned job"
+
+        result.append({
+            "staff_id": staff_id,
+            "staff_name": staff.get("name"),
+            "phone_number": staff.get("phone_number"),
+            "status": status,
+            "job_id": job_id,
+            "customer_name": customer_name,
+            "job_status": job_status,
+            "location": location,
+            "map_url": _map_url(location),
+            "last_update_time": last_update_time,
+            "source": source,
+        })
+
+    return result
 
 
 @router.get("/jobs-by-priority")

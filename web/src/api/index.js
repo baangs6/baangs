@@ -137,6 +137,7 @@ export const dashboardApi = {
   technicianPerformance: (params) => api.get('/dashboard/technician-performance', { params }),
   monthlyRevenue: (params) => api.get('/dashboard/monthly-revenue', { params }),
   attendanceSummary: (params) => api.get('/dashboard/attendance-summary', { params }),
+  fieldStaffStatus: () => api.get('/dashboard/field-staff-status'),
   technicianPerformanceReport: (params) => api.get('/dashboard/technician-performance-report', { params }),
   technicianPerformanceDeepDive: (params) => api.get('/dashboard/technician-performance-deep-dive', { params }),
 };

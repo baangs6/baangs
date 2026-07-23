@@ -4,7 +4,7 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { MdWork, MdPeople, MdAttachMoney, MdTrendingUp, MdEngineering, MdDownload } from 'react-icons/md';
+import { MdWork, MdPeople, MdAttachMoney, MdTrendingUp, MdEngineering, MdDownload, MdLocationOn, MdOpenInNew } from 'react-icons/md';
 
 const STATUS_COLORS = {
   pending: '#f59e0b', in_progress: '#3b82f6', complete: '#10b981', cancelled: '#ef4444'
@@ -48,12 +48,26 @@ function getInitialDateFilter() {
   return fallback;
 }
 
+function fieldStatusBadge(status = '') {
+  const normalized = status.toLowerCase();
+  if (normalized.includes('on job') || normalized.includes('checked in')) return 'badge-in_progress';
+  if (normalized.includes('checked out')) return 'badge-complete';
+  if (normalized.includes('assigned')) return 'badge-pending';
+  return 'badge-cancelled';
+}
+
+function formatDashboardTime(value) {
+  if (!value) return '-';
+  return value.slice(0, 16).replace('T', ' ');
+}
+
 export default function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [jobsByStatus, setJobsByStatus] = useState([]);
   const [jobsByPriority, setJobsByPriority] = useState([]);
   const [monthlyRevenue, setMonthlyRevenue] = useState([]);
   const [techPerf, setTechPerf] = useState([]);
+  const [fieldStaff, setFieldStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState(getInitialDateFilter);
 
@@ -69,18 +83,20 @@ export default function Dashboard() {
           date_from: dateFilter.from,
           date_to: dateFilter.to,
         };
-        const [sumRes, statusRes, priorityRes, revenueRes, techRes] = await Promise.allSettled([
+        const [sumRes, statusRes, priorityRes, revenueRes, techRes, fieldStaffRes] = await Promise.allSettled([
           dashboardApi.summary(params),
           dashboardApi.jobsByStatus(params),
           dashboardApi.jobsByPriority(params),
           dashboardApi.monthlyRevenue(params),
           dashboardApi.technicianPerformance(params),
+          dashboardApi.fieldStaffStatus(),
         ]);
         if (sumRes.status === 'fulfilled') setSummary(sumRes.value.data);
         if (statusRes.status === 'fulfilled') setJobsByStatus(statusRes.value.data);
         if (priorityRes.status === 'fulfilled') setJobsByPriority(priorityRes.value.data);
         if (revenueRes.status === 'fulfilled') setMonthlyRevenue(revenueRes.value.data);
         if (techRes.status === 'fulfilled') setTechPerf(techRes.value.data);
+        if (fieldStaffRes.status === 'fulfilled') setFieldStaff(fieldStaffRes.value.data);
       } catch (e) {
         console.error(e);
       } finally {
@@ -178,6 +194,65 @@ export default function Dashboard() {
           <div className="stat-value">{jobs.pending || 0}</div>
           <div className="stat-label">Pending Jobs</div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <h3 className="card-title">Field Staff Status</h3>
+        </div>
+        {fieldStaff.length > 0 ? (
+          <div className="table-wrapper" style={{ border: 'none' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Technician</th>
+                  <th>Status</th>
+                  <th>Job / Customer</th>
+                  <th>Last Update</th>
+                  <th>Location</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fieldStaff.map((staff) => (
+                  <tr key={staff.staff_id}>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{staff.staff_name || staff.staff_id}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{staff.staff_id}</div>
+                    </td>
+                    <td>
+                      <span className={`badge ${fieldStatusBadge(staff.status)}`}>{staff.status}</span>
+                      {staff.source ? (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4 }}>{staff.source}</div>
+                      ) : null}
+                    </td>
+                    <td>
+                      {staff.job_id ? (
+                        <>
+                          <div style={{ fontWeight: 600 }}>{staff.job_id}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{staff.customer_name || '-'}</div>
+                        </>
+                      ) : (
+                        <span style={{ color: 'var(--color-text-muted)' }}>No active job</span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                      {formatDashboardTime(staff.last_update_time)}
+                    </td>
+                    <td>
+                      {staff.map_url ? (
+                        <a className="btn btn-secondary btn-sm" href={staff.map_url} target="_blank" rel="noreferrer">
+                          <MdLocationOn /> Map <MdOpenInNew />
+                        </a>
+                      ) : (
+                        <span style={{ color: 'var(--color-text-muted)' }}>No GPS</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <div className="empty-state"><p>No field staff status yet</p></div>}
       </div>
 
       {/* Charts Row 1 */}
