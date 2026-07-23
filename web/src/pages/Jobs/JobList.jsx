@@ -6,6 +6,18 @@ import { MdAdd, MdSearch, MdFilterList, MdRefresh } from 'react-icons/md';
 const STATUS_LABELS = { pending: 'Pending', in_progress: 'In Progress', complete: 'Complete', cancelled: 'Cancelled' };
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
+function daysSinceCreated(job) {
+  if (job.status === 'complete') return null;
+  const rawDate = job.service_request_date || job.scheduled_date;
+  if (!rawDate) return null;
+  const createdAt = new Date(rawDate.slice(0, 10));
+  if (Number.isNaN(createdAt.getTime())) return null;
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const createdStart = new Date(createdAt.getFullYear(), createdAt.getMonth(), createdAt.getDate());
+  return Math.max(0, Math.floor((todayStart - createdStart) / 86400000));
+}
+
 export default function JobList() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
@@ -129,6 +141,7 @@ export default function JobList() {
                 <th>Assigned To</th>
                 <th>Priority</th>
                 <th>Status</th>
+                <th>Days Open</th>
                 <th>Scheduled</th>
               </tr>
             </thead>
@@ -145,6 +158,13 @@ export default function JobList() {
                   <td style={{ fontSize: '0.85rem' }}>{job.assigned_staff_name || <span style={{ color: 'var(--color-text-muted)' }}>Unassigned</span>}</td>
                   <td><span className={`badge badge-${job.priority}`}>{job.priority}</span></td>
                   <td><span className={`badge badge-${job.status}`}>{STATUS_LABELS[job.status]}</span></td>
+                  <td style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                    {daysSinceCreated(job) === null ? (
+                      <span style={{ color: 'var(--color-text-muted)' }}>-</span>
+                    ) : (
+                      `${daysSinceCreated(job)} day${daysSinceCreated(job) === 1 ? '' : 's'}`
+                    )}
+                  </td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{job.scheduled_date || job.service_request_date?.slice(0, 10)}</td>
                 </tr>
               ))}

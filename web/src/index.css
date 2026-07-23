@@ -1157,6 +1157,13 @@ input, select, textarea { font-family: inherit; }
 
 .modal-lg { max-width: 800px; }
 
+.modal > form {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .modal-header {
   padding: var(--sp-6);
   border-bottom: 1px solid var(--color-border);
