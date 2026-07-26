@@ -1243,6 +1243,132 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* =========================================================
+   CREATE JOB TICKET FORM
+   ========================================================= */
+.job-create-page {
+  max-width: 1320px;
+}
+
+.job-create-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--sp-4);
+}
+
+.job-create-topbar h2 {
+  margin-top: var(--sp-3);
+  font-size: 1.35rem;
+  font-weight: 750;
+}
+
+.job-ticket-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  gap: 0;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.job-ticket-panel {
+  padding: var(--sp-4);
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.job-ticket-panel:nth-of-type(2n) {
+  border-right: 0;
+}
+
+.job-ticket-photo-panel {
+  grid-column: 1 / -1;
+  border-right: 0;
+}
+
+.job-ticket-section-title {
+  margin: calc(var(--sp-4) * -1) calc(var(--sp-4) * -1) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: #eef8ff;
+  color: var(--color-text);
+  border-bottom: 1px solid #d8eaf5;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.job-ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3) var(--sp-4);
+}
+
+.job-ticket-grid .form-full {
+  grid-column: 1 / -1;
+}
+
+.job-create-page .form-label {
+  margin-bottom: 4px;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.job-create-page .form-input,
+.job-create-page .form-select,
+.job-create-page .form-textarea {
+  min-height: 38px;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.job-create-page .form-textarea {
+  min-height: 84px;
+}
+
+.job-ticket-radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  min-height: 38px;
+  align-items: center;
+  padding: var(--sp-2) 0;
+}
+
+.job-ticket-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.job-ticket-radio input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+}
+
+.job-ticket-technicians {
+  padding: var(--sp-3);
+  background: #f8fbfe;
+  border: 1px solid #d8eaf5;
+  border-radius: 6px;
+}
+
+.job-ticket-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: #eef8ff;
+}
+
+/* =========================================================
    PAGE HEADER
    ========================================================= */
 .page-header {
@@ -1458,6 +1584,11 @@ input, select, textarea { font-family: inherit; }
   .page-header { flex-direction: column; align-items: flex-start; }
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .detail-grid { grid-template-columns: 1fr; }
+  .job-ticket-shell { grid-template-columns: 1fr; }
+  .job-ticket-panel { border-right: 0; }
+  .job-ticket-grid { grid-template-columns: 1fr; }
+  .job-ticket-actions { flex-direction: column-reverse; }
+  .job-ticket-actions .btn { justify-content: center; }
 }
 
 /* =========================================================

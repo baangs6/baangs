@@ -213,31 +213,30 @@ export default function JobCreate() {
   };
 
   return (
-    <div className="animate-fade" style={{ maxWidth: 900 }}>
-      <div className="page-header">
-        <div className="page-header-left">
-          <button className="btn btn-secondary btn-sm" onClick={() => navigate('/jobs')} style={{ marginBottom: 8 }}>
+    <div className="animate-fade job-create-page">
+      <div className="job-create-topbar">
+        <div>
+          <button className="btn btn-secondary btn-sm" onClick={() => navigate('/jobs')}>
             <MdArrowBack /> Back
           </button>
           <h2>Create New Job</h2>
-          <p>Fill in the service request details</p>
         </div>
       </div>
 
       {error && <div className="toast toast-error" style={{ marginBottom: 16 }}>⚠️ {error}</div>}
 
-      <form onSubmit={handleSubmit}>
+      <form className="job-ticket-shell" onSubmit={handleSubmit}>
         {/* Customer Section */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-header"><h3 className="card-title">👤 Customer Details</h3></div>
-          <div className="form-grid">
+        <div className="job-ticket-panel">
+          <div className="job-ticket-section-title">Customer Details</div>
+          <div className="job-ticket-grid">
             <datalist id="customer-names">
               {customers.map(c => <option key={c.customer_id} value={c.customer_name} />)}
             </datalist>
             <datalist id="customer-phones">
               {customers.map(c => <option key={c.customer_id} value={c.phone_number} />)}
             </datalist>
-            <div className="form-group">
+            <div className="form-group form-full">
               <label className="form-label">Customer Name *</label>
               <input className="form-input" list="customer-names" value={form.customer_name} onChange={e => handleCustomerChange(e.target.value)} required placeholder="Full name" />
             </div>
@@ -245,7 +244,7 @@ export default function JobCreate() {
               <label className="form-label">Phone Number *</label>
               <input className="form-input" list="customer-phones" value={form.phone_number} onChange={e => handlePhoneChange(e.target.value)} required placeholder="+91 98765 43210" />
             </div>
-            <div className="form-group">
+            <div className="form-group form-full">
               <label className="form-label">Location / Address</label>
               <input className="form-input" value={form.location} onChange={e => set('location', e.target.value)} placeholder="Site address" />
             </div>
@@ -267,21 +266,32 @@ export default function JobCreate() {
         </div>
 
         {/* Job Section */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-header"><h3 className="card-title">🔧 Job Details</h3></div>
-          <div className="form-grid">
-            <div className="form-group">
+        <div className="job-ticket-panel">
+          <div className="job-ticket-section-title">Job Details</div>
+          <div className="job-ticket-grid">
+            <div className="form-group form-full">
               <label className="form-label">Work Type *</label>
               <select className="form-select" value={form.work_type} onChange={e => set('work_type', e.target.value)} required>
                 <option value="">Select work type</option>
                 {(lookups.service_types || []).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
-            <div className="form-group">
+            <div className="form-group form-full">
               <label className="form-label">Priority</label>
-              <select className="form-select" value={form.priority} onChange={e => set('priority', e.target.value)}>
-                {(lookups.priority_levels || []).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
+              <div className="job-ticket-radio-row">
+                {(lookups.priority_levels || []).map(p => (
+                  <label key={p.value} className="job-ticket-radio">
+                    <input
+                      type="radio"
+                      name="priority"
+                      value={p.value}
+                      checked={form.priority === p.value}
+                      onChange={e => set('priority', e.target.value)}
+                    />
+                    <span>{p.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">Scheduled Date</label>
@@ -291,7 +301,7 @@ export default function JobCreate() {
               <label className="form-label">Preferred Time</label>
               <input className="form-input" type="time" value={form.preferred_time} onChange={e => set('preferred_time', e.target.value)} />
             </div>
-            <div className="form-group form-full">
+            <div className="form-group form-full job-ticket-technicians">
               <TechnicianPicker
                 staff={staff}
                 primaryId={form.assigned_staff_id}
@@ -300,7 +310,7 @@ export default function JobCreate() {
                 onChangeAdditional={v => set('additional_staff_ids', v)}
               />
             </div>
-            <div className="form-group">
+            <div className="form-group form-full">
               <label className="form-label">Next Schedule Date</label>
               <input className="form-input" type="date" value={form.next_schedule_date} onChange={e => set('next_schedule_date', e.target.value)} />
             </div>
@@ -312,15 +322,15 @@ export default function JobCreate() {
         </div>
 
         {/* Photo */}
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-header"><h3 className="card-title">📷 Job Photo (optional)</h3></div>
+        <div className="job-ticket-panel job-ticket-photo-panel">
+          <div className="job-ticket-section-title">Job Photo</div>
           <div className="form-group">
             <input type="file" accept="image/*" className="form-input" onChange={e => setPhoto(e.target.files[0])} />
             {photo && <p style={{ fontSize: '0.8rem', color: 'var(--color-success)' }}>✓ {photo.name}</p>}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+        <div className="job-ticket-actions">
           <button className="btn btn-secondary" type="button" onClick={() => navigate('/jobs')}>Cancel</button>
           <button className="btn btn-primary" type="submit" disabled={loading}>
             {loading ? <><div className="spinner" style={{ width: 16, height: 16 }} />Creating...</> : '✅ Create Job'}
@@ -330,3 +340,4 @@ export default function JobCreate() {
     </div>
   );
 }
+
