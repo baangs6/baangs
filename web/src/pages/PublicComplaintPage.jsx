@@ -19,6 +19,7 @@ export default function PublicComplaintPage() {
   });
   const [photoFile, setPhotoFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [createdResult, setCreatedResult] = useState(null);
@@ -73,6 +74,28 @@ export default function PublicComplaintPage() {
     }
   };
 
+  const useCurrentLocation = () => {
+    setError('');
+    if (!navigator.geolocation) {
+      setError('Location is not supported on this phone/browser.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const locationText = `${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+        setForm((prev) => ({ ...prev, location: locationText }));
+        setLocating(false);
+      },
+      () => {
+        setError('Unable to get current location. Please allow location permission or type your address.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+    );
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -113,22 +136,26 @@ export default function PublicComplaintPage() {
   };
 
   return (
-    <div className="auth-page" style={{ minHeight: '100vh', padding: '32px 16px', background: 'var(--bg-primary)' }}>
-      <div className="auth-bg-glow auth-bg-glow-1" />
-      <div className="auth-bg-glow auth-bg-glow-2" />
+    <div className="public-complaint-page">
+      <div className="public-complaint-bg-grid" />
+      <div className="public-complaint-orbit public-complaint-orbit-a" />
+      <div className="public-complaint-orbit public-complaint-orbit-b" />
 
-      <div style={{ maxWidth: 640, margin: '0 auto', position: 'relative', zIndex: 1 }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
-            ⚡ Baangs Customer Portal
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-            Register a service complaint or request support directly without logging in.
-          </p>
-        </div>
+      <div className="public-complaint-shell">
+        <section className="public-complaint-hero">
+          <img className="public-complaint-logo" src="/baangs-logo.png" alt="BAANGS" />
+          <p className="public-complaint-kicker">CCTV Field Service</p>
+          <h1>Register your service complaint</h1>
+          <p>Share your issue, attach a photo, and send your exact site location. Our team will create a ticket and follow up.</p>
+          <div className="public-complaint-visual" aria-hidden="true">
+            <div className="public-cube"><span /><span /><span /></div>
+            <div className="public-visual-card public-visual-card-one">Camera offline</div>
+            <div className="public-visual-card public-visual-card-two">Technician assigned</div>
+          </div>
+        </section>
 
         {createdResult ? (
-          <div className="card" style={{ padding: 32, textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+          <div className="public-complaint-card public-success-card">
             <div style={{ color: 'var(--color-success)', fontSize: '3.5rem', marginBottom: 16 }}>
               <MdCheckCircle />
             </div>
@@ -149,7 +176,7 @@ export default function PublicComplaintPage() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <div className="public-complaint-actions">
               <button
                 className="btn btn-primary"
                 onClick={() => navigate(`/track/${createdResult.job_id}`)}
@@ -178,7 +205,7 @@ export default function PublicComplaintPage() {
             </div>
           </div>
         ) : (
-          <div className="card" style={{ padding: 28, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+          <div className="public-complaint-card">
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
               <MdBuild style={{ color: 'var(--color-primary)' }} /> Register Service Complaint
             </h2>
@@ -186,13 +213,13 @@ export default function PublicComplaintPage() {
             {error && <div className="toast toast-error" style={{ marginBottom: 16 }}>⚠️ {error}</div>}
 
             <form onSubmit={handleSubmit}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="public-form-stack">
                 {/* Phone Number Input */}
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <MdPhone style={{ color: 'var(--color-primary)' }} /> Mobile Phone Number *
                   </label>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div className="public-inline-field">
                     <input
                       className="form-input"
                       type="tel"
@@ -236,17 +263,22 @@ export default function PublicComplaintPage() {
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <MdLocationOn style={{ color: 'var(--color-primary)' }} /> Address / Location *
                   </label>
-                  <input
-                    className="form-input"
-                    placeholder="e.g. MG Road, Kochi"
-                    value={form.location}
-                    onChange={(e) => setForm({ ...form, location: e.target.value })}
-                    required
-                  />
+                  <div className="public-location-row">
+                    <input
+                      className="form-input"
+                      placeholder="e.g. MG Road, Kochi or GPS coordinates"
+                      value={form.location}
+                      onChange={(e) => setForm({ ...form, location: e.target.value })}
+                      required
+                    />
+                    <button type="button" className="btn btn-secondary" onClick={useCurrentLocation} disabled={locating}>
+                      <MdLocationOn /> {locating ? 'Getting...' : 'Use Current Location'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Site Type & Work Type */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="public-form-grid">
                   <div className="form-group">
                     <label className="form-label">Site Type</label>
                     <select
@@ -323,7 +355,7 @@ export default function PublicComplaintPage() {
           </div>
         )}
 
-        <div style={{ textAlign: 'center', marginTop: 24 }}>
+        <div className="public-login-link">
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => navigate('/login')}
@@ -335,3 +367,4 @@ export default function PublicComplaintPage() {
     </div>
   );
 }
+
