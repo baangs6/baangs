@@ -116,8 +116,10 @@ test.describe('P0 Full (API-seeded cross-module)', () => {
 
     await page.getByRole('button', { name: /leave history/i }).click();
     await expect(page.getByRole('heading', { name: /leave applications \(pending\)/i })).toBeVisible();
-    const pendingRow = page.locator('tr', { hasText: leaveReason });
+    const pendingCard = page.locator('.card', { has: page.getByRole('heading', { name: /leave applications \(pending\)/i }) });
+    const pendingRow = pendingCard.locator('tr', { hasText: leaveReason });
     await pendingRow.getByRole('button', { name: /accept/i }).click();
+    await expect(pendingRow).not.toBeVisible();
 
     const approvedListRes = await api.get(`${API_BASE}/leaves/`, {
       headers: { Authorization: `Bearer ${adminToken}` },

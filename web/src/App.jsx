@@ -22,6 +22,8 @@ import StaffFormPage from './pages/Staff/StaffFormPage';
 import InventoryDashboard from './pages/Inventory/InventoryDashboard';
 import Reports from './pages/Reports/Reports';
 import Tasks from './pages/Tasks/Tasks';
+import PublicComplaintPage from './pages/PublicComplaintPage';
+import PublicTrackPage from './pages/PublicTrackPage';
 
 function AppRoutes() {
   const { user, loading, isSetup } = useAuth();
@@ -36,41 +38,46 @@ function AppRoutes() {
   }
 
   if (!isSetup) return <Routes><Route path="*" element={<Setup />} /></Routes>;
-  if (!user) return <Routes><Route path="*" element={<Login />} /></Routes>;
 
-  if (user.role === 'sales') {
-    return (
-      <Routes>
+  return (
+    <Routes>
+      <Route path="/complaint" element={<PublicComplaintPage />} />
+      <Route path="/track" element={<PublicTrackPage />} />
+      <Route path="/track/:job_id" element={<PublicTrackPage />} />
+      {!user ? (
+        <>
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Login />} />
+        </>
+      ) : user.role === 'sales' ? (
         <Route path="/" element={<Layout />}>
           <Route index element={<Navigate to="/tasks" replace />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="*" element={<Navigate to="/tasks" replace />} />
         </Route>
-      </Routes>
-    );
-  }
-
-  return (
-    <Routes>
-      <Route path="/" element={<Layout />}>
-        <Route index element={<Dashboard />} />
-        <Route path="jobs" element={<JobList />} />
-        <Route path="jobs/create" element={<JobCreate />} />
-        <Route path="jobs/:jobId" element={<JobDetail />} />
-        <Route path="customers" element={<CustomerList />} />
-        <Route path="customers/:customerId" element={<CustomerDetail />} />
-        <Route path="attendance" element={<AttendanceReport />} />
-        <Route path="billing" element={<BillingList />} />
-        <Route path="inventory" element={<InventoryDashboard />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="staff" element={<StaffList />} />
-        <Route path="staff/new" element={<StaffFormPage />} />
-        <Route path="staff/:staffId" element={<StaffFormPage />} />
-        <Route path="tasks" element={<Tasks />} />
-        <Route path="users" element={<UserManagement />} />
-        <Route path="settings" element={<LookupManager />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" />} />
+      ) : (
+        <>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="jobs" element={<JobList />} />
+            <Route path="jobs/create" element={<JobCreate />} />
+            <Route path="jobs/:jobId" element={<JobDetail />} />
+            <Route path="customers" element={<CustomerList />} />
+            <Route path="customers/:customerId" element={<CustomerDetail />} />
+            <Route path="attendance" element={<AttendanceReport />} />
+            <Route path="billing" element={<BillingList />} />
+            <Route path="inventory" element={<InventoryDashboard />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="staff" element={<StaffList />} />
+            <Route path="staff/new" element={<StaffFormPage />} />
+            <Route path="staff/:staffId" element={<StaffFormPage />} />
+            <Route path="tasks" element={<Tasks />} />
+            <Route path="users" element={<UserManagement />} />
+            <Route path="settings" element={<LookupManager />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" />} />
+        </>
+      )}
     </Routes>
   );
 }

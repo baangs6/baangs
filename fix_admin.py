@@ -25,7 +25,7 @@ async def fix_admin():
     )
     
     if result.modified_count > 0:
-        print("✅ Admin password reset successful!")
+        print("[OK] Admin password reset successful!")
     else:
         # If user doesn't exist, create it
         user = await db.users.find_one({"username": username})

@@ -80,6 +80,9 @@ export const jobsApi = {
   get: (id) => api.get(`/jobs/${id}`),
   create: (data) => api.post('/jobs/', data),
   update: (id, data) => api.put(`/jobs/${id}`, data),
+  acceptRequest: (id, data) => api.patch(`/jobs/${id}/accept`, data),
+  rejectRequest: (id, data) => api.patch(`/jobs/${id}/reject`, data),
+  delete: (id) => api.delete(`/jobs/${id}`),
   uploadPhoto: (id, file) => {
     const form = new FormData();
     form.append('file', file);
@@ -186,6 +189,17 @@ export const tasksApi = {
   addSubtask: (id, data) => api.post(`/tasks/${id}/subtasks`, data),
   updateSubtask: (taskId, subtaskId, data) => api.patch(`/tasks/${taskId}/subtasks/${subtaskId}`, data),
   addComment: (id, data) => api.post(`/tasks/${id}/comments`, data),
+};
+
+export const publicApi = {
+  lookupCustomer: (phoneNumber) => api.post('/public/lookup-customer', { phone_number: phoneNumber }),
+  registerComplaint: (data) => api.post('/public/complaints', data),
+  uploadPhoto: (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/public/complaints/photo', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  track: (jobId) => api.get(`/public/track/${jobId}`),
 };
 
 export default api;

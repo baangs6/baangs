@@ -53,6 +53,17 @@ class JobUpdate(BaseModel):
     photo_url: Optional[str] = None
 
 
+class JobAcceptRequest(BaseModel):
+    assigned_staff_id: str
+    additional_staff_ids: Optional[List[str]] = Field(default_factory=list)
+    scheduled_date: Optional[str] = None
+    preferred_time: Optional[str] = None
+
+
+class JobRejectRequest(BaseModel):
+    remark: str
+
+
 class JobResponse(BaseModel):
     job_id: str
     customer_id: str
@@ -81,4 +92,7 @@ class JobResponse(BaseModel):
     next_schedule_date: Optional[str] = None
     photo_url: Optional[str] = None
     customer_key: str
+    is_public_submission: Optional[bool] = False
+    request_status: Optional[str] = None
+    rejection_remark: Optional[str] = None
     inventory_used: Optional[List[dict]] = Field(default_factory=list)

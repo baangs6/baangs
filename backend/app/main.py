@@ -7,7 +7,7 @@ from .config import settings
 from .database import connect_db, close_db, get_db, get_db_mode
 from .utils.cloudinary_helper import configure_cloudinary
 from .utils.job_reminders import job_reminder_loop, logout_reminder_loop
-from .routers import auth, users, staff, customers, jobs, updates, billing, attendance, lookups, dashboard, export, inventory, notifications, leaves, tasks
+from .routers import auth, users, staff, customers, jobs, updates, billing, attendance, lookups, dashboard, export, inventory, notifications, leaves, tasks, public
 
 
 @asynccontextmanager
@@ -72,6 +72,7 @@ app.include_router(inventory.router)
 app.include_router(notifications.router)
 app.include_router(leaves.router)
 app.include_router(tasks.router)
+app.include_router(public.router)
 
 
 @app.get("/")

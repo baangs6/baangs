@@ -258,7 +258,7 @@ async def payroll_summary(month: str, _=Depends(require_admin_or_manager)):
     month_prefix = f"{year:04d}-{mon:02d}"
     attendance_rows = await db.attendance.find({"date": {"$regex": f"^{month_prefix}"}}).to_list(10000)
     leave_rows = await db.leaves.find({"status": "approved"}).to_list(10000)
-    active_staff = await db.staff.find({"is_active": True}).to_list(2000)
+    active_staff = await db.staff.find({"$or": [{"is_active": True}, {"status": "active"}, {"is_active": {"$exists": False}}]}).to_list(2000)
     month_start = date(year, mon, 1)
     month_end = date(year, mon, days_in_month)
 
