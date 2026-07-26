@@ -313,7 +313,7 @@ export default function JobList() {
                 <th>Status</th>
                 <th>Days Open</th>
                 <th>Scheduled</th>
-                {activeTab === 'requests' && <th>Actions</th>}
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -361,25 +361,23 @@ export default function JobList() {
                   <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
                     {job.scheduled_date || job.service_request_date?.slice(0, 10)}
                   </td>
-                  {activeTab === 'requests' && (
-                    <td>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {job.request_status !== 'rejected' && (
-                          <>
-                            <button className="btn btn-success btn-sm" onClick={(event) => openAccept(event, job)} disabled={actionSaving}>
-                              <MdCheck /> Accept
-                            </button>
-                            <button className="btn btn-secondary btn-sm" onClick={(event) => openReject(event, job)} disabled={actionSaving}>
-                              <MdClose /> Reject
-                            </button>
-                          </>
-                        )}
-                        <button className="btn btn-danger btn-sm" onClick={(event) => openDelete(event, job)} disabled={actionSaving}>
-                          <MdDelete /> Delete
-                        </button>
-                      </div>
-                    </td>
-                  )}
+                  <td>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {activeTab === 'requests' && job.request_status !== 'rejected' && (
+                        <>
+                          <button className="btn btn-success btn-sm" onClick={(event) => openAccept(event, job)} disabled={actionSaving}>
+                            <MdCheck /> Accept
+                          </button>
+                          <button className="btn btn-secondary btn-sm" onClick={(event) => openReject(event, job)} disabled={actionSaving}>
+                            <MdClose /> Reject
+                          </button>
+                        </>
+                      )}
+                      <button className="btn btn-danger btn-sm" onClick={(event) => openDelete(event, job)} disabled={actionSaving}>
+                        <MdDelete /> Delete
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -478,7 +476,7 @@ export default function JobList() {
         <div className="modal-overlay" onClick={() => setDeleteJob(null)}>
           <div className="modal" style={{ maxWidth: 440 }} onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Delete Customer Request</h3>
+              <h3 className="modal-title">{isCustomerRequest(deleteJob) ? 'Delete Customer Request' : 'Delete Work Order'}</h3>
               <button className="btn-icon" onClick={() => setDeleteJob(null)}>x</button>
             </div>
             <div className="modal-body">
@@ -486,7 +484,7 @@ export default function JobList() {
                 Delete <strong>{deleteJob.job_id}</strong> for <strong>{deleteJob.customer_name}</strong>?
               </p>
               <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-                This will remove the request permanently.
+                This will remove the {isCustomerRequest(deleteJob) ? 'request' : 'work order'} permanently.
               </p>
               {deleteError && (
                 <p style={{ color: 'var(--color-danger)', fontSize: '0.9rem', marginTop: 12 }}>
