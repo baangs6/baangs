@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { jobsApi, updatesApi, billingApi, staffApi, lookupsApi } from '../../api';
-import { MdArrowBack, MdEdit, MdAttachMoney, MdVerified, MdClose, MdExpandMore } from 'react-icons/md';
+import { MdArrowBack, MdEdit, MdAttachMoney, MdVerified, MdClose, MdExpandMore, MdPerson, MdLocationOn, MdEngineering, MdSchedule } from 'react-icons/md';
 
 // ── Multi-select technician picker ──────────────────────────────────────────
 function TechnicianPicker({ staff, primaryId, additionalIds, onChangePrimary, onChangeAdditional }) {
@@ -166,6 +166,7 @@ export default function JobDetail() {
   const [staff, setStaff] = useState([]);
   const [lookups, setLookups] = useState({});
   const [editForm, setEditForm] = useState({});
+  const [activeTab, setActiveTab] = useState('details');
 
   const [updateForm, setUpdateForm] = useState({
     status: 'in_progress',
@@ -317,23 +318,39 @@ export default function JobDetail() {
   if (!job) return <div className="loading-center"><div className="spinner" /></div>;
 
   return (
-    <div className="animate-fade" style={{ maxWidth: 980 }}>
+    <div className="animate-fade job-detail-page">
       <button className="btn btn-secondary btn-sm" onClick={() => navigate('/jobs')} style={{ marginBottom: 16 }}>
         <MdArrowBack /> Back to Jobs
       </button>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-            <h2 style={{ fontFamily: 'Outfit', fontSize: '1.5rem', fontWeight: 700 }}>{job.job_id}</h2>
+      <div className="job-ticket-detail-shell">
+        <div className="job-detail-tabs">
+          <button type="button" className={`job-detail-tab ${activeTab === 'details' ? 'active' : ''}`} onClick={() => setActiveTab('details')}>Ticket Details</button>
+          <button type="button" className={`job-detail-tab ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>History</button>
+          <button type="button" className={`job-detail-tab ${activeTab === 'files' ? 'active' : ''}`} onClick={() => setActiveTab('files')}>Files</button>
+        </div>
+
+        <div id="ticket-details" className="job-detail-header">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+              <h2>{job.job_id}</h2>
+            </div>
+            <p className="job-detail-customer">{job.customer_name}</p>
+            <p className="job-detail-summary">{job.work_type}</p>
+            <p className="job-detail-description"><strong>Description :</strong> {job.complaint || '-'}</p>
+          </div>
+          <div className="job-detail-created">Ticket Created on {formatDateTime(job.service_request_date)}</div>
+        </div>
+
+        <div className="job-detail-status-strip">
+          <div className="job-detail-badges">
             <span className={`badge badge-${job.status}`}>{STATUS_LABELS[job.status] || job.status}</span>
             <span className={`badge badge-${job.priority}`}>{job.priority}</span>
           </div>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-            {job.customer_name} | {job.phone_number}
-          </p>
+          <span>Ticket Created by {job.assigned_staff_name || 'Admin'}</span>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+
+        <div className="job-detail-actions">
           <button className="btn btn-secondary" onClick={openEditModal}>
             <MdEdit /> Edit Job
           </button>
@@ -353,20 +370,32 @@ export default function JobDetail() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card">
-          <h3 className="card-title" style={{ marginBottom: 16 }}>Customer</h3>
+      {activeTab === 'details' && (
+      <>
+      <div className="job-detail-main-grid">
+        <div className="job-detail-panel">
+          <h3 className="job-detail-section-title">Ticket Details</h3>
           <div className="detail-grid">
-            <div className="detail-item"><span className="detail-label">Name</span><span className="detail-value">{job.customer_name}</span></div>
-            <div className="detail-item"><span className="detail-label">Phone</span><span className="detail-value">{job.phone_number}</span></div>
-            <div className="detail-item"><span className="detail-label">Location</span><span className="detail-value">{job.location || '-'}</span></div>
-            <div className="detail-item"><span className="detail-label">Map Location</span><span className="detail-value">{getMapHref(job.map_location, job.location) ? <a href={getMapHref(job.map_location, job.location)} target="_blank" rel="noreferrer" style={{color: 'var(--color-primary)', textDecoration: 'underline'}}>View Map</a> : '-'}</span></div>
-            <div className="detail-item"><span className="detail-label">Site Type</span><span className="detail-value">{job.site_type || '-'}</span></div>
+            <div className="detail-item"><span className="detail-label"><MdPerson /> Assigned To</span><span className="detail-value">{job.assigned_staff_name || 'Unassigned'}</span></div>
+            <div className="detail-item"><span className="detail-label"><MdLocationOn /> Address</span><span className="detail-value">{job.location || '-'}</span></div>
+            <div className="detail-item"><span className="detail-label"><MdLocationOn /> Map Location</span><span className="detail-value">{getMapHref(job.map_location, job.location) ? <a href={getMapHref(job.map_location, job.location)} target="_blank" rel="noreferrer" style={{color: 'var(--color-primary)', textDecoration: 'underline'}}>View Map</a> : '-'}</span></div>
+            <div className="detail-item"><span className="detail-label"><MdEngineering /> Site Type</span><span className="detail-value">{job.site_type || '-'}</span></div>
+            <div className="detail-item"><span className="detail-label"><MdEngineering /> Work Type</span><span className="detail-value">{job.work_type}</span></div>
+            <div className="detail-item"><span className="detail-label"><MdSchedule /> Scheduled on</span><span className="detail-value">{job.scheduled_date || '-'}</span></div>
           </div>
         </div>
 
-        <div className="card">
-          <h3 className="card-title" style={{ marginBottom: 16 }}>Work Tracking</h3>
+        <div className="job-detail-panel">
+          <h3 className="job-detail-section-title">Contacts</h3>
+          <div className="job-detail-contact-card">
+            <div>
+              <strong>{job.customer_name}</strong>
+              <span>{job.phone_number}</span>
+              <span>{job.location || '-'}</span>
+            </div>
+            <a className="job-detail-call" href={`tel:${job.phone_number}`}>Call</a>
+          </div>
+          <h3 className="job-detail-section-title" style={{ marginTop: 20 }}>Work Tracking</h3>
           <div className="detail-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <div className="detail-item"><span className="detail-label">Started At</span><span className="detail-value">{formatDateTime(job.work_started_at)}</span></div>
             <div className="detail-item"><span className="detail-label">Start Location</span><span className="detail-value">{formatLocation(job.work_start_location)}</span></div>
@@ -378,8 +407,8 @@ export default function JobDetail() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h3 className="card-title" style={{ marginBottom: 16 }}>Job Info</h3>
+      <div className="job-detail-panel" style={{ marginBottom: 16 }}>
+        <h3 className="job-detail-section-title">Job Info</h3>
         <div className="detail-grid">
           <div className="detail-item"><span className="detail-label">Work Type</span><span className="detail-value">{job.work_type}</span></div>
           <div className="detail-item"><span className="detail-label">Assigned To</span><span className="detail-value">{job.assigned_staff_name || 'Unassigned'}</span></div>
@@ -397,8 +426,8 @@ export default function JobDetail() {
       </div>
 
       {billing && (
-        <div className="card" style={{ marginBottom: 16, borderColor: 'rgba(16,185,129,0.3)' }}>
-          <h3 className="card-title" style={{ marginBottom: 16, color: 'var(--color-success)' }}>Billing</h3>
+        <div className="job-detail-panel" style={{ marginBottom: 16, borderColor: 'rgba(16,185,129,0.3)' }}>
+          <h3 className="job-detail-section-title" style={{ color: 'var(--color-success)' }}>Billing</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
             {[
               ['Invoice', `Rs ${billing.invoice_amount}`],
@@ -417,15 +446,18 @@ export default function JobDetail() {
           </div>
         </div>
       )}
+      </>
+      )}
 
-      <div className="card">
-        <h3 className="card-title" style={{ marginBottom: 16 }}>Update History</h3>
+      {activeTab === 'history' && (
+      <div id="job-history" className="job-detail-panel">
+        <h3 className="job-detail-section-title">Call History</h3>
         {updates.length === 0 ? (
           <div className="empty-state" style={{ padding: 24 }}><p>No updates yet</p></div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="job-detail-timeline">
             {updates.map((update) => (
-              <div key={update.update_id} style={{ padding: 12, background: 'var(--color-surface-2)', borderRadius: 8, borderLeft: '3px solid var(--color-accent)' }}>
+              <div key={update.update_id} className="job-detail-timeline-item">
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{update.staff_name}</span>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -481,6 +513,18 @@ export default function JobDetail() {
           </div>
         )}
       </div>
+      )}
+
+      {activeTab === 'files' && (
+      <div id="job-files" className="job-detail-panel" style={{ marginTop: 16 }}>
+        <h3 className="job-detail-section-title">Files</h3>
+        {job.photo_url ? (
+          <a href={job.photo_url} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}>View job photo</a>
+        ) : (
+          <div className="empty-state" style={{ padding: 24 }}><p>No files uploaded</p></div>
+        )}
+      </div>
+      )}
 
       {showUpdateModal && (
         <div className="modal-overlay" onClick={() => setShowUpdateModal(false)}>
