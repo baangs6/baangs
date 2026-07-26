@@ -15,9 +15,9 @@ router = APIRouter(prefix="/staff", tags=["Staff"])
 
 def _format_staff(s: dict) -> dict:
     return {
-        "staff_id": s["staff_id"],
-        "name": s["name"],
-        "phone_number": s["phone_number"],
+        "staff_id": s.get("staff_id", ""),
+        "name": s.get("name") or s.get("full_name") or "Unnamed Staff",
+        "phone_number": s.get("phone_number") or s.get("phone") or "",
         "skill": s.get("skill"),
         "dob": s.get("dob"),
         "doj": s.get("doj"),
@@ -38,7 +38,7 @@ def _format_staff(s: dict) -> dict:
         "aadhaar_number": s.get("aadhaar_number"),
         "photo_url": s.get("photo_url"),
         "is_active": s.get("is_active", True),
-        "created_at": s["created_at"],
+        "created_at": s.get("created_at") or now_ist_str(),
     }
 
 
