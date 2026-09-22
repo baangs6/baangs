@@ -37,6 +37,17 @@ def _technician_name_match(technician_name: Optional[str], staff_name: Optional[
 def _location_payload(latitude, longitude):
     if latitude is None or longitude is None:
         return None
+
+
+def _minutes_between(start_value: Optional[str], end_value: Optional[str]) -> int:
+    if not start_value or not end_value:
+        return 0
+    try:
+        start = datetime.fromisoformat(str(start_value).replace("Z", "+00:00"))
+        end = datetime.fromisoformat(str(end_value).replace("Z", "+00:00"))
+        return max(0, int((end - start).total_seconds() // 60))
+    except Exception:
+        return 0
     return {"latitude": latitude, "longitude": longitude}
 
 
@@ -468,49 +479,98 @@ async def technician_performance_deep_dive(
 ):
     db = get_db()
 
-    billing_query = _date_range_filter(date_from, date_to, "complete_date")
-    billing_rows = await db.billing.find(billing_query).to_list(5000)
-    if not billing_rows:
-        return []
-
-    job_ids = [b.get("job_id") for b in billing_rows if b.get("job_id")]
-    jobs = await db.jobs.find({"job_id": {"$in": job_ids}}).to_list(5000)
-    jobs_by_id = {j.get("job_id"): j for j in jobs}
-
+    staff_rows = await db.staff.find({"is_active": True}).to_list(1000)
     tech_map = {}
-    for bill in billing_rows:
-        job = jobs_by_id.get(bill.get("job_id"))
-        if not job:
+    for staff in staff_rows:
+        staff_id = staff.get("staff_id")
+        staff_name = staff.get("full_name") or staff.get("name") or staff_id
+        if not staff_id or not _technician_name_match(technician_name, staff_name, staff_id):
             continue
-        if not _technician_name_match(technician_name, job.get("assigned_staff_name"), job.get("assigned_staff_id")):
-            continue
-
-        staff_id = job.get("assigned_staff_id") or "UNASSIGNED"
-        staff_name = job.get("assigned_staff_name") or staff_id
-        row = tech_map.setdefault(staff_id, {
+        tech_map[staff_id] = {
             "staff_id": staff_id,
             "staff_name": staff_name,
+            "photo_url": staff.get("photo_url") or staff.get("staff_photo") or staff.get("profile_photo"),
+            "attendance_days": 0,
+            "working_minutes": 0,
+            "installation_minutes": 0,
             "total_service_completed": 0,
             "total_installation_completed": 0,
+            "total_service_attended": 0,
+            "total_site_visits": 0,
+            "new_projects_created": 0,
+            "food_expense": 0.0,
+            "petrol_expense": 0.0,
             "average_service_completion_days": 0,
             "_service_durations": [],
-        })
+        }
 
+    jobs = await db.jobs.find(_date_range_filter(date_from, date_to, "scheduled_date")).to_list(5000)
+    for job in jobs:
+        staff_id = job.get("assigned_staff_id")
+        row = tech_map.get(staff_id)
+        if not row:
+            continue
         work_type = (job.get("work_type") or "").strip().lower()
-        is_installation = work_type == "installation"
+        is_installation = "install" in work_type
         if is_installation:
-            row["total_installation_completed"] += 1
+            row["installation_minutes"] += _minutes_between(job.get("work_started_at"), job.get("work_ended_at"))
+            if job.get("status") == "complete":
+                row["total_installation_completed"] += 1
         else:
-            row["total_service_completed"] += 1
-            req_date = _parse_date(job.get("service_request_date"))
-            comp_date = _parse_date(bill.get("complete_date"))
-            if req_date and comp_date and comp_date >= req_date:
-                row["_service_durations"].append((comp_date - req_date).days)
+            row["total_service_attended"] += 1
+            if job.get("status") == "complete":
+                row["total_service_completed"] += 1
+                req_date = _parse_date(job.get("service_request_date"))
+                comp_date = _parse_date(job.get("work_ended_at"))
+                if req_date and comp_date and comp_date >= req_date:
+                    row["_service_durations"].append((comp_date - req_date).days)
+
+    attendance_rows = await db.attendance.find(_date_range_filter(date_from, date_to, "date")).to_list(5000)
+    for attendance in attendance_rows:
+        row = tech_map.get(attendance.get("staff_id"))
+        if row:
+            row["attendance_days"] += 1
+            row["working_minutes"] += _minutes_between(attendance.get("checkin_time"), attendance.get("checkout_time"))
+
+    update_query = {}
+    if date_from or date_to:
+        update_query["update_time"] = {}
+        if date_from:
+            update_query["update_time"]["$gte"] = date_from
+        if date_to:
+            update_query["update_time"]["$lte"] = f"{date_to}T23:59:59"
+    updates = await db.daily_updates.find({**update_query, "work_event": "start_work"}).to_list(5000)
+    for update in updates:
+        row = tech_map.get(update.get("assigned_staff_id"))
+        if row:
+            row["total_site_visits"] += 1
+
+    allowance_rows = await db.attendance_allowances.find(_date_range_filter(date_from, date_to, "date")).to_list(5000)
+    for allowance in allowance_rows:
+        row = tech_map.get(allowance.get("staff_id"))
+        if not row:
+            continue
+        expense_type = (allowance.get("expense_type") or "").lower()
+        if expense_type == "food":
+            row["food_expense"] += float(allowance.get("amount", 0) or 0)
+        elif expense_type == "petrol":
+            row["petrol_expense"] += float(allowance.get("amount", 0) or 0)
+
+    staff_users = await db.users.find({"staff_id": {"$ne": None}}).to_list(1000)
+    user_to_staff = {u.get("user_id"): u.get("staff_id") for u in staff_users}
+    for job in jobs:
+        creator_staff_id = user_to_staff.get(job.get("created_by_user_id"))
+        if creator_staff_id in tech_map:
+            tech_map[creator_staff_id]["new_projects_created"] += 1
 
     result = []
     for row in tech_map.values():
         durations = row.pop("_service_durations", [])
         row["average_service_completion_days"] = round(sum(durations) / len(durations), 2) if durations else 0
+        row["working_hours"] = round(row.pop("working_minutes") / 60, 2)
+        row["installation_hours"] = round(row.pop("installation_minutes") / 60, 2)
+        row["food_expense"] = round(row["food_expense"], 2)
+        row["petrol_expense"] = round(row["petrol_expense"], 2)
         result.append(row)
 
     result.sort(key=lambda x: (x["total_service_completed"] + x["total_installation_completed"]), reverse=True)

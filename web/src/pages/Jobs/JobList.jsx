@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { jobsApi, staffApi } from '../../api';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { jobsApi, lookupsApi, staffApi } from '../../api';
 import { MdAdd, MdCheck, MdClose, MdDelete, MdRefresh, MdSearch } from 'react-icons/md';
+import { formatDate } from '../../utils/dateFormat';
 
 const STATUS_LABELS = { pending: 'Pending', in_progress: 'In Progress', complete: 'Complete', cancelled: 'Cancelled' };
 
@@ -23,8 +24,10 @@ function daysSinceCreated(job) {
 
 export default function JobList() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [jobs, setJobs] = useState([]);
   const [staff, setStaff] = useState([]);
+  const [workTypes, setWorkTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [actionSaving, setActionSaving] = useState(false);
@@ -40,8 +43,8 @@ export default function JobList() {
   const [rejectRemark, setRejectRemark] = useState('');
   const [filters, setFilters] = useState({
     search: '',
-    status: '',
-    priority: '',
+    status: searchParams.get('status') || '',
+    priority: searchParams.get('priority') || '',
     work_type: '',
     site_type: '',
     assigned_staff_id: '',
@@ -76,12 +79,11 @@ export default function JobList() {
 
   useEffect(() => {
     let ignore = false;
-    staffApi
-      .list()
-      .then((res) => {
-        if (!ignore) setStaff(res.data || []);
-      })
-      .catch(console.error);
+    Promise.allSettled([staffApi.list(), lookupsApi.all()]).then(([staffResult, lookupResult]) => {
+      if (ignore) return;
+      if (staffResult.status === 'fulfilled') setStaff(staffResult.value.data || []);
+      if (lookupResult.status === 'fulfilled') setWorkTypes(lookupResult.value.data?.service_types || []);
+    });
     return () => {
       ignore = true;
     };
@@ -240,14 +242,13 @@ export default function JobList() {
         <select
           className="form-select"
           style={{ width: 130 }}
-          value={filters.site_type}
-          onChange={(e) => setFilters({ ...filters, site_type: e.target.value })}
+          value={filters.work_type}
+          onChange={(e) => setFilters({ ...filters, work_type: e.target.value })}
         >
-          <option value="">All Site Types</option>
-          <option value="Home">Home</option>
-          <option value="Office">Office</option>
-          <option value="Shop">Shop</option>
-          <option value="Land">Land</option>
+          <option value="">All Work Types</option>
+          {workTypes.map((type) => (
+            <option key={type.value} value={type.value}>{type.label}</option>
+          ))}
         </select>
         <select
           className="form-select"
@@ -359,7 +360,7 @@ export default function JobList() {
                     )}
                   </td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                    {job.scheduled_date || job.service_request_date?.slice(0, 10)}
+                    {formatDate(job.scheduled_date || job.service_request_date)}
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

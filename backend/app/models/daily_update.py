@@ -29,7 +29,9 @@ class DailyUpdateCreate(BaseModel):
     work_event: Optional[str] = None
     location: Optional[GeoPoint] = None
     visit_notes: Optional[str] = None
+    issues_faced: Optional[str] = None
     expense: Optional[float] = 0.0
+    service_charge: Optional[float] = 0.0
     service_bill: Optional[float] = 0.0
     collected_amount: Optional[float] = 0.0
     invoice: Optional[str] = None
@@ -50,7 +52,9 @@ class DailyUpdateResponse(BaseModel):
     work_event: Optional[str] = None
     location: Optional[dict] = None
     visit_notes: Optional[str] = None
+    issues_faced: Optional[str] = None
     expense: float = 0.0
+    service_charge: float = 0.0
     service_bill: float = 0.0
     collected_amount: float = 0.0
     invoice: Optional[str] = None

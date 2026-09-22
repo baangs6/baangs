@@ -89,6 +89,8 @@ class JobResponse(BaseModel):
     work_ended_by: Optional[str] = None
     work_end_location: Optional[dict] = None
     service_request_date: str
+    created_by_user_id: Optional[str] = None
+    created_by_name: Optional[str] = None
     next_schedule_date: Optional[str] = None
     photo_url: Optional[str] = None
     customer_key: str

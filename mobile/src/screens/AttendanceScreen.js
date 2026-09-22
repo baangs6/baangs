@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { attendanceApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing, radius, useTheme } from '../theme';
+import { formatDate } from '../utils/dateFormat';
 
 export default function AttendanceScreen() {
   const theme = useTheme();
@@ -278,7 +279,7 @@ export default function AttendanceScreen() {
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Attendance</Text>
-        <Text style={styles.headerDate}>{new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+        <Text style={styles.headerDate}>{formatDate(new Date())}</Text>
       </View>
 
       {/* Status Card */}

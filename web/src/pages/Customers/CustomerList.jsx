@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { customersApi } from '../../api';
 import { MdSearch, MdPeople, MdAdd, MdEdit, MdDelete } from 'react-icons/md';
+import { formatDate } from '../../utils/dateFormat';
 
 export default function CustomerList() {
   const navigate = useNavigate();
@@ -173,8 +174,8 @@ export default function CustomerList() {
                       {c.total_jobs}
                     </span>
                   </td>
-                  <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{c.latest_request_date || '-'}</td>
-                  <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{c.first_request_date || '-'}</td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{formatDate(c.latest_request_date)}</td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{formatDate(c.first_request_date)}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button

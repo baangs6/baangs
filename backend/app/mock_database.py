@@ -70,8 +70,12 @@ class MockCollection:
     async def create_index(self, *args, **kwargs):
         return None
 
-    async def find_one(self, query: dict | None = None, projection: dict | None = None):
-        for doc in self.docs:
+    async def find_one(self, query: dict | None = None, projection: dict | None = None, sort: list | None = None):
+        docs = list(self.docs)
+        if sort:
+            for field, direction in reversed(sort):
+                docs.sort(key=lambda doc: _sort_key(_extract_first_value(doc, field)), reverse=direction < 0)
+        for doc in docs:
             if _matches(doc, query or {}):
                 return _apply_projection(doc, projection)
         return None
@@ -152,6 +156,14 @@ class MockCollection:
                 self.database.save()
                 return MockDeleteResult(deleted_count=1)
         return MockDeleteResult(deleted_count=0)
+
+    async def delete_many(self, query: dict):
+        retained = [doc for doc in self.docs if not _matches(doc, query)]
+        deleted_count = len(self.docs) - len(retained)
+        if deleted_count:
+            self.database.data[self.name] = retained
+            self.database.save()
+        return MockDeleteResult(deleted_count=deleted_count)
 
     async def count_documents(self, query: dict | None = None):
         return sum(1 for doc in self.docs if _matches(doc, query or {}))

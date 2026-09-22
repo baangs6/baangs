@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { customersApi } from '../../api';
 import { MdArrowBack, MdWork } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
+import { formatDate } from '../../utils/dateFormat';
 
 export default function CustomerDetail() {
   const { customerId } = useParams();
@@ -130,8 +131,8 @@ export default function CustomerDetail() {
           <h3 className="card-title" style={{ marginBottom: 12 }}>History</h3>
           <div className="detail-grid">
             {[
-              ['First Request', customer.first_request_date || '-'],
-              ['Latest Request', customer.latest_request_date || '-']
+              ['First Request', formatDate(customer.first_request_date)],
+              ['Latest Request', formatDate(customer.latest_request_date)]
             ].map(([label, value]) => (
               <div className="detail-item" key={label}>
                 <span className="detail-label">{label}</span>
@@ -167,7 +168,7 @@ export default function CustomerDetail() {
                     <td>{j.work_type}</td>
                     <td><span className={`badge badge-${j.priority}`}>{j.priority}</span></td>
                     <td><span className={`badge badge-${j.status}`}>{STATUS_LABELS[j.status]}</span></td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{j.service_request_date?.slice(0, 10)}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{formatDate(j.service_request_date)}</td>
                   </tr>
                 ))}
               </tbody>

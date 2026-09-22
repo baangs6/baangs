@@ -16,10 +16,10 @@ function resolveApiBase() {
   return DEFAULT_API_BASE;
 }
 
-const API_BASE = resolveApiBase();
+export const API_BASE_URL = resolveApiBase();
 
 const api = axios.create({
-  baseURL: API_BASE,
+  baseURL: API_BASE_URL,
   timeout: 30000,
 });
 
@@ -40,7 +40,7 @@ async function uploadAttendancePhoto(path, attendanceId, uri, fileName) {
   }
 
   const token = await storage.getItem('token');
-  const response = await fetch(`${API_BASE}${path}?attendance_id=${encodeURIComponent(attendanceId)}`, {
+  const response = await fetch(`${API_BASE_URL}${path}?attendance_id=${encodeURIComponent(attendanceId)}`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: formData,
@@ -70,7 +70,7 @@ async function uploadFile(path, uri, fileName) {
   }
 
   const token = await storage.getItem('token');
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: formData,
@@ -110,6 +110,7 @@ export const authApi = {
 export const jobsApi = {
   list: (params) => api.get('/jobs/', { params }),
   get: (id) => api.get(`/jobs/${id}`),
+  customerHistory: (id) => api.get(`/jobs/${id}/customer-history`),
   update: (id, data) => api.put(`/jobs/${id}`, data),
   create: (data) => api.post('/jobs/', data),
 };
@@ -136,10 +137,17 @@ export const attendanceApi = {
 
 export const staffApi = {
   list: () => api.get('/staff/'),
+  create: (data) => api.post('/staff/', data),
+  update: (id, data) => api.put(`/staff/${id}`, data),
+  delete: (id) => api.delete(`/staff/${id}`),
 };
 
 export const customersApi = {
   list: (params) => api.get('/customers/', { params }),
+  get: (id) => api.get(`/customers/${id}`),
+  create: (data) => api.post('/customers/', data),
+  update: (id, data) => api.put(`/customers/${id}`, data),
+  delete: (id) => api.delete(`/customers/${id}`),
 };
 
 export const billingApi = {
@@ -165,6 +173,12 @@ export const usersApi = {
 
 export const inventoryApi = {
   list: () => api.get('/inventory/'),
+  summary: () => api.get('/inventory/summary'),
+  transactions: () => api.get('/inventory/transactions'),
+  create: (data) => api.post('/inventory/', data),
+  update: (barcode, data) => api.put(`/inventory/${barcode}`, data),
+  delete: (barcode) => api.delete(`/inventory/${barcode}`),
+  adjust: (barcode, data) => api.post(`/inventory/${barcode}/adjust`, data),
   get: (barcode) => api.get(`/inventory/${barcode}`),
   search: (model_number, serial_number) => api.get('/inventory/search', {
     params: {

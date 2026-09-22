@@ -4,11 +4,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { Platform, View, ActivityIndicator, StatusBar } from 'react-native';
+import { Platform, View, ActivityIndicator, StatusBar, StyleSheet, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import Icon from '@expo/vector-icons/MaterialIcons';
-import { attendanceApi, notificationsApi } from './src/api';
+import { attendanceApi, notificationsApi, staffApi } from './src/api';
 import { ThemeProvider, useTheme } from './src/theme';
 
 // Screens
@@ -20,9 +20,12 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import RequiredCheckInScreen from './src/screens/RequiredCheckInScreen';
 import FinanceScreen from './src/screens/FinanceScreen';
+import JobCreateScreen from './src/screens/JobCreateScreen';
+import { CustomersScreen, InventoryScreen, ReportsScreen, StaffScreen, UsersScreen } from './src/screens/AdminListScreens';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
+const RootStack = createStackNavigator();
 const navigationRef = React.createRef();
 
 Notifications.setNotificationHandler({
@@ -45,8 +48,130 @@ function JobsStack() {
       }}
     >
       <Stack.Screen name="JobsList" component={JobsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="JobCreate" component={JobCreateScreen} options={{ title: 'Create Job', headerBackTitle: 'Back' }} />
       <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ title: 'Job Details', headerBackTitle: 'Back' }} />
     </Stack.Navigator>
+  );
+}
+
+function RootApp() {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1 }}>
+      <RootStack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+          headerTintColor: colors.text,
+          headerTitleStyle: { fontWeight: '800' },
+        }}
+      >
+        <RootStack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+        <RootStack.Screen name="Customers" component={CustomersScreen} />
+        <RootStack.Screen name="Staff" component={StaffScreen} options={{ title: 'Staff / Technicians' }} />
+        <RootStack.Screen name="Users" component={UsersScreen} />
+        <RootStack.Screen name="Inventory" component={InventoryScreen} />
+        <RootStack.Screen name="Reports" component={ReportsScreen} />
+      </RootStack.Navigator>
+      <AdminOverlay />
+    </View>
+  );
+}
+
+function AdminOverlay() {
+  const { colors } = useTheme();
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const styles = React.useMemo(() => overlayStyles(colors, insets), [colors, insets]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [techOpen, setTechOpen] = useState(false);
+  const [technicians, setTechnicians] = useState([]);
+  const isAdmin = ['admin', 'manager', 'sales'].includes(String(user?.role || '').toLowerCase());
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    staffApi.list()
+      .then((res) => setTechnicians((Array.isArray(res.data) ? res.data : []).filter((s) => String(s.role || '').toLowerCase() === 'technician' || s.staff_id)))
+      .catch(() => setTechnicians([]));
+  }, [isAdmin]);
+
+  if (!isAdmin) return null;
+
+  const go = (screen, params) => {
+    setMenuOpen(false);
+    navigationRef.current?.navigate(screen, params);
+  };
+
+  const menuItems = [
+    { label: 'Dashboard', icon: 'dashboard', action: () => go('MainTabs', { screen: 'Dashboard' }) },
+    { label: 'Jobs', icon: 'work', action: () => go('MainTabs', { screen: 'Jobs', params: { screen: 'JobsList' } }) },
+    { label: 'Create Job', icon: 'add-task', action: () => go('MainTabs', { screen: 'Jobs', params: { screen: 'JobCreate' } }) },
+    { label: 'Customers', icon: 'people', action: () => go('Customers') },
+    { label: 'Staff / Technicians', icon: 'engineering', action: () => go('Staff') },
+    { label: 'Users', icon: 'admin-panel-settings', action: () => go('Users') },
+    { label: 'Inventory', icon: 'inventory-2', action: () => go('Inventory') },
+    { label: 'Finance', icon: 'account-balance-wallet', action: () => go('MainTabs', { screen: 'Finance' }) },
+    { label: 'Reports', icon: 'bar-chart', action: () => go('Reports') },
+    { label: 'Notifications', icon: 'notifications', action: () => go('MainTabs', { screen: 'Notifications' }) },
+    { label: 'Settings', icon: 'settings', action: () => go('MainTabs', { screen: 'Settings' }) },
+  ];
+
+  const openTechnician = (tech) => {
+    setTechOpen(false);
+    navigationRef.current?.navigate('MainTabs', {
+      screen: 'Dashboard',
+      params: {
+        selectedTechnician: tech,
+      },
+    });
+  };
+
+  return (
+    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+      <TouchableOpacity style={styles.menuFab} onPress={() => setMenuOpen(true)} activeOpacity={0.8}>
+        <Icon name="menu" size={22} color="#fff" />
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.techFab} onPress={() => setTechOpen(true)} activeOpacity={0.8}>
+        <Icon name="person-search" size={18} color="#fff" />
+        <Text style={styles.fabText}>Tech</Text>
+      </TouchableOpacity>
+
+      <Modal transparent animationType="fade" visible={menuOpen} onRequestClose={() => setMenuOpen(false)}>
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setMenuOpen(false)}>
+          <View style={styles.drawer}>
+            <Text style={styles.drawerTitle}>Admin Menu</Text>
+            <ScrollView>
+              {menuItems.map((item) => (
+                <TouchableOpacity key={item.label} style={styles.drawerItem} onPress={item.action}>
+                  <Icon name={item.icon} size={20} color={colors.accent} />
+                  <Text style={styles.drawerItemText}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal transparent animationType="fade" visible={techOpen} onRequestClose={() => setTechOpen(false)}>
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setTechOpen(false)}>
+          <View style={styles.techSheet}>
+            <Text style={styles.drawerTitle}>Select Technician</Text>
+            <ScrollView>
+              {technicians.map((tech) => (
+                <TouchableOpacity key={tech.staff_id} style={styles.drawerItem} onPress={() => openTechnician(tech)}>
+                  <View style={styles.avatarMini}>
+                    <Text style={styles.avatarMiniText}>{(tech.full_name || tech.name || tech.staff_id || '?')[0]}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.drawerItemText}>{tech.full_name || tech.name || tech.staff_id}</Text>
+                    <Text style={styles.techSub}>{tech.staff_id}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
   );
 }
 
@@ -145,9 +270,12 @@ function MainTabs() {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const jobId = response.notification.request.content.data?.job_id;
       if (jobId && navigationRef.current?.isReady()) {
-        navigationRef.current.navigate('Jobs', {
-          screen: 'JobDetail',
-          params: { jobId },
+        navigationRef.current.navigate('MainTabs', {
+          screen: 'Jobs',
+          params: {
+            screen: 'JobDetail',
+            params: { jobId },
+          },
         });
       }
     });
@@ -257,7 +385,7 @@ function AppNavigator() {
             <ActivityIndicator size="large" color={colors.accent} />
           </View>
         ) : attendanceReady ? (
-          <MainTabs />
+          <RootApp />
         ) : (
           <RequiredCheckInScreen
             existingAttendance={todayAttendance}
@@ -273,6 +401,83 @@ function AppNavigator() {
     </NavigationContainer>
   );
 }
+
+const overlayStyles = (colors, insets) => StyleSheet.create({
+  menuFab: {
+    position: 'absolute',
+    top: insets.top + 8,
+    left: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    zIndex: 20,
+  },
+  techFab: {
+    position: 'absolute',
+    top: insets.top + 8,
+    right: 12,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 14,
+    elevation: 8,
+    zIndex: 20,
+  },
+  fabText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-start',
+  },
+  drawer: {
+    width: 292,
+    maxWidth: '82%',
+    height: '100%',
+    backgroundColor: colors.surface,
+    paddingTop: insets.top + 18,
+    paddingHorizontal: 14,
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
+  },
+  techSheet: {
+    marginTop: insets.top + 62,
+    marginHorizontal: 16,
+    maxHeight: '70%',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+  },
+  drawerTitle: { color: colors.text, fontSize: 20, fontWeight: '900', marginBottom: 14 },
+  drawerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  drawerItemText: { color: colors.text, fontSize: 15, fontWeight: '800' },
+  avatarMini: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.accentDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarMiniText: { color: colors.accent, fontWeight: '900' },
+  techSub: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
+});
 
 export default function App() {
   return (

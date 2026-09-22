@@ -3,31 +3,35 @@ import { View, Text, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, 
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import Icon from '@expo/vector-icons/MaterialIcons';
-import { attendanceApi, dashboardApi } from '../api';
+import { attendanceApi, dashboardApi, jobsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing, radius, useTheme } from '../theme';
 
-export default function DashboardScreen() {
+export default function DashboardScreen({ navigation, route }) {
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme.colors), [theme.colors]);
   const { user } = useAuth();
   const [summary, setSummary] = useState(null);
   const [techPerf, setTechPerf] = useState([]);
+  const [techJobs, setTechJobs] = useState([]);
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  const selectedTechnician = route?.params?.selectedTechnician;
 
   const load = async () => {
     try {
-      const [sumRes, techRes, attendanceRes] = await Promise.all([
+      const [sumRes, techRes, attendanceRes, selectedJobsRes] = await Promise.all([
         dashboardApi.summary(),
         dashboardApi.technicianPerformance(),
         user?.staff_id ? attendanceApi.today(user.staff_id).catch(() => ({ data: null })) : Promise.resolve({ data: null }),
+        selectedTechnician?.staff_id ? jobsApi.list({ assigned_staff_id: selectedTechnician.staff_id }).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ]);
       setSummary(sumRes.data);
       setTechPerf(techRes.data);
       setTodayAttendance(attendanceRes.data);
+      setTechJobs(Array.isArray(selectedJobsRes.data) ? selectedJobsRes.data : []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -38,7 +42,7 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     load();
-  }, [user?.staff_id]);
+  }, [user?.staff_id, selectedTechnician?.staff_id]);
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -101,14 +105,29 @@ export default function DashboardScreen() {
     );
   }
 
-  const jobs = summary?.jobs || {};
+  const selectedJobCounts = techJobs.reduce((acc, job) => {
+    acc.total += 1;
+    if (job.status === 'pending') acc.pending += 1;
+    else if (job.status === 'in_progress') acc.in_progress += 1;
+    else if (job.status === 'complete') acc.complete += 1;
+    return acc;
+  }, { total: 0, pending: 0, in_progress: 0, complete: 0 });
+  const jobs = selectedTechnician ? selectedJobCounts : (summary?.jobs || {});
   const revenue = summary?.revenue || {};
   const showRevenue = user?.role !== 'technician';
   const canWorkdayLogout = !!todayAttendance && !todayAttendance.is_checked_out;
+  const openJobs = (status) => {
+    navigation.navigate('Jobs', {
+      screen: 'JobsList',
+      params: status ? { statusFilter: status } : { statusFilter: 'all' },
+    });
+  };
+  const rootNavigation = navigation.getParent?.()?.getParent?.() || navigation.getParent?.();
 
   return (
     <ScrollView
       style={styles.container}
+      contentContainerStyle={styles.scrollContent}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -123,16 +142,16 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>
-            Good {getTimeOfDay()}, {user?.full_name?.split(' ')[0] || user?.username}!
+            {selectedTechnician ? `${selectedTechnician.full_name || selectedTechnician.name || selectedTechnician.staff_id}` : `Good ${getTimeOfDay()}, ${user?.full_name?.split(' ')[0] || user?.username}!`}
           </Text>
-          <Text style={styles.subGreeting}>Here&apos;s today&apos;s overview</Text>
+          <Text style={styles.subGreeting}>{selectedTechnician ? 'Technician dashboard view' : "Here's today's overview"}</Text>
         </View>
         <View style={styles.roleBadge}>
-          <Text style={styles.roleBadgeText}>{user?.role?.toUpperCase()}</Text>
+          <Text style={styles.roleBadgeText}>{selectedTechnician ? 'TECHNICIAN' : user?.role?.toUpperCase()}</Text>
         </View>
       </View>
 
-      {user?.staff_id && (
+      {user?.staff_id && !selectedTechnician && (
         <View style={styles.logoutPanel}>
           <View style={{ flex: 1 }}>
             <Text style={styles.logoutTitle}>{canWorkdayLogout ? 'Checked in today' : 'Workday status'}</Text>
@@ -164,20 +183,20 @@ export default function DashboardScreen() {
 
       <Text style={styles.sectionLabel}>Jobs Overview</Text>
       <View style={styles.statsGrid}>
-        <StatCard label="Total" value={jobs.total || 0} color={colors.accent} />
-        <StatCard label="Pending" value={jobs.pending || 0} color={colors.warning} />
-        <StatCard label="In Progress" value={jobs.in_progress || 0} color={colors.info} />
-        <StatCard label="Complete" value={jobs.complete || 0} color={colors.success} />
+        <StatCard label="Total" value={jobs.total || 0} color={colors.accent} onPress={() => openJobs('all')} />
+        <StatCard label="Pending" value={jobs.pending || 0} color={colors.warning} onPress={() => openJobs('pending')} />
+        <StatCard label="In Progress" value={jobs.in_progress || 0} color={colors.info} onPress={() => openJobs('in_progress')} />
+        <StatCard label="Complete" value={jobs.complete || 0} color={colors.success} onPress={() => openJobs('complete')} />
       </View>
 
       {showRevenue && (
         <>
           <Text style={styles.sectionLabel}>Revenue</Text>
           <View style={styles.statsGrid}>
-            <StatCard label="Revenue" value={`Rs ${fmtK(revenue.total)}`} color={colors.success} />
-            <StatCard label="Profit" value={`Rs ${fmtK(revenue.profit)}`} color={colors.accent} />
-            <StatCard label="Customers" value={summary?.customers?.total || 0} color={colors.secondary} />
-            <StatCard label="Staff" value={summary?.staff?.total || 0} color={colors.amber} />
+            <StatCard label="Revenue" value={`Rs ${fmtK(revenue.total)}`} color={colors.success} onPress={() => navigation.navigate('Finance')} />
+            <StatCard label="Profit" value={`Rs ${fmtK(revenue.profit)}`} color={colors.accent} onPress={() => navigation.navigate('Finance')} />
+            <StatCard label="Customers" value={summary?.customers?.total || 0} color={colors.secondary} onPress={() => rootNavigation?.navigate('Customers')} />
+            <StatCard label="Staff" value={summary?.staff?.total || 0} color={colors.amber} onPress={() => rootNavigation?.navigate('Staff')} />
           </View>
         </>
       )}
@@ -206,20 +225,45 @@ export default function DashboardScreen() {
         </>
       )}
 
+      {selectedTechnician && (
+        <>
+          <Text style={styles.sectionLabel}>Technician Jobs</Text>
+          <View style={styles.card}>
+            {techJobs.slice(0, 8).map((job) => (
+              <TouchableOpacity
+                key={job.job_id}
+                style={styles.techRow}
+                onPress={() => navigation.navigate('Jobs', { screen: 'JobDetail', params: { jobId: job.job_id } })}
+              >
+                <View style={styles.techInfo}>
+                  <Text style={styles.techName}>{job.job_id}</Text>
+                  <Text style={styles.techSub}>{job.customer_name} | {job.status}</Text>
+                </View>
+                <Icon name="chevron-right" size={22} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
+
       <View style={styles.spacer} />
     </ScrollView>
   );
 }
 
-function StatCard({ label, value, color }) {
+function StatCard({ label, value, color, onPress }) {
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme.colors), [theme.colors]);
-  return (
-    <View style={[styles.statCard, { borderColor: `${color}33` }]}>
+  const card = (
+    <>
       <Text style={[styles.statValue, { color }]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    </>
   );
+  if (onPress) {
+    return <TouchableOpacity style={[styles.statCard, { borderColor: `${color}33` }]} onPress={onPress} activeOpacity={0.75}>{card}</TouchableOpacity>;
+  }
+  return <View style={[styles.statCard, { borderColor: `${color}33` }]}>{card}</View>;
 }
 
 function fmtK(v) {
@@ -237,6 +281,7 @@ function getTimeOfDay() {
 
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  scrollContent: { paddingTop: 56 },
   center: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -247,10 +292,11 @@ const createStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.xl,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.base,
     paddingBottom: spacing.md,
   },
-  greeting: { fontSize: 22, fontWeight: '800', color: colors.text },
+  greeting: { fontSize: 19, fontWeight: '900', color: colors.text },
   subGreeting: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   roleBadge: {
     backgroundColor: colors.accentDim,

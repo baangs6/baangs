@@ -11,6 +11,7 @@ import {
   MdTaskAlt,
 } from 'react-icons/md';
 import { tasksApi } from '../../api';
+import { formatDateTime } from '../../utils/dateFormat';
 
 const STATUSES = [
   ['pending', 'Pending'],
@@ -408,7 +409,7 @@ export default function Tasks() {
                   <div key={comment.comment_id} className="task-comment">
                     <strong>{comment.created_by_name || comment.created_by_user_id}</strong>
                     <p>{comment.comment}</p>
-                    <span>{comment.created_at?.slice(0, 16).replace('T', ' ')}</span>
+                    <span>{formatDateTime(comment.created_at)}</span>
                   </div>
                 ))}
               </div>

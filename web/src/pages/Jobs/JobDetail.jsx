@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { jobsApi, updatesApi, billingApi, staffApi, lookupsApi } from '../../api';
+import { jobsApi, updatesApi, billingApi, customersApi, staffApi, lookupsApi } from '../../api';
+import { formatDate } from '../../utils/dateFormat';
+import { createInvoicePdf } from '../../utils/invoicePdf';
+import { calculateBillingProfit } from '../../utils/billingMath';
 import { MdArrowBack, MdEdit, MdAttachMoney, MdVerified, MdClose, MdExpandMore, MdPerson, MdLocationOn, MdEngineering, MdSchedule } from 'react-icons/md';
+import { FaWhatsapp } from 'react-icons/fa';
+import { MdDownload } from 'react-icons/md';
 
 // ── Multi-select technician picker ──────────────────────────────────────────
 function TechnicianPicker({ staff, primaryId, additionalIds, onChangePrimary, onChangeAdditional }) {
@@ -158,6 +163,7 @@ export default function JobDetail() {
   const [job, setJob] = useState(null);
   const [updates, setUpdates] = useState([]);
   const [billing, setBilling] = useState(null);
+  const [customerHistory, setCustomerHistory] = useState([]);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showBillingModal, setShowBillingModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
@@ -171,12 +177,14 @@ export default function JobDetail() {
   const [updateForm, setUpdateForm] = useState({
     status: 'in_progress',
     visit_notes: '',
+    issues_faced: '',
     expense: 0,
     collected_amount: 0,
     invoice_amount: 0,
   });
   const [billingForm, setBillingForm] = useState({
     invoice_amount: 0,
+    service_amount: 0,
     expense: 0,
     material_amount: 0,
     collected_amount: 0,
@@ -193,10 +201,63 @@ export default function JobDetail() {
     ]);
     setJob(jobRes.data);
     setUpdates(updatesRes.data);
+    try {
+      const historyRes = await jobsApi.customerHistory(jobId);
+      setCustomerHistory(historyRes.data?.history || []);
+    } catch (error) {
+      console.warn('Customer history endpoint unavailable; using compatibility data', error);
+      try {
+        const [customerJobsRes, billingRes] = await Promise.all([
+          customersApi.getJobs(jobRes.data.customer_id),
+          billingApi.list(),
+        ]);
+        const customerJobs = customerJobsRes.data || [];
+        const billingRecords = billingRes.data || [];
+        const fallbackHistory = await Promise.all(customerJobs.map(async (customerJob) => {
+          const [detailResult, updatesResult] = await Promise.allSettled([
+            jobsApi.get(customerJob.job_id),
+            updatesApi.getJobUpdates(customerJob.job_id),
+          ]);
+          const detail = detailResult.status === 'fulfilled' ? detailResult.value.data : customerJob;
+          const jobUpdates = updatesResult.status === 'fulfilled' ? updatesResult.value.data : [];
+          const invoice = billingRecords.find((record) => record.job_id === customerJob.job_id) || null;
+          const staffAttended = [
+            detail.assigned_staff_name,
+            ...(detail.additional_staff_names || []),
+            ...jobUpdates.map((update) => update.staff_name),
+          ].filter((name, index, names) => name && names.indexOf(name) === index);
+
+          return {
+            job_id: customerJob.job_id,
+            date: customerJob.service_request_date || detail.service_request_date || detail.scheduled_date,
+            work_type: detail.work_type || customerJob.work_type,
+            complaint: detail.complaint,
+            status: detail.status || customerJob.status,
+            staff_attended: staffAttended,
+            service_updates: jobUpdates
+              .filter((update) => update.visit_notes || update.issues_faced)
+              .map((update) => ({
+                update_time: update.update_time,
+                staff_name: update.staff_name,
+                visit_notes: update.visit_notes,
+                issues_faced: update.issues_faced,
+                status: update.status,
+              })),
+            products_used: detail.inventory_used || jobUpdates.flatMap((update) => update.inventory_used || []),
+            invoice,
+          };
+        }));
+        setCustomerHistory(fallbackHistory);
+      } catch (fallbackError) {
+        console.error('Unable to load customer history compatibility data', fallbackError);
+        setCustomerHistory([]);
+      }
+    }
     const latestUpdate = updatesRes.data?.[0];
     setUpdateForm({
       status: latestUpdate?.status || jobRes.data.status || 'pending',
       visit_notes: latestUpdate?.visit_notes || '',
+      issues_faced: '',
       expense: Number(latestUpdate?.expense || 0),
       collected_amount: Number(latestUpdate?.collected_amount || 0),
       invoice_amount: Number(latestUpdate?.service_bill || 0),
@@ -233,7 +294,17 @@ export default function JobDetail() {
   const submitBilling = async () => {
     setSaving(true);
     try {
-      const res = await billingApi.create({ job_id: jobId, ...billingForm });
+      const materialAmount = (job.inventory_used || []).reduce(
+        (sum, item) => sum + Number(item.quantity_used || 0) * Number(item.unit_selling_price || 0),
+        0
+      );
+      const invoiceAmount = materialAmount + Number(billingForm.service_amount || 0);
+      const res = await billingApi.create({
+        job_id: jobId,
+        ...billingForm,
+        material_amount: materialAmount,
+        invoice_amount: invoiceAmount,
+      });
       setBilling(res.data);
       setJob((current) => ({ ...current, status: 'complete' }));
       setShowBillingModal(false);
@@ -241,6 +312,56 @@ export default function JobDetail() {
       alert(error.response?.data?.detail || 'Failed to create billing');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const getInvoiceFile = async () => {
+    try {
+      const response = await billingApi.invoicePdf(jobId);
+      return new File([response.data], `${jobId}-invoice.pdf`, { type: 'application/pdf' });
+    } catch (error) {
+      console.warn('Server PDF unavailable; generating invoice in browser', error);
+      const blob = createInvoicePdf(job, billing);
+      return new File([blob], `${jobId}-invoice.pdf`, { type: 'application/pdf' });
+    }
+  };
+
+  const downloadInvoice = async () => {
+    try {
+      const file = await getInvoiceFile();
+      const url = URL.createObjectURL(file);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.name;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(error.response?.data?.detail || 'Unable to generate invoice PDF');
+    }
+  };
+
+  const shareInvoiceWhatsApp = async () => {
+    try {
+      const file = await getInvoiceFile();
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: `Invoice ${jobId}`,
+          text: `BAANGS invoice for ${job.customer_name}`,
+          files: [file],
+        });
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.name;
+      link.click();
+      URL.revokeObjectURL(url);
+      const phone = String(job.phone_number || '').replace(/\D/g, '');
+      const message = encodeURIComponent(`Hello ${job.customer_name}, your BAANGS invoice ${jobId} has been prepared. Please find the downloaded PDF attached.`);
+      window.open(`https://wa.me/${phone.length === 10 ? `91${phone}` : phone}?text=${message}`, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      if (error?.name !== 'AbortError') alert(error.response?.data?.detail || 'Unable to share invoice');
     }
   };
 
@@ -317,6 +438,14 @@ export default function JobDetail() {
 
   if (!job) return <div className="loading-center"><div className="spinner" /></div>;
 
+  const historyTotals = updates.reduce((total, update) => ({
+    visits: total.visits + 1,
+    expense: total.expense + Number(update.expense || 0),
+    collected: total.collected + Number(update.collected_amount || 0),
+    items: total.items + (update.inventory_used?.length || 0) + (update.manual_inventory_items?.length || 0),
+  }), { visits: 0, expense: 0, collected: 0, items: 0 });
+  const billingProfit = calculateBillingProfit(billing || {});
+
   return (
     <div className="animate-fade job-detail-page">
       <button className="btn btn-secondary btn-sm" onClick={() => navigate('/jobs')} style={{ marginBottom: 16 }}>
@@ -327,6 +456,7 @@ export default function JobDetail() {
         <div className="job-detail-tabs">
           <button type="button" className={`job-detail-tab ${activeTab === 'details' ? 'active' : ''}`} onClick={() => setActiveTab('details')}>Ticket Details</button>
           <button type="button" className={`job-detail-tab ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>History</button>
+          <button type="button" className={`job-detail-tab ${activeTab === 'customer-history' ? 'active' : ''}`} onClick={() => setActiveTab('customer-history')}>Customer History</button>
           <button type="button" className={`job-detail-tab ${activeTab === 'files' ? 'active' : ''}`} onClick={() => setActiveTab('files')}>Files</button>
         </div>
 
@@ -347,7 +477,7 @@ export default function JobDetail() {
             <span className={`badge badge-${job.status}`}>{STATUS_LABELS[job.status] || job.status}</span>
             <span className={`badge badge-${job.priority}`}>{job.priority}</span>
           </div>
-          <span>Ticket Created by {job.assigned_staff_name || 'Admin'}</span>
+          <span>Ticket Created by {job.created_by_name || 'Admin'}</span>
         </div>
 
         <div className="job-detail-actions">
@@ -381,7 +511,7 @@ export default function JobDetail() {
             <div className="detail-item"><span className="detail-label"><MdLocationOn /> Map Location</span><span className="detail-value">{getMapHref(job.map_location, job.location) ? <a href={getMapHref(job.map_location, job.location)} target="_blank" rel="noreferrer" style={{color: 'var(--color-primary)', textDecoration: 'underline'}}>View Map</a> : '-'}</span></div>
             <div className="detail-item"><span className="detail-label"><MdEngineering /> Site Type</span><span className="detail-value">{job.site_type || '-'}</span></div>
             <div className="detail-item"><span className="detail-label"><MdEngineering /> Work Type</span><span className="detail-value">{job.work_type}</span></div>
-            <div className="detail-item"><span className="detail-label"><MdSchedule /> Scheduled on</span><span className="detail-value">{job.scheduled_date || '-'}</span></div>
+            <div className="detail-item"><span className="detail-label"><MdSchedule /> Scheduled on</span><span className="detail-value">{formatDate(job.scheduled_date)}</span></div>
           </div>
         </div>
 
@@ -415,8 +545,8 @@ export default function JobDetail() {
           {job.additional_staff_names?.length > 0 && (
             <div className="detail-item"><span className="detail-label">Additional Techs</span><span className="detail-value">{job.additional_staff_names.join(', ')}</span></div>
           )}
-          <div className="detail-item"><span className="detail-label">Scheduled</span><span className="detail-value">{job.scheduled_date || '-'}</span></div>
-          <div className="detail-item"><span className="detail-label">Requested</span><span className="detail-value">{job.service_request_date?.slice(0, 10)}</span></div>
+          <div className="detail-item"><span className="detail-label">Scheduled</span><span className="detail-value">{formatDate(job.scheduled_date)}</span></div>
+          <div className="detail-item"><span className="detail-label">Requested</span><span className="detail-value">{formatDate(job.service_request_date)}</span></div>
         </div>
         {job.complaint ? (
           <p style={{ marginTop: 12, fontSize: '0.875rem', color: 'var(--color-text-secondary)', padding: '8px', background: 'var(--color-surface-2)', borderRadius: 6 }}>
@@ -433,7 +563,7 @@ export default function JobDetail() {
               ['Invoice', `Rs ${billing.invoice_amount}`],
               ['Expense', `Rs ${billing.expense}`],
               ['Material', `Rs ${billing.material_amount}`],
-              ['Profit', `Rs ${billing.profit} (${billing.profit_percentage?.toFixed(1)}%)`],
+              ['Profit', `Rs ${billingProfit.profit.toFixed(2)} (${billingProfit.percentage.toFixed(1)}%)`],
             ].map(([label, value]) => (
               <div key={label} className="detail-item" style={{ textAlign: 'center', padding: 12, background: 'var(--color-surface-2)', borderRadius: 8 }}>
                 <div className="detail-label">{label}</div>
@@ -444,6 +574,10 @@ export default function JobDetail() {
           <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
             Payment: {billing.payment_mode} {billing.payment_id ? `| ${billing.payment_id}` : ''} | Collected: Rs {billing.collected_amount || 0}
           </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+            <button type="button" className="btn btn-secondary" onClick={downloadInvoice}><MdDownload /> Download PDF</button>
+            <button type="button" className="btn btn-success" onClick={shareInvoiceWhatsApp}><FaWhatsapp /> Send on WhatsApp</button>
+          </div>
         </div>
       )}
       </>
@@ -452,6 +586,20 @@ export default function JobDetail() {
       {activeTab === 'history' && (
       <div id="job-history" className="job-detail-panel">
         <h3 className="job-detail-section-title">Call History</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 10, marginBottom: 18 }}>
+          {[
+            ['Total Visits', historyTotals.visits],
+            ['Time Spent', formatDuration(job.work_started_at, job.work_ended_at)],
+            ['Items Changed', historyTotals.items],
+            ['Collected', `Rs ${historyTotals.collected.toFixed(2)}`],
+            ['Bill', billing ? `Rs ${Number(billing.invoice_amount || 0).toFixed(2)}` : 'Not billed'],
+          ].map(([label, value]) => (
+            <div key={label} className="detail-item" style={{ padding: 10, background: 'var(--color-surface-2)', borderRadius: 8 }}>
+              <span className="detail-label">{label}</span>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
         {updates.length === 0 ? (
           <div className="empty-state" style={{ padding: 24 }}><p>No updates yet</p></div>
         ) : (
@@ -472,7 +620,8 @@ export default function JobDetail() {
                     {update.location ? ` | Location: ${formatLocation(update.location)}` : ''}
                   </p>
                 ) : null}
-                {update.visit_notes ? <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>{update.visit_notes}</p> : null}
+                {update.visit_notes ? <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}><strong>Visit notes:</strong> {update.visit_notes}</p> : null}
+                {update.issues_faced ? <p style={{ fontSize: '0.85rem', color: 'var(--color-danger)', marginTop: 4 }}><strong>Doubts / issues:</strong> {update.issues_faced}</p> : null}
                 {Number(update.expense || 0) > 0 ? (
                   <p style={{ fontSize: '0.75rem', color: 'var(--color-amber)', marginTop: 4 }}>Expense: Rs {update.expense}</p>
                 ) : null}
@@ -486,6 +635,8 @@ export default function JobDetail() {
                     {update.inventory_used.map((item) => (
                       <div key={`${update.update_id}-${item.barcode}`} style={{ fontSize: '0.82rem', color: 'var(--color-text)' }}>
                         {item.quantity_used} x {item.item_name || item.barcode}
+                        {item.model_number ? ` | Model: ${item.model_number}` : ''}
+                        {item.serial_number ? ` | Serial: ${item.serial_number}` : ''}
                       </div>
                     ))}
                   </div>
@@ -526,6 +677,58 @@ export default function JobDetail() {
       </div>
       )}
 
+      {activeTab === 'customer-history' && (
+        <div className="job-detail-panel" style={{ marginTop: 16 }}>
+          <h3 className="job-detail-section-title">Customer Service History</h3>
+          {customerHistory.length === 0 ? (
+            <div className="empty-state" style={{ padding: 24 }}><p>No previous service history for this customer</p></div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {customerHistory.map((entry) => (
+                <div key={entry.job_id} style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 14, background: 'var(--color-surface-2)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                    <button type="button" className="link-button" onClick={() => navigate(`/jobs/${entry.job_id}`)} style={{ fontWeight: 700 }}>{entry.job_id}</button>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span className={`badge badge-${entry.status}`}>{STATUS_LABELS[entry.status] || entry.status}</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{formatDateTime(entry.date)}</span>
+                    </div>
+                  </div>
+                  <div className="detail-grid" style={{ marginBottom: 10 }}>
+                    <div className="detail-item"><span className="detail-label">Service</span><span className="detail-value">{entry.work_type || '-'}</span></div>
+                    <div className="detail-item"><span className="detail-label">Staff Attended</span><span className="detail-value">{entry.staff_attended?.join(', ') || '-'}</span></div>
+                    <div className="detail-item"><span className="detail-label">Invoice</span><span className="detail-value">{entry.invoice ? `Rs ${Number(entry.invoice.invoice_amount || 0).toFixed(2)}` : 'Not billed'}</span></div>
+                    <div className="detail-item"><span className="detail-label">Collected</span><span className="detail-value">{entry.invoice ? `Rs ${Number(entry.invoice.collected_amount || 0).toFixed(2)}` : '-'}</span></div>
+                  </div>
+                  {entry.complaint ? <p style={{ fontSize: '0.85rem', marginBottom: 8 }}><strong>Complaint:</strong> {entry.complaint}</p> : null}
+                  {entry.service_updates?.map((update, index) => (
+                    <p key={`${entry.job_id}-update-${index}`} style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginBottom: 5 }}>
+                      <strong>{update.staff_name || 'Technician'}:</strong> {update.visit_notes || update.issues_faced}
+                    </p>
+                  ))}
+                  {entry.products_used?.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <div className="detail-label" style={{ marginBottom: 5 }}>Products Used</div>
+                      {entry.products_used.map((product, index) => (
+                        <div key={`${entry.job_id}-product-${index}`} style={{ fontSize: '0.82rem', marginBottom: 3 }}>
+                          {product.quantity_used} x {product.item_name}
+                          {product.model_number ? ` | Model: ${product.model_number}` : ''}
+                          {product.serial_number ? ` | Serial: ${product.serial_number}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {entry.invoice && (
+                    <div style={{ marginTop: 10, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                      Invoice ID: {entry.invoice.billing_id} | Payment: {entry.invoice.payment_mode || '-'} {entry.invoice.payment_id ? `| Ref: ${entry.invoice.payment_id}` : ''}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {showUpdateModal && (
         <div className="modal-overlay" onClick={() => setShowUpdateModal(false)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
@@ -546,7 +749,11 @@ export default function JobDetail() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Visit Notes</label>
-                  <textarea className="form-textarea" value={updateForm.visit_notes} onChange={(event) => setUpdateForm((prev) => ({ ...prev, visit_notes: event.target.value }))} />
+                  <textarea className="form-textarea" rows={6} placeholder="Describe all work completed during this visit" value={updateForm.visit_notes} onChange={(event) => setUpdateForm((prev) => ({ ...prev, visit_notes: event.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Doubts / Issues Faced</label>
+                  <textarea className="form-textarea" rows={4} placeholder="Record pending doubts, blockers, or site issues" value={updateForm.issues_faced} onChange={(event) => setUpdateForm((prev) => ({ ...prev, issues_faced: event.target.value }))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Invoice Amount (Rs)</label>
@@ -582,9 +789,8 @@ export default function JobDetail() {
             <div className="modal-body">
               <div className="form-grid">
                 {[
-                  ['Invoice Amount (Rs)', 'invoice_amount'],
+                  ['Service Cost (Rs)', 'service_amount'],
                   ['Expense (Rs)', 'expense'],
-                  ['Material Cost (Rs)', 'material_amount'],
                   ['Collected Amount (Rs)', 'collected_amount'],
                 ].map(([label, key]) => (
                   <div className="form-group" key={key}>
@@ -592,6 +798,17 @@ export default function JobDetail() {
                     <input className="form-input" type="number" value={billingForm[key]} onChange={(event) => setBillingForm((prev) => ({ ...prev, [key]: Number(event.target.value) || 0 }))} />
                   </div>
                 ))}
+                <div className="form-group form-full">
+                  <label className="form-label">Products Used</label>
+                  {(job.inventory_used || []).length === 0 ? (
+                    <div style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>No products used - invoice will contain service cost only.</div>
+                  ) : (job.inventory_used || []).map((item, index) => (
+                    <div key={`${item.barcode || item.item_name}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '0.85rem', padding: '5px 0' }}>
+                      <span>{item.quantity_used} x {item.item_name || item.barcode}{item.model_number ? ` (${item.model_number})` : ''}</span>
+                      <strong>Rs {(Number(item.quantity_used || 0) * Number(item.unit_selling_price || 0)).toFixed(2)}</strong>
+                    </div>
+                  ))}
+                </div>
                 <div className="form-group">
                   <label className="form-label">Payment Mode</label>
                   <select className="form-select" value={billingForm.payment_mode} onChange={(event) => setBillingForm((prev) => ({ ...prev, payment_mode: event.target.value }))}>
@@ -739,7 +956,9 @@ export default function JobDetail() {
 
 function formatDateTime(value) {
   if (!value) return '-';
-  return value.slice(0, 16).replace('T', ' ');
+  const date = formatDate(value);
+  const time = String(value).match(/[T\s](\d{2}):(\d{2})/);
+  return time ? `${date} ${time[1]}:${time[2]}` : date;
 }
 
 function formatLocation(location) {

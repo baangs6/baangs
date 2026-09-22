@@ -37,6 +37,8 @@ def _format_job(j: dict, staff_name: str = None) -> dict:
         "work_ended_by": j.get("work_ended_by"),
         "work_end_location": j.get("work_end_location"),
         "service_request_date": j.get("service_request_date") or j.get("scheduled_date") or today_ist_str(),
+        "created_by_user_id": j.get("created_by_user_id"),
+        "created_by_name": j.get("created_by_name") or ("Customer" if j.get("is_public_submission") else "Admin"),
         "next_schedule_date": j.get("next_schedule_date"),
         "photo_url": j.get("photo_url"),
         "customer_key": j.get("customer_key") or make_customer_key(j.get("phone_number", ""), j.get("customer_name", "")),
@@ -230,6 +232,8 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
         "additional_staff_names": additional_staff_names,
         "status": "pending",
         "service_request_date": today_ist_str(),
+        "created_by_user_id": current_user.get("user_id"),
+        "created_by_name": current_user.get("full_name") or current_user.get("username") or "Admin",
         "next_schedule_date": data.next_schedule_date,
         "photo_url": data.photo_url,
         "customer_key": customer_key,
@@ -246,6 +250,84 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
         if tech_user and tech_user.get("user_id"):
             await notify_users(db, [tech_user["user_id"]], title, msg, {"job_id": job_id, "type": "job_assigned"})
     return _format_job(job_doc, staff_name)
+
+
+@router.get("/{job_id}/customer-history")
+async def get_customer_history(job_id: str, current_user: dict = Depends(get_current_user)):
+    db = get_db()
+    if current_user["role"] == "sales":
+        raise HTTPException(status_code=403, detail="Sales users can access Tasks only")
+
+    current_job = await db.jobs.find_one({"job_id": job_id})
+    if not current_job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if current_user["role"] == "technician" and current_job.get("assigned_staff_id") != current_user.get("staff_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    customer_id = current_job.get("customer_id")
+    if not customer_id:
+        return {"customer_id": None, "customer_name": current_job.get("customer_name"), "history": []}
+
+    customer_jobs = await db.jobs.find({"customer_id": customer_id}).sort("service_request_date", -1).to_list(500)
+    history = []
+    for customer_job in customer_jobs:
+        related_job_id = customer_job["job_id"]
+        updates = await db.daily_updates.find({"job_id": related_job_id}).sort("update_time", -1).to_list(200)
+        products = await db.job_inventory_usage.find({"job_id": related_job_id}).sort("usage_datetime", -1).to_list(200)
+        billing = await db.billing.find_one({"job_id": related_job_id})
+
+        staff_names = []
+        for name in [customer_job.get("assigned_staff_name"), *(customer_job.get("additional_staff_names") or [])]:
+            if name and name not in staff_names:
+                staff_names.append(name)
+        for update in updates:
+            name = update.get("staff_name")
+            if name and name not in staff_names:
+                staff_names.append(name)
+
+        history.append({
+            "job_id": related_job_id,
+            "date": customer_job.get("service_request_date") or customer_job.get("scheduled_date"),
+            "work_type": customer_job.get("work_type"),
+            "complaint": customer_job.get("complaint"),
+            "status": customer_job.get("status", "pending"),
+            "staff_attended": staff_names,
+            "service_updates": [
+                {
+                    "update_time": update.get("update_time"),
+                    "staff_name": update.get("staff_name"),
+                    "visit_notes": update.get("visit_notes"),
+                    "issues_faced": update.get("issues_faced"),
+                    "status": update.get("status"),
+                }
+                for update in updates
+                if update.get("visit_notes") or update.get("issues_faced")
+            ],
+            "products_used": [
+                {
+                    "item_name": product.get("item_name") or product.get("barcode"),
+                    "model_number": product.get("model_number"),
+                    "serial_number": product.get("serial_number"),
+                    "quantity_used": product.get("quantity_used", 0),
+                }
+                for product in products
+            ],
+            "invoice": ({
+                "billing_id": billing.get("billing_id"),
+                "invoice_amount": billing.get("invoice_amount", 0),
+                "collected_amount": billing.get("collected_amount", 0),
+                "payment_mode": billing.get("payment_mode"),
+                "payment_id": billing.get("payment_id"),
+                "complete_date": billing.get("complete_date"),
+            } if billing else None),
+        })
+
+    return {
+        "customer_id": customer_id,
+        "customer_name": current_job.get("customer_name"),
+        "phone_number": current_job.get("phone_number"),
+        "history": history,
+    }
 
 
 @router.get("/{job_id}", response_model=JobResponse)

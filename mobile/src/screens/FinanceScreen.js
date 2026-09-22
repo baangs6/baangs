@@ -5,6 +5,7 @@ import Icon from '@expo/vector-icons/MaterialIcons';
 import { attendanceApi, billingApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { spacing, radius, useTheme } from '../theme';
+import { formatDate } from '../utils/dateFormat';
 
 export default function FinanceScreen() {
   const theme = useTheme();
@@ -15,6 +16,8 @@ export default function FinanceScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [billingFilter, setBillingFilter] = useState('all');
+  const [billingSearch, setBillingSearch] = useState('');
   const [allowanceSaving, setAllowanceSaving] = useState(false);
   const [allowanceForm, setAllowanceForm] = useState({
     expense_type: 'food',
@@ -102,13 +105,26 @@ export default function FinanceScreen() {
     }
   };
 
-  const totals = useMemo(() => billing.reduce((acc, item) => {
+  const filteredBilling = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const month = today.slice(0, 7);
+    return billing.filter((item) => {
+      const date = String(item.complete_date || item.created_at || '');
+      if (billingFilter === 'today' && !date.startsWith(today)) return false;
+      if (billingFilter === 'month' && !date.startsWith(month)) return false;
+      const q = billingSearch.trim().toLowerCase();
+      if (!q) return true;
+      return `${item.job_id || ''} ${item.customer_name || ''} ${item.phone_number || ''}`.toLowerCase().includes(q);
+    });
+  }, [billing, billingFilter, billingSearch]);
+
+  const totals = useMemo(() => filteredBilling.reduce((acc, item) => {
     acc.revenue += Number(item.invoice_amount || 0);
     acc.collected += Number(item.collected_amount || 0);
     acc.expense += Number(item.expense || 0) + Number(item.material_amount || 0);
     acc.profit += Number(item.profit || 0);
     return acc;
-  }, { revenue: 0, collected: 0, expense: 0, profit: 0 }), [billing]);
+  }, { revenue: 0, collected: 0, expense: 0, profit: 0 }), [filteredBilling]);
 
   if (loading) {
     return <View style={styles.center}><ActivityIndicator color={theme.colors.accent} size="large" /></View>;
@@ -204,6 +220,32 @@ export default function FinanceScreen() {
 
       {!error ? (
         <>
+          <View style={styles.filterCard}>
+            <Text style={styles.cardTitle}>Filter Billing</Text>
+            <View style={styles.segmentRow}>
+              {[
+                ['all', 'All'],
+                ['today', 'Today'],
+                ['month', 'This Month'],
+              ].map(([value, label]) => (
+                <TouchableOpacity
+                  key={value}
+                  style={[styles.segmentBtn, billingFilter === value && styles.segmentBtnActive]}
+                  onPress={() => setBillingFilter(value)}
+                >
+                  <Text style={[styles.segmentText, billingFilter === value && styles.segmentTextActive]}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              style={[styles.input, styles.compactInput]}
+              value={billingSearch}
+              onChangeText={setBillingSearch}
+              placeholder="Search job or customer"
+              placeholderTextColor={theme.colors.textMuted}
+            />
+          </View>
+
           <View style={styles.statsGrid}>
             <MoneyCard label="Revenue" value={totals.revenue} color={theme.colors.success} />
             <MoneyCard label="Collected" value={totals.collected} color={theme.colors.accent} />
@@ -218,11 +260,11 @@ export default function FinanceScreen() {
               <Text style={styles.emptyTitle}>No billing records</Text>
               <Text style={styles.emptyText}>Completed job billing will appear here.</Text>
             </View>
-          ) : billing.slice(0, 50).map((item) => (
+          ) : filteredBilling.slice(0, 50).map((item) => (
             <View key={item.billing_id} style={styles.rowCard}>
               <View style={styles.rowTop}>
                 <Text style={styles.jobId}>{item.job_id}</Text>
-                <Text style={styles.dateText}>{item.complete_date}</Text>
+                <Text style={styles.dateText}>{formatDate(item.complete_date || item.created_at)}</Text>
               </View>
               <Text style={styles.customer}>{item.customer_name || 'Customer'}</Text>
               <View style={styles.moneyRow}>
@@ -319,6 +361,15 @@ const createStyles = (colors) => StyleSheet.create({
   emptyTitle: { color: colors.text, fontSize: 16, fontWeight: '800', marginTop: spacing.sm },
   emptyText: { color: colors.textMuted, fontSize: 13, textAlign: 'center', marginTop: spacing.xs, lineHeight: 20 },
   formCard: {
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    padding: spacing.base,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterCard: {
     marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     padding: spacing.base,

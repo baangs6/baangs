@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { publicApi } from '../api';
 import { MdSearch, MdCheckCircle, MdSchedule, MdBuild, MdPerson, MdLocationOn, MdHome } from 'react-icons/md';
+import { formatDateTime } from '../utils/dateFormat';
 
 export default function PublicTrackPage() {
   const { job_id } = useParams();
@@ -192,7 +193,7 @@ export default function PublicTrackPage() {
                 <MdSchedule style={{ color: 'var(--color-primary)', fontSize: '1.2rem' }} />
                 <div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Request Created At</div>
-                  <div style={{ fontWeight: 600 }}>{job.created_at}</div>
+                  <div style={{ fontWeight: 600 }}>{formatDateTime(job.created_at)}</div>
                 </div>
               </div>
 

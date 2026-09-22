@@ -11,13 +11,17 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Share,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
-import { jobsApi, updatesApi, billingApi, inventoryApi } from '../api';
+import { jobsApi, updatesApi, billingApi, inventoryApi, API_BASE_URL } from '../api';
+import { formatDate } from '../utils/dateFormat';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing, radius, useTheme } from '../theme';
 import { callPhone, openJobMap } from '../utils/contactActions';
+import storage from '../utils/storage';
 
 const EMPTY_MANUAL_ITEM = {
   barcode: '',
@@ -41,9 +45,12 @@ export default function JobDetailScreen({ route }) {
 
   const [job, setJob] = useState(null);
   const [updates, setUpdates] = useState([]);
+  const [customerHistory, setCustomerHistory] = useState([]);
+  const [showCustomerHistory, setShowCustomerHistory] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [actionSaving, setActionSaving] = useState(false);
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
 
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showBillingModal, setShowBillingModal] = useState(false);
@@ -65,7 +72,9 @@ export default function JobDetailScreen({ route }) {
   const [updateForm, setUpdateForm] = useState({
     status: 'in_progress',
     visit_notes: '',
+    issues_faced: '',
     expense: '0',
+    service_charge: '0',
     collected_amount: '0',
     inventory_used: [],
     manual_inventory_items: [],
@@ -90,6 +99,13 @@ export default function JobDetailScreen({ route }) {
       ]);
       setJob(jobRes.data);
       setUpdates(updatesRes.data);
+      try {
+        const historyRes = await jobsApi.customerHistory(jobId);
+        setCustomerHistory(historyRes.data?.history || []);
+      } catch (historyError) {
+        console.warn('Customer history unavailable', historyError);
+        setCustomerHistory([]);
+      }
       setUpdateForm((prev) => ({ ...prev, status: jobRes.data.status || 'in_progress' }));
     } catch (error) {
       Alert.alert('Error', 'Failed to load job details');
@@ -115,7 +131,9 @@ export default function JobDetailScreen({ route }) {
     setUpdateForm({
       status: job?.status || 'in_progress',
       visit_notes: '',
+      issues_faced: '',
       expense: '0',
+      service_charge: '0',
       collected_amount: '0',
       inventory_used: [],
       manual_inventory_items: [],
@@ -183,7 +201,9 @@ export default function JobDetailScreen({ route }) {
         work_event: workEvent,
         location: location,
         visit_notes: updateForm.visit_notes,
+        issues_faced: updateForm.issues_faced,
         expense: parseFloat(updateForm.expense) || 0,
+        service_charge: parseFloat(updateForm.service_charge) || 0,
         collected_amount: parseFloat(updateForm.collected_amount) || 0,
         inventory_used: updateForm.inventory_used.map((item) => ({
           barcode: item.barcode,
@@ -261,6 +281,33 @@ export default function JobDetailScreen({ route }) {
       Alert.alert('Not Found', error.response?.data?.detail || 'No inventory found for the entered details');
     } finally {
       setSearchingItem(false);
+    }
+  };
+
+  const shareInvoice = async (whatsapp = false) => {
+    setInvoiceBusy(true);
+    try {
+      const token = await storage.getItem('token');
+      const target = `${FileSystem.cacheDirectory}${jobId}-invoice.pdf`;
+      const result = await FileSystem.downloadAsync(
+        `${API_BASE_URL}/billing/job/${encodeURIComponent(jobId)}/invoice.pdf`,
+        target,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+      if (result.status < 200 || result.status >= 300) {
+        throw new Error('Complete billing before downloading the invoice.');
+      }
+      await Share.share({
+        title: `Invoice ${jobId}`,
+        message: whatsapp
+          ? `Invoice for ${job.customer_name || jobId}. Select WhatsApp to send the attached invoice.`
+          : `Invoice for ${job.customer_name || jobId}`,
+        url: result.uri,
+      }, { dialogTitle: whatsapp ? 'Send invoice on WhatsApp' : 'Download or share invoice' });
+    } catch (error) {
+      Alert.alert('Invoice unavailable', error.response?.data?.detail || error.message || 'Complete billing before downloading the invoice.');
+    } finally {
+      setInvoiceBusy(false);
     }
   };
 
@@ -487,9 +534,18 @@ export default function JobDetailScreen({ route }) {
         <Text style={styles.sectionTitle}>Job Details</Text>
         <InfoRow styles={styles} label="Work Type" value={job.work_type} />
         <InfoRow styles={styles} label="Priority" value={job.priority} />
-        <InfoRow styles={styles} label="Scheduled" value={job.scheduled_date || '-'} />
+        <InfoRow styles={styles} label="Scheduled" value={formatDate(job.scheduled_date)} />
         <InfoRow styles={styles} label="Preferred Time" value={job.preferred_time || '-'} />
         {job.complaint ? <Text style={styles.complaint}>{job.complaint}</Text> : null}
+      </View>
+
+      <View style={styles.invoiceActions}>
+        <TouchableOpacity style={styles.invoiceBtn} onPress={() => shareInvoice(false)} disabled={invoiceBusy}>
+          <Text style={styles.invoiceBtnText}>{invoiceBusy ? 'Preparing...' : 'Download Invoice'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.invoiceBtn, styles.whatsappBtn]} onPress={() => shareInvoice(true)} disabled={invoiceBusy}>
+          <Text style={[styles.invoiceBtnText, styles.whatsappBtnText]}>WhatsApp</Text>
+        </TouchableOpacity>
       </View>
 
       {job.status !== 'complete' && job.status !== 'cancelled' && (
@@ -530,6 +586,55 @@ export default function JobDetailScreen({ route }) {
       )}
 
       <View style={styles.card}>
+        <TouchableOpacity style={styles.historyHeader} onPress={() => setShowCustomerHistory((visible) => !visible)}>
+          <View>
+            <Text style={[styles.sectionTitle, { marginBottom: 2 }]}>Customer History</Text>
+            <Text style={styles.historyCount}>{customerHistory.length} service record{customerHistory.length === 1 ? '' : 's'}</Text>
+          </View>
+          <Text style={styles.historyToggle}>{showCustomerHistory ? 'Hide' : 'View'}</Text>
+        </TouchableOpacity>
+        {showCustomerHistory && (
+          <View style={{ marginTop: spacing.md }}>
+            {customerHistory.length === 0 ? <Text style={styles.noUpdates}>No previous service history</Text> : null}
+            {customerHistory.map((entry) => (
+              <View key={entry.job_id} style={styles.historyItem}>
+                <View style={styles.historyTitleRow}>
+                  <Text style={styles.historyJobId}>{entry.job_id}</Text>
+                  <Text style={styles.historyDate}>{formatDateTime(entry.date)}</Text>
+                </View>
+                <Text style={styles.historyService}>{entry.work_type || 'Service'} | {entry.status?.replace('_', ' ')}</Text>
+                {!!entry.complaint && <Text style={styles.historyText}>Complaint: {entry.complaint}</Text>}
+                <Text style={styles.historyText}>Staff: {entry.staff_attended?.join(', ') || '-'}</Text>
+                {entry.service_updates?.map((update, index) => (
+                  <Text key={`${entry.job_id}-update-${index}`} style={styles.historyText}>
+                    {update.staff_name || 'Technician'}: {update.visit_notes || update.issues_faced}
+                  </Text>
+                ))}
+                {entry.products_used?.length > 0 && (
+                  <View style={styles.inventoryBox}>
+                    <Text style={styles.inventoryTitle}>Products Used</Text>
+                    {entry.products_used.map((product, index) => (
+                      <Text key={`${entry.job_id}-product-${index}`} style={styles.inventoryLine}>
+                        {product.quantity_used} x {product.item_name}
+                        {product.model_number ? ` | Model: ${product.model_number}` : ''}
+                        {product.serial_number ? ` | Serial: ${product.serial_number}` : ''}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+                <Text style={styles.historyInvoice}>
+                  {entry.invoice
+                    ? `Invoice ${entry.invoice.billing_id}: Rs ${Number(entry.invoice.invoice_amount || 0).toFixed(2)} | Collected Rs ${Number(entry.invoice.collected_amount || 0).toFixed(2)}`
+                    : 'Invoice: Not billed'}
+                </Text>
+                {!!entry.invoice?.payment_mode && <Text style={styles.historyText}>Payment: {entry.invoice.payment_mode}{entry.invoice.payment_id ? ` | Ref: ${entry.invoice.payment_id}` : ''}</Text>}
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.sectionTitle}>Updates ({updates.length})</Text>
         {updates.map((update) => (
           <View key={update.update_id} style={styles.updateItem}>
@@ -547,6 +652,10 @@ export default function JobDetailScreen({ route }) {
             ) : null}
             {update.location ? <Text style={styles.updateMeta}>Location: {formatLocation(update.location)}</Text> : null}
             {update.visit_notes ? <Text style={styles.updateNotes}>{update.visit_notes}</Text> : null}
+            {update.issues_faced ? <Text style={[styles.updateNotes, { color: colors.danger }]}>Issues: {update.issues_faced}</Text> : null}
+            {Number(update.service_charge || 0) > 0 ? (
+              <Text style={styles.money}>Service charge: Rs {Number(update.service_charge).toFixed(2)}</Text>
+            ) : null}
             {Number(update.collected_amount || 0) > 0 ? (
               <Text style={styles.money}>Collected: Rs {Number(update.collected_amount).toFixed(2)}</Text>
             ) : null}
@@ -627,10 +736,20 @@ export default function JobDetailScreen({ route }) {
 
             <Text style={styles.label}>Visit Notes</Text>
             <TextInput
-              style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+              style={[styles.input, { height: 140, textAlignVertical: 'top' }]}
               value={updateForm.visit_notes}
               onChangeText={(text) => setUpdateForm((prev) => ({ ...prev, visit_notes: text }))}
               placeholder="What was done on site?"
+              placeholderTextColor={colors.textMuted}
+              multiline
+            />
+
+            <Text style={styles.label}>Doubts / Issues Faced</Text>
+            <TextInput
+              style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
+              value={updateForm.issues_faced}
+              onChangeText={(text) => setUpdateForm((prev) => ({ ...prev, issues_faced: text }))}
+              placeholder="Pending doubts, blockers, or site issues"
               placeholderTextColor={colors.textMuted}
               multiline
             />
@@ -654,6 +773,19 @@ export default function JobDetailScreen({ route }) {
               placeholder="0"
               placeholderTextColor={colors.textMuted}
             />
+
+            <View style={styles.subCard}>
+              <Text style={styles.sectionTitle}>Service Charge</Text>
+              <Text style={styles.label}>Service Charge (Rs)</Text>
+              <TextInput
+                style={styles.input}
+                value={updateForm.service_charge}
+                onChangeText={(text) => setUpdateForm((prev) => ({ ...prev, service_charge: text }))}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
 
             <View style={styles.subCard}>
               <Text style={styles.label}>Hardware Used</Text>
@@ -1000,7 +1132,9 @@ function InfoRow({ label, value, styles }) {
 
 function formatDateTime(value) {
   if (!value) return '-';
-  return value.slice(0, 16).replace('T', ' ');
+  const date = formatDate(value);
+  const time = String(value).match(/[T\s](\d{2}):(\d{2})/);
+  return time ? `${date} ${time[1]}:${time[2]}` : date;
 }
 
 function formatLocation(location) {
@@ -1058,6 +1192,11 @@ const createStyles = (colors) => StyleSheet.create({
   },
   contactBtnText: { fontSize: 12, fontWeight: '800' },
   actions: { paddingHorizontal: spacing.base, paddingBottom: spacing.md, gap: spacing.sm },
+  invoiceActions: { flexDirection: 'row', paddingHorizontal: spacing.base, paddingBottom: spacing.md, gap: spacing.sm },
+  invoiceBtn: { flex: 1, borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.accentDim, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center' },
+  invoiceBtnText: { color: colors.accent, fontWeight: '800', fontSize: 12 },
+  whatsappBtn: { borderColor: colors.success, backgroundColor: `${colors.success}18` },
+  whatsappBtnText: { color: colors.success },
   updateBtn: {
     backgroundColor: colors.accentDim,
     borderRadius: radius.md,
@@ -1074,6 +1213,16 @@ const createStyles = (colors) => StyleSheet.create({
   money: { fontSize: 12, color: colors.warning, marginTop: 4 },
   updateTime: { fontSize: 11, color: colors.textMuted, marginTop: 6 },
   noUpdates: { color: colors.textMuted, textAlign: 'center', padding: spacing.base },
+  historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  historyCount: { color: colors.textMuted, fontSize: 11 },
+  historyToggle: { color: colors.accent, fontSize: 13, fontWeight: '800' },
+  historyItem: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md, marginTop: spacing.md },
+  historyTitleRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+  historyJobId: { color: colors.accent, fontWeight: '800', fontSize: 12, flex: 1 },
+  historyDate: { color: colors.textMuted, fontSize: 10 },
+  historyService: { color: colors.text, fontSize: 13, fontWeight: '700', marginTop: 5, textTransform: 'capitalize' },
+  historyText: { color: colors.textSecondary, fontSize: 12, marginTop: 4 },
+  historyInvoice: { color: colors.success, fontSize: 12, fontWeight: '700', marginTop: 8 },
   inventoryBox: {
     marginTop: 8,
     padding: 8,

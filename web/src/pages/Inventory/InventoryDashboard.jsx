@@ -133,15 +133,30 @@ export default function InventoryDashboard() {
     setSaving(true);
     try {
       const payload = {
-        ...editForm,
+        item_name: editForm.item_name.trim(),
+        model_number: editForm.model_number.trim(),
+        category: editForm.category || null,
+        brand: editForm.brand || null,
+        unit_type: editForm.unit_type || 'Pcs',
+        purchase_price: Number(editForm.purchase_price) || 0,
+        selling_price: Number(editForm.selling_price) || 0,
+        tax_percentage: Number(editForm.tax_percentage) || 0,
+        minimum_stock_level: Number(editForm.minimum_stock_level) || 0,
+        item_photo: editForm.item_photo || null,
+        remarks: editForm.remarks || null,
         serial_numbers: editSerials.filter(s => s.trim() !== ''),
         serial_number: editSerials.filter(s => s.trim() !== '').join(', ')
       };
-      await inventoryApi.update(editForm.barcode, payload);
+      const response = await inventoryApi.update(editForm.barcode, payload);
+      const updatedItem = response.data;
+      setItems((current) => current.map((item) => item.barcode === updatedItem.barcode ? updatedItem : item));
+      setSelectedItem((current) => current?.barcode === updatedItem.barcode ? updatedItem : current);
       setShowEditModal(false);
       await loadData();
-    } catch {
-      alert('Failed to update item');
+      setSelectedItem((current) => current?.barcode === updatedItem.barcode ? updatedItem : current);
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+      alert(typeof detail === 'string' ? detail : 'Failed to update item');
     }
     setSaving(false);
   };
@@ -286,10 +301,17 @@ export default function InventoryDashboard() {
     if (!matchedItem) return alert('No item found matching that search term');
 
     try {
+      const quantity = Math.abs(Number(logForm.quantity_changed));
+      const enteredAmount = Number(logForm.amount_paid);
+      const amountPaid = logForm.transaction_type === 'STOCK_OUT' && enteredAmount <= 0
+        ? quantity * Number(matchedItem.selling_price || 0)
+        : enteredAmount;
       const payload = {
         ...logForm,
         barcode: matchedItem.barcode,
-        quantity_changed: logForm.transaction_type === 'STOCK_OUT' ? -Math.abs(logForm.quantity_changed) : Math.abs(logForm.quantity_changed)
+        linked_technician_id: logForm.staff_id || null,
+        amount_paid: amountPaid,
+        quantity_changed: logForm.transaction_type === 'STOCK_OUT' ? -quantity : quantity
       };
       await inventoryApi.adjust(matchedItem.barcode, payload);
       alert('Transaction logged successfully');
@@ -301,7 +323,30 @@ export default function InventoryDashboard() {
   };
 
   const formatCurrency = (val) => `₹${(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-  const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-';
+    const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (!match) return String(dateStr);
+    const time = String(dateStr).match(/[T\s](\d{2}):(\d{2})/);
+    const result = `${match[3]}-${months[Number(match[2]) - 1]}-${match[1]}`;
+    return time ? `${result} ${time[1]}:${time[2]}` : result;
+  };
+  const getTransactionStaffName = (transaction) => {
+    const staffId = transaction.linked_technician_id || transaction.staff_id;
+    const userId = transaction.done_by_user_id;
+    const matchedStaff = staff.find((person) =>
+      person.staff_id === staffId ||
+      person.staff_id === userId ||
+      person.user_id === userId
+    );
+
+    if (matchedStaff) return matchedStaff.full_name || matchedStaff.name || '-';
+    if (transaction.staff_name && transaction.staff_name !== staffId && transaction.staff_name !== userId) {
+      return transaction.staff_name;
+    }
+    return '-';
+  };
 
   if (loading && !summary) return <div className="loading-center"><div className="spinner" /></div>;
 
@@ -852,10 +897,14 @@ export default function InventoryDashboard() {
                       <td style={{ color: isIn ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 700 }}>
                         {isIn ? 'IN' : 'OUT'}
                       </td>
-                      <td>{t.linked_technician_id || t.done_by_user_id}</td>
+                      <td>{getTransactionStaffName(t)}</td>
                       <td>{t.balance_after_transaction}</td>
                       <td>{t.customer_details || '-'}</td>
-                      <td>{formatCurrency(t.amount_paid)}</td>
+                      <td>{formatCurrency(
+                        Number(t.amount_paid || 0) > 0
+                          ? Number(t.amount_paid)
+                          : (!isIn ? Math.abs(Number(t.quantity_changed || 0)) * Number(itm?.selling_price || 0) : 0)
+                      )}</td>
                     </tr>
                   );
                 })}
@@ -942,8 +991,9 @@ export default function InventoryDashboard() {
                 <tr>
                   <th>Date & Time</th>
                   <th>Customer Name & Details</th>
-                  <th>Staff ID</th>
-                  <th>Amount Paid</th>
+                  <th>Staff Name</th>
+                  <th>Sold Price</th>
+                  <th>Sale Amount</th>
                   <th>Profit</th>
                   <th>Item Details</th>
                 </tr>
@@ -951,15 +1001,16 @@ export default function InventoryDashboard() {
               <tbody>
                 {soldDetails.map(t => {
                   const qty = Math.abs(t.quantity_changed);
-                  const revenue = t.amount_paid || (qty * t.selling_price);
-                  const cost = qty * t.purchase_price;
+                  const revenue = t.sale_amount ?? t.amount_paid ?? (qty * t.selling_price);
+                  const cost = qty * Number(t.purchase_price || 0);
                   const profit = revenue - cost;
                   return (
                     <tr key={t._id}>
                       <td style={{ fontSize: '0.8rem' }}>{formatDate(t.transaction_datetime)}</td>
                       <td>{t.customer_details || '-'}</td>
-                      <td>{t.linked_technician_id || t.done_by_user_id}</td>
-                      <td>{formatCurrency(t.amount_paid)}</td>
+                      <td>{getTransactionStaffName(t)}</td>
+                      <td>{formatCurrency(t.sold_price ?? t.selling_price)}</td>
+                      <td>{formatCurrency(revenue)}</td>
                       <td style={{ color: profit < 0 ? 'red' : 'green', fontWeight: 700 }}>
                         {profit < 0 ? `(${Math.abs(profit).toLocaleString()})` : formatCurrency(profit)}
                       </td>

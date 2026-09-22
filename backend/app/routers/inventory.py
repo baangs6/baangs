@@ -98,6 +98,10 @@ async def get_transactions(limit: int = 100, current_user: dict = Depends(requir
     res = []
     for t in txns:
         t["_id"] = str(t["_id"])
+        staff_id = t.get("linked_technician_id") or t.get("staff_id")
+        if staff_id:
+            staff = await db.staff.find_one({"staff_id": staff_id})
+            t["staff_name"] = (staff or {}).get("full_name") or (staff or {}).get("name") or staff_id
         res.append(t)
     return res
 
@@ -332,7 +336,7 @@ async def adjust_stock(barcode: str, data: Dict[str, Any], current_user: dict = 
         "project_name": data.get("project_name"),
         "customer_details": data.get("customer_details"),
         "amount_paid": float(data.get("amount_paid", 0)),
-        "linked_technician_id": data.get("linked_technician_id"),
+        "linked_technician_id": data.get("linked_technician_id") or data.get("staff_id"),
         "linked_job_id": data.get("linked_job_id")
     }
     await db.inventory_transactions.insert_one(txn)
@@ -402,6 +406,13 @@ async def get_sold_details(current_user: dict = Depends(require_admin_or_manager
             t["item_name"] = item["item_name"]
             t["purchase_price"] = item["purchase_price"]
             t["selling_price"] = item["selling_price"]
+        qty = abs(float(t.get("quantity_changed", 0) or 0))
+        t["sold_price"] = float(t.get("selling_price", 0) or 0)
+        t["sale_amount"] = float(t.get("amount_paid", 0) or 0) or round(qty * t["sold_price"], 2)
+        staff_id = t.get("linked_technician_id") or t.get("staff_id")
+        if staff_id:
+            staff = await db.staff.find_one({"staff_id": staff_id})
+            t["staff_name"] = (staff or {}).get("full_name") or (staff or {}).get("name") or staff_id
         if not t.get("customer_details") and t.get("linked_job_id"):
             job = await db.jobs.find_one({"job_id": t.get("linked_job_id")})
             if job:

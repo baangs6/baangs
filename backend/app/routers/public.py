@@ -128,6 +128,8 @@ async def register_public_complaint(data: PublicComplaintCreate):
         "additional_staff_names": [],
         "scheduled_date": today_ist_str(),
         "service_request_date": today_ist_str(),
+        "created_by_user_id": None,
+        "created_by_name": "Customer",
         "customer_key": customer_key,
         "status": "pending",
         "stage": "pending",

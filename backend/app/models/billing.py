@@ -20,6 +20,7 @@ class BillingCreate(BaseModel):
     collected_amount: Optional[float] = None
     payment_mode: Optional[PaymentMode] = None
     payment_id: Optional[str] = None
+    service_amount: float = Field(0.0, ge=0)
 
 
 class BillingResponse(BaseModel):
@@ -36,3 +37,4 @@ class BillingResponse(BaseModel):
     collected_amount: Optional[float] = None
     payment_mode: Optional[str] = None
     payment_id: Optional[str] = None
+    service_amount: float = 0.0

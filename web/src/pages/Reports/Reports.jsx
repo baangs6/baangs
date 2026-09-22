@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { billingApi, dashboardApi, inventoryApi } from '../../api';
+import { formatDate } from '../../utils/dateFormat';
+import { calculateBillingProfit } from '../../utils/billingMath';
 
 function currentMonthRange() {
   const now = new Date();
@@ -69,7 +71,7 @@ export default function Reports() {
     const totals = billingRows.reduce((acc, row) => {
       acc.revenue += Number(row.invoice_amount || 0);
       acc.expense += Number(row.expense || 0);
-      acc.profit += Number(row.profit || 0);
+      acc.profit += calculateBillingProfit(row).profit;
       return acc;
     }, { revenue: 0, expense: 0, profit: 0 });
     return totals;
@@ -156,22 +158,41 @@ export default function Reports() {
                   <thead>
                     <tr>
                       <th>Technician</th>
-                      <th>Total Service Completed</th>
-                      <th>Total Installation Completed</th>
-                      <th>Average Time to Complete Services</th>
+                      <th>Attendance</th>
+                      <th>Working Time</th>
+                      <th>Installation Time</th>
+                      <th>Installations Completed</th>
+                      <th>Services Attended</th>
+                      <th>Services Completed</th>
+                      <th>Site Visits</th>
+                      <th>New Projects</th>
+                      <th>Food Expense</th>
+                      <th>Petrol Expense</th>
                     </tr>
                   </thead>
                   <tbody>
                     {techDeepDive.length ? techDeepDive.map((row) => (
                       <tr key={row.staff_id} style={{ cursor: 'pointer' }} onClick={() => setTechnicianFilter(row.staff_name || row.staff_id)}>
-                        <td>{row.staff_name || row.staff_id}</td>
-                        <td>{row.total_service_completed}</td>
-                        <td>{row.total_installation_completed}</td>
-                        <td>{Number(row.average_service_completion_days || 0).toFixed(1)}d</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {row.photo_url ? <img src={row.photo_url} alt="" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover' }} /> : null}
+                            <span>{row.staff_name || row.staff_id}</span>
+                          </div>
+                        </td>
+                        <td>{row.attendance_days || 0} days</td>
+                        <td>{Number(row.working_hours || 0).toFixed(1)} hrs</td>
+                        <td>{Number(row.installation_hours || 0).toFixed(1)} hrs</td>
+                        <td>{row.total_installation_completed || 0}</td>
+                        <td>{row.total_service_attended || 0}</td>
+                        <td>{row.total_service_completed || 0}</td>
+                        <td>{row.total_site_visits || 0}</td>
+                        <td>{row.new_projects_created || 0}</td>
+                        <td>₹{Number(row.food_expense || 0).toLocaleString()}</td>
+                        <td>₹{Number(row.petrol_expense || 0).toLocaleString()}</td>
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={4} style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+                        <td colSpan={11} style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>
                           No technician deep-dive data for this date range
                         </td>
                       </tr>
@@ -223,10 +244,10 @@ export default function Reports() {
                     <tr key={b.billing_id}>
                       <td>{b.billing_id}</td>
                       <td>{b.customer_name || '-'}</td>
-                      <td>{b.complete_date}</td>
+                      <td>{formatDate(b.complete_date)}</td>
                       <td>₹{Number(b.invoice_amount || 0).toLocaleString()}</td>
                       <td>₹{Number(b.expense || 0).toLocaleString()}</td>
-                      <td>₹{Number(b.profit || 0).toLocaleString()}</td>
+                      <td>₹{calculateBillingProfit(b).profit.toLocaleString()}</td>
                     </tr>
                   )) : (
                     <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>No financial records for this date range</td></tr>

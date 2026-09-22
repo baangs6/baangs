@@ -212,7 +212,9 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
         "work_event": data.work_event,
         "location": _location_dict(data.location),
         "visit_notes": data.visit_notes,
+        "issues_faced": data.issues_faced,
         "expense": data.expense or 0.0,
+        "service_charge": data.service_charge or data.service_bill or data.invoice_amount or 0.0,
         "service_bill": data.service_bill or 0.0,
         "collected_amount": data.collected_amount or 0.0,
         "invoice": data.invoice,
@@ -268,12 +270,12 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
             {"job_id": data.job_id, "status": data.status, "type": "technician_update"},
         )
 
+    service_charge = float(data.service_charge or data.service_bill or data.invoice_amount or 0)
     should_update_billing = (
         bool(inventory_records)
         or bool(data.expense and data.expense > 0)
         or bool(data.collected_amount and data.collected_amount > 0)
-        or bool(data.invoice_amount and data.invoice_amount > 0)
-        or bool(data.service_bill and data.service_bill > 0)
+        or service_charge > 0
     )
     if should_update_billing:
         from .billing import calc_profit
@@ -283,7 +285,8 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
 
         billing = await db.billing.find_one({"job_id": data.job_id})
         if not billing:
-            invoice_amount = float(data.invoice_amount or data.service_bill or 0)
+            service_amount = service_charge
+            invoice_amount = material_amount + service_amount
             collected = float(data.collected_amount or 0)
             expense = float(data.expense or 0)
             profit, profit_pct = calc_profit(invoice_amount, collected, expense, material_amount)
@@ -294,6 +297,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
                 "complete_date": today_ist_str(),
                 "work_type": job.get("work_type"),
                 "invoice_amount": invoice_amount,
+                "service_amount": service_amount,
                 "expense": expense,
                 "material_amount": material_amount,
                 "profit": profit,
@@ -304,7 +308,15 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
             }
             await db.billing.insert_one(billing_doc)
         else:
-            new_invoice = (billing.get("invoice_amount") or 0.0) + float(data.invoice_amount or data.service_bill or 0)
+            existing_service = billing.get("service_amount")
+            if existing_service is None:
+                existing_service = max(
+                    0.0,
+                    float(billing.get("invoice_amount") or 0.0)
+                    - float(billing.get("material_amount") or 0.0),
+                )
+            new_service = float(existing_service) + service_charge
+            new_invoice = material_amount + new_service
             new_expense = (billing.get("expense") or 0.0) + float(data.expense or 0)
             new_collected = (billing.get("collected_amount") or 0.0) + float(data.collected_amount or 0)
             
@@ -318,6 +330,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
                 {"billing_id": billing["billing_id"]},
                 {"$set": {
                     "invoice_amount": new_invoice,
+                    "service_amount": new_service,
                     "expense": new_expense,
                     "collected_amount": new_collected,
                     "material_amount": material_amount,
@@ -472,7 +485,9 @@ def _fmt(u: dict) -> dict:
         "work_event": u.get("work_event"),
         "location": u.get("location"),
         "visit_notes": u.get("visit_notes"),
+        "issues_faced": u.get("issues_faced"),
         "expense": u.get("expense", 0.0),
+        "service_charge": u.get("service_charge", u.get("service_bill", 0.0)),
         "service_bill": u.get("service_bill", 0.0),
         "collected_amount": u.get("collected_amount", 0.0),
         "invoice": u.get("invoice"),

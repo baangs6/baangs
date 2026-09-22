@@ -2,6 +2,7 @@ import { NavLink, useNavigate, Outlet } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../context/useAuth';
 import { notificationsApi } from '../../api';
+import { formatDateTime } from '../../utils/dateFormat';
 import {
   MdDashboard, MdWork, MdPeople, MdAttachMoney,
   MdLocationOn, MdLogout, MdSupervisorAccount,
@@ -136,7 +137,7 @@ export default function Layout() {
                   >
                     <strong>{n.title}</strong>
                     <p>{n.message}</p>
-                    <small>{n.created_at?.slice(0, 16).replace('T', ' ')}</small>
+                    <small>{formatDateTime(n.created_at)}</small>
                   </button>
                 ))}
               </div>

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { billingApi } from '../../api';
 import { MdAttachMoney, MdTrendingUp, MdDownload } from 'react-icons/md';
 import { exportApi } from '../../api';
+import { formatDate } from '../../utils/dateFormat';
+import { calculateBillingProfit } from '../../utils/billingMath';
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -24,7 +26,7 @@ export default function BillingList() {
   }, [monthFilter]);
 
   const totalRevenue = billing.reduce((acc, b) => acc + b.invoice_amount + (b.collected_amount || 0), 0);
-  const totalProfit = billing.reduce((acc, b) => acc + b.profit, 0);
+  const totalProfit = billing.reduce((acc, b) => acc + calculateBillingProfit(b).profit, 0);
   const totalCollected = billing.reduce((acc, b) => acc + (b.collected_amount || 0), 0);
 
   return (
@@ -97,14 +99,14 @@ export default function BillingList() {
                 <tr key={b.billing_id}>
                   <td style={{ fontFamily: 'monospace', color: 'var(--color-accent)', fontSize: '0.8rem' }}>{b.job_id}</td>
                   <td style={{ fontWeight: 600 }}>{b.customer_name || '—'}</td>
-                  <td style={{ fontSize: '0.8rem' }}>{b.complete_date}</td>
+                  <td style={{ fontSize: '0.8rem' }}>{formatDate(b.complete_date)}</td>
                   <td style={{ fontSize: '0.85rem' }}>{b.work_type || '—'}</td>
                   <td style={{ fontWeight: 600, color: 'var(--color-success)' }}>₹{b.invoice_amount.toLocaleString()}</td>
                   <td style={{ fontWeight: 600, color: 'var(--color-success)' }}>₹{(b.collected_amount || 0).toLocaleString()}</td>
                   <td style={{ color: 'var(--color-danger)' }}>₹{b.expense.toLocaleString()}</td>
                   <td style={{ color: 'var(--color-warning)' }}>₹{b.material_amount.toLocaleString()}</td>
-                  <td style={{ fontWeight: 600, color: b.profit >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>₹{b.profit.toLocaleString()}</td>
-                  <td><span className={`badge badge-${b.profit_percentage >= 30 ? 'complete' : b.profit_percentage >= 10 ? 'in_progress' : 'cancelled'}`}>{b.profit_percentage?.toFixed(1)}%</span></td>
+                  <td style={{ fontWeight: 600, color: calculateBillingProfit(b).profit >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>₹{calculateBillingProfit(b).profit.toLocaleString()}</td>
+                  <td><span className={`badge badge-${calculateBillingProfit(b).percentage >= 30 ? 'complete' : calculateBillingProfit(b).percentage >= 10 ? 'in_progress' : 'cancelled'}`}>{calculateBillingProfit(b).percentage.toFixed(1)}%</span></td>
                   <td style={{ fontSize: '0.8rem' }}>{b.payment_mode} {b.payment_id ? `·${b.payment_id.slice(0,8)}` : ''}</td>
                 </tr>
               ))}

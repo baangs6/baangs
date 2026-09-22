@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { attendanceApi, staffApi, exportApi, leavesApi } from '../../api';
 import { MdDelete, MdDownload, MdLocationOn, MdPayment, MdPhoto } from 'react-icons/md';
+import { formatDate } from '../../utils/dateFormat';
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -611,7 +612,7 @@ export default function AttendanceReport() {
             <tbody>
               {records.map(r => (
                 <tr key={r.attendance_id}>
-                  <td style={{ fontWeight: 600 }}>{r.date}</td>
+                  <td style={{ fontWeight: 600 }}>{formatDate(r.date)}</td>
                   <td>{r.staff_name || r.staff_id}</td>
                   <td style={{ fontSize: '0.8rem', fontFamily: 'monospace', color: 'var(--color-success)' }}>
                     {r.checkin_time?.slice(11, 19) || '—'}

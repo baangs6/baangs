@@ -78,6 +78,7 @@ export const customersApi = {
 export const jobsApi = {
   list: (params) => api.get('/jobs/', { params }),
   get: (id) => api.get(`/jobs/${id}`),
+  customerHistory: (id) => api.get(`/jobs/${id}/customer-history`),
   create: (data) => api.post('/jobs/', data),
   update: (id, data) => api.put(`/jobs/${id}`, data),
   acceptRequest: (id, data) => api.patch(`/jobs/${id}/accept`, data),
@@ -105,6 +106,7 @@ export const billingApi = {
   create: (data) => api.post('/billing/', data),
   update: (id, data) => api.put(`/billing/${id}`, data),
   monthlySummary: () => api.get('/billing/summary/monthly'),
+  invoicePdf: (jobId) => api.get(`/billing/job/${jobId}/invoice.pdf`, { responseType: 'blob' }),
 };
 
 // Attendance

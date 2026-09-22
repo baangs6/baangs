@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { notificationsApi } from '../api';
 import { colors, spacing, radius, useTheme } from '../theme';
+import { formatDateTime } from '../utils/dateFormat';
 
 export default function NotificationsScreen({ navigation }) {
   const theme = useTheme();
@@ -103,7 +104,7 @@ export default function NotificationsScreen({ navigation }) {
         >
           <Text style={styles.itemTitle}>{row.title}</Text>
           <Text style={styles.itemMsg}>{row.message}</Text>
-          <Text style={styles.itemTime}>{row.created_at?.slice(0, 16).replace('T', ' ')}</Text>
+          <Text style={styles.itemTime}>{formatDateTime(row.created_at)}</Text>
         </TouchableOpacity>
       ))}
       <View style={{ height: 24 }} />
