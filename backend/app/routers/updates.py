@@ -196,7 +196,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
     if staff_id:
         staff = await db.staff.find_one({"staff_id": staff_id})
         if staff:
-            staff_name = staff["name"]
+            staff_name = staff.get("name") or staff.get("full_name") or staff_id
 
     # Validate and process inventory usage
     inventory_records = []
@@ -358,14 +358,17 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
             {"$set": {"map_location": job_update["map_location"]}}
         )
 
-    if current_user["role"] == "technician":
-        await notify_roles(
-            db,
-            ["admin"],
-            "Technician Job Update",
-            f"{data.job_id} changed to {data.status} by {staff_name or current_user.get('username')}",
-            {"job_id": data.job_id, "status": data.status, "type": "technician_update"},
-        )
+    if current_user.get("role") == "technician":
+        try:
+            await notify_roles(
+                db,
+                ["admin"],
+                "Technician Job Update",
+                f"{data.job_id} changed to {data.status} by {staff_name or current_user.get('username')}",
+                {"job_id": data.job_id, "status": data.status, "type": "technician_update"},
+            )
+        except Exception as exc:
+            print(f"Unable to send technician update notification: {exc}")
 
     service_charge = float(data.service_charge or data.service_bill or data.invoice_amount or 0)
     should_update_billing = (
