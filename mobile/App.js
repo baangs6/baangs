@@ -21,6 +21,7 @@ import NotificationsScreen from './src/screens/NotificationsScreen';
 import RequiredCheckInScreen from './src/screens/RequiredCheckInScreen';
 import FinanceScreen from './src/screens/FinanceScreen';
 import JobCreateScreen from './src/screens/JobCreateScreen';
+import LearningLogScreen from './src/screens/LearningLogScreen';
 import { CustomersScreen, InventoryScreen, ReportsScreen, StaffScreen, UsersScreen } from './src/screens/AdminListScreens';
 
 const Tab = createBottomTabNavigator();
@@ -71,6 +72,7 @@ function RootApp() {
         <RootStack.Screen name="Users" component={UsersScreen} />
         <RootStack.Screen name="Inventory" component={InventoryScreen} />
         <RootStack.Screen name="Reports" component={ReportsScreen} />
+        <RootStack.Screen name="LearningLog" component={LearningLogScreen} options={{ title: 'Learning & Doubts' }} />
       </RootStack.Navigator>
       <AdminOverlay />
     </View>
@@ -86,6 +88,7 @@ function AdminOverlay() {
   const [techOpen, setTechOpen] = useState(false);
   const [technicians, setTechnicians] = useState([]);
   const isAdmin = ['admin', 'manager', 'sales'].includes(String(user?.role || '').toLowerCase());
+  const canReviewLearning = ['admin', 'manager'].includes(String(user?.role || '').toLowerCase());
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -107,6 +110,7 @@ function AdminOverlay() {
     { label: 'Create Job', icon: 'add-task', action: () => go('MainTabs', { screen: 'Jobs', params: { screen: 'JobCreate' } }) },
     { label: 'Customers', icon: 'people', action: () => go('Customers') },
     { label: 'Staff / Technicians', icon: 'engineering', action: () => go('Staff') },
+    ...(canReviewLearning ? [{ label: 'Learning & Doubts', icon: 'school', action: () => go('LearningLog') }] : []),
     { label: 'Users', icon: 'admin-panel-settings', action: () => go('Users') },
     { label: 'Inventory', icon: 'inventory-2', action: () => go('Inventory') },
     { label: 'Finance', icon: 'account-balance-wallet', action: () => go('MainTabs', { screen: 'Finance' }) },

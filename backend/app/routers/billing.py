@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from datetime import timedelta
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 from typing import List, Optional
 from ..models.billing import BillingCreate, BillingResponse
-from ..auth.utils import require_admin, require_admin_or_manager, require_any
+from ..auth.utils import create_access_token, decode_token, require_admin, require_admin_or_manager, require_any
 from ..database import get_db
 from ..utils.id_generator import generate_billing_id
 from ..utils.timezone import today_ist_str
@@ -157,6 +158,37 @@ async def create_billing(data: BillingCreate, _=Depends(require_admin)):
     return _fmt(billing_doc)
 
 
+def _ensure_invoice_access(job: dict, current_user: dict):
+    if current_user.get("role") == "technician" and job.get("assigned_staff_id") != current_user.get("staff_id"):
+        raise HTTPException(status_code=403, detail="This job is not assigned to you")
+
+
+@router.get("/job/{job_id}/invoice-link")
+async def job_invoice_link(job_id: str, request: Request, current_user: dict = Depends(require_any)):
+    db = get_db()
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    _ensure_invoice_access(job, current_user)
+    if not await db.billing.find_one({"job_id": job_id}):
+        raise HTTPException(status_code=404, detail="Complete billing before generating the invoice")
+
+    token = create_access_token(
+        {"sub": current_user.get("username"), "invoice_job_id": job_id},
+        expires_delta=timedelta(hours=24),
+    )
+    public_url = str(request.url_for("public_job_invoice_pdf", job_id=job_id))
+    return {"url": f"{public_url}?token={token}", "expires_in_hours": 24}
+
+
+@router.get("/job/{job_id}/invoice-public.pdf", name="public_job_invoice_pdf")
+async def public_job_invoice_pdf(job_id: str, token: str = Query(...)):
+    payload = decode_token(token)
+    if payload.get("invoice_job_id") != job_id:
+        raise HTTPException(status_code=403, detail="Invalid invoice link")
+    return await job_invoice_pdf(job_id, {"role": "admin"})
+
+
 @router.get("/job/{job_id}/invoice.pdf")
 async def job_invoice_pdf(job_id: str, current_user: dict = Depends(require_any)):
     from reportlab.lib import colors
@@ -170,8 +202,7 @@ async def job_invoice_pdf(job_id: str, current_user: dict = Depends(require_any)
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if current_user.get("role") == "technician" and job.get("assigned_staff_id") != current_user.get("staff_id"):
-        raise HTTPException(status_code=403, detail="This job is not assigned to you")
+    _ensure_invoice_access(job, current_user)
     billing = await db.billing.find_one({"job_id": job_id})
     if not billing:
         raise HTTPException(status_code=404, detail="Create the billing record before generating the invoice")

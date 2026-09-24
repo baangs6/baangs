@@ -6,7 +6,7 @@ import { formatDateTime } from '../../utils/dateFormat';
 import {
   MdDashboard, MdWork, MdPeople, MdAttachMoney,
   MdLocationOn, MdLogout, MdSupervisorAccount,
-  MdEngineering, MdListAlt, MdInventory, MdAssessment, MdNotifications, MdTaskAlt
+  MdEngineering, MdListAlt, MdInventory, MdAssessment, MdNotifications, MdTaskAlt, MdSchool
 } from 'react-icons/md';
 
 export default function Layout() {
@@ -162,6 +162,11 @@ export default function Layout() {
             <NavLink to="/staff" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <MdEngineering className="nav-icon" /> Staff
             </NavLink>
+            {(isAdmin || isManager) && (
+              <NavLink to="/learning-log" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                <MdSchool className="nav-icon" /> Learning & Doubts
+              </NavLink>
+            )}
           </>}
           {isSales && <div className="nav-section-title">Workspace</div>}
           {canUseTasks && (

@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { MdWork, MdPeople, MdAttachMoney, MdTrendingUp, MdEngineering, MdDownload, MdLocationOn, MdOpenInNew } from 'react-icons/md';
 import { formatDateTime } from '../utils/dateFormat';
+import DateRangePicker from '../components/DateRangePicker';
 
 const STATUS_COLORS = {
   pending: '#f59e0b', in_progress: '#3b82f6', complete: '#10b981', cancelled: '#ef4444'
@@ -154,21 +155,8 @@ export default function Dashboard() {
           <h2>Dashboard</h2>
           <p>Welcome back! Here's your operations overview.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            type="date"
-            className="input"
-            value={dateFilter.from}
-            onChange={(e) => setDateFilter((prev) => ({ ...prev, from: e.target.value }))}
-            aria-label="From date"
-          />
-          <input
-            type="date"
-            className="input"
-            value={dateFilter.to}
-            onChange={(e) => setDateFilter((prev) => ({ ...prev, to: e.target.value }))}
-            aria-label="To date"
-          />
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <DateRangePicker start={dateFilter.from} end={dateFilter.to} onChange={(from, to) => setDateFilter({ from, to })} />
           <button className="btn btn-secondary btn-sm" onClick={() => handleExport('jobs')}><MdDownload /> Jobs CSV</button>
           <button className="btn btn-secondary btn-sm" onClick={() => handleExport('all')}><MdDownload /> Full Export</button>
         </div>

@@ -11,11 +11,12 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  Share,
+  Linking,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
+import * as Sharing from 'expo-sharing';
 import { jobsApi, updatesApi, billingApi, inventoryApi, API_BASE_URL } from '../api';
 import { formatDate } from '../utils/dateFormat';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +31,8 @@ const EMPTY_MANUAL_ITEM = {
   serial_number: '',
   quantity_used: '1',
 };
+
+const LEARNING_CATEGORIES = ['CCTV', 'Networking', 'Electrical', 'Software', 'Customer Handling', 'Other'];
 
 export default function JobDetailScreen({ route }) {
   const theme = useTheme();
@@ -73,6 +76,8 @@ export default function JobDetailScreen({ route }) {
     status: 'in_progress',
     visit_notes: '',
     issues_faced: '',
+    learning_notes: '',
+    learning_category: 'CCTV',
     expense: '0',
     service_charge: '0',
     collected_amount: '0',
@@ -132,6 +137,8 @@ export default function JobDetailScreen({ route }) {
       status: job?.status || 'in_progress',
       visit_notes: '',
       issues_faced: '',
+      learning_notes: '',
+      learning_category: 'CCTV',
       expense: '0',
       service_charge: '0',
       collected_amount: '0',
@@ -202,6 +209,8 @@ export default function JobDetailScreen({ route }) {
         location: location,
         visit_notes: updateForm.visit_notes,
         issues_faced: updateForm.issues_faced,
+        learning_notes: updateForm.learning_notes,
+        learning_category: updateForm.learning_notes ? updateForm.learning_category : null,
         expense: parseFloat(updateForm.expense) || 0,
         service_charge: parseFloat(updateForm.service_charge) || 0,
         collected_amount: parseFloat(updateForm.collected_amount) || 0,
@@ -294,18 +303,17 @@ export default function JobDetailScreen({ route }) {
         target,
         { headers: token ? { Authorization: `Bearer ${token}` } : {} },
       );
-      if (result.status < 200 || result.status >= 300) {
-        throw new Error('Complete billing before downloading the invoice.');
-      }
-      await Share.share({
-        title: `Invoice ${jobId}`,
-        message: whatsapp
-          ? `Invoice for ${job.customer_name || jobId}. Select WhatsApp to send the attached invoice.`
-          : `Invoice for ${job.customer_name || jobId}`,
-        url: result.uri,
-      }, { dialogTitle: whatsapp ? 'Send invoice on WhatsApp' : 'Download or share invoice' });
+      if (result.status < 200 || result.status >= 300) throw new Error(`Invoice download failed (${result.status})`);
+      if (!(await Sharing.isAvailableAsync())) throw new Error('File sharing is not available on this phone.');
+      await Sharing.shareAsync(result.uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: whatsapp ? 'Send invoice using WhatsApp' : 'Save or open invoice',
+        UTI: 'com.adobe.pdf',
+      });
     } catch (error) {
-      Alert.alert('Invoice unavailable', error.response?.data?.detail || error.message || 'Complete billing before downloading the invoice.');
+      let message = error.response?.data?.detail || error.message || 'Complete billing before downloading the invoice.';
+      if (String(message).includes('(404)')) message = 'No billing record exists for this job. Add the service charge or item billing first.';
+      Alert.alert('Invoice unavailable', message);
     } finally {
       setInvoiceBusy(false);
     }
@@ -653,6 +661,13 @@ export default function JobDetailScreen({ route }) {
             {update.location ? <Text style={styles.updateMeta}>Location: {formatLocation(update.location)}</Text> : null}
             {update.visit_notes ? <Text style={styles.updateNotes}>{update.visit_notes}</Text> : null}
             {update.issues_faced ? <Text style={[styles.updateNotes, { color: colors.danger }]}>Issues: {update.issues_faced}</Text> : null}
+            {update.admin_reply ? <Text style={styles.adminReply}>Admin reply: {update.admin_reply}</Text> : null}
+            {update.learning_notes ? (
+              <View style={styles.learningBox}>
+                <Text style={styles.learningLabel}>Learned · {update.learning_category || 'Other'}</Text>
+                <Text style={styles.updateNotes}>{update.learning_notes}</Text>
+              </View>
+            ) : null}
             {Number(update.service_charge || 0) > 0 ? (
               <Text style={styles.money}>Service charge: Rs {Number(update.service_charge).toFixed(2)}</Text>
             ) : null}
@@ -753,6 +768,30 @@ export default function JobDetailScreen({ route }) {
               placeholderTextColor={colors.textMuted}
               multiline
             />
+
+            <View style={styles.subCard}>
+              <Text style={styles.sectionTitle}>What I Learned</Text>
+              <Text style={styles.label}>Category</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.learningCategories}>
+                {LEARNING_CATEGORIES.map((category) => (
+                  <TouchableOpacity
+                    key={category}
+                    style={[styles.categoryChip, updateForm.learning_category === category && styles.categoryChipActive]}
+                    onPress={() => setUpdateForm((prev) => ({ ...prev, learning_category: category }))}
+                  >
+                    <Text style={[styles.categoryChipText, updateForm.learning_category === category && styles.categoryChipTextActive]}>{category}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TextInput
+                style={[styles.input, { height: 110, textAlignVertical: 'top' }]}
+                value={updateForm.learning_notes}
+                onChangeText={(text) => setUpdateForm((prev) => ({ ...prev, learning_notes: text }))}
+                placeholder="New method, product knowledge, diagnosis, or customer handling learned"
+                placeholderTextColor={colors.textMuted}
+                multiline
+              />
+            </View>
 
             <Text style={styles.label}>Amount Collected (Rs)</Text>
             <TextInput
@@ -1210,6 +1249,9 @@ const createStyles = (colors) => StyleSheet.create({
   updateStaff: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4 },
   updateMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   updateNotes: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
+  adminReply: { fontSize: 12, color: colors.info, backgroundColor: colors.infoDim, padding: spacing.sm, borderRadius: radius.sm, marginTop: spacing.sm },
+  learningBox: { backgroundColor: `${colors.success}12`, borderLeftWidth: 2, borderLeftColor: colors.success, padding: spacing.sm, marginTop: spacing.sm },
+  learningLabel: { color: colors.success, fontSize: 11, fontWeight: '800' },
   money: { fontSize: 12, color: colors.warning, marginTop: 4 },
   updateTime: { fontSize: 11, color: colors.textMuted, marginTop: 6 },
   noUpdates: { color: colors.textMuted, textAlign: 'center', padding: spacing.base },
@@ -1302,6 +1344,11 @@ const createStyles = (colors) => StyleSheet.create({
     paddingTop: spacing.sm,
     marginTop: spacing.sm,
   },
+  learningCategories: { gap: spacing.xs, paddingBottom: spacing.md },
+  categoryChip: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.surface2 },
+  categoryChipActive: { borderColor: colors.success, backgroundColor: `${colors.success}18` },
+  categoryChipText: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+  categoryChipTextActive: { color: colors.success },
   modelOptionTitle: { color: colors.accent, fontWeight: '800', fontSize: 13, marginBottom: 2 },
   suggestionBox: {
     borderWidth: 1,

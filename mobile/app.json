@@ -2,7 +2,7 @@
   "expo": {
     "name": "Baangs",
     "slug": "baangs",
-    "version": "1.0.4",
+    "version": "1.0.9",
     "platforms": [
       "ios",
       "android",
@@ -35,7 +35,7 @@
         "VIBRATE"
       ],
       "package": "com.anonymous.mobile",
-      "versionCode": 9
+      "versionCode": 10
     },
     "notification": {
       "icon": "./assets/adaptive-icon.png",

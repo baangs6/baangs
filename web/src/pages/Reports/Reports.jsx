@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { billingApi, dashboardApi, inventoryApi } from '../../api';
 import { formatDate } from '../../utils/dateFormat';
 import { calculateBillingProfit } from '../../utils/billingMath';
+import DateRangePicker from '../../components/DateRangePicker';
 
 function currentMonthRange() {
   const now = new Date();
@@ -100,22 +101,7 @@ export default function Reports() {
               </option>
             ))}
           </select>
-          <label style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>From</label>
-          <input
-            type="date"
-            className="input"
-            value={dateFilter.from}
-            onChange={(e) => setDateFilter((prev) => ({ ...prev, from: e.target.value }))}
-            aria-label="From date"
-          />
-          <label style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>To</label>
-          <input
-            type="date"
-            className="input"
-            value={dateFilter.to}
-            onChange={(e) => setDateFilter((prev) => ({ ...prev, to: e.target.value }))}
-            aria-label="To date"
-          />
+          <DateRangePicker start={dateFilter.from} end={dateFilter.to} onChange={(from, to) => setDateFilter({ from, to })} />
         </div>
       </div>
 

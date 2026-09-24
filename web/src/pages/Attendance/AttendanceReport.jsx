@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { attendanceApi, staffApi, exportApi, leavesApi } from '../../api';
 import { MdDelete, MdDownload, MdLocationOn, MdPayment, MdPhoto } from 'react-icons/md';
 import { formatDate } from '../../utils/dateFormat';
+import DateRangePicker from '../../components/DateRangePicker';
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -238,10 +239,8 @@ export default function AttendanceReport() {
             <option value="">All Staff</option>
             {staff.map(s => <option key={s.staff_id} value={s.staff_id}>{s.name}</option>)}
           </select>
-          <input className="form-input" type="date" value={filters.date_from} style={{ width: 160 }}
-            onChange={e => setFilters({ ...filters, date_from: e.target.value })} placeholder="Date from" />
-          <input className="form-input" type="date" value={filters.date_to} style={{ width: 160 }}
-            onChange={e => setFilters({ ...filters, date_to: e.target.value })} />
+          <DateRangePicker start={filters.date_from} end={filters.date_to}
+            onChange={(date_from, date_to) => setFilters({ ...filters, date_from, date_to })} />
           <button className="btn btn-secondary" onClick={() => setFilters({ staff_id: '', date_from: '', date_to: '' })}>Clear</button>
         </div>
       )}

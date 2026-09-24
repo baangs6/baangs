@@ -118,6 +118,8 @@ export const jobsApi = {
 export const updatesApi = {
   getJobUpdates: (jobId) => api.get(`/updates/job/${jobId}`),
   create: (data) => api.post('/updates/', data),
+  learningLog: (params) => api.get('/updates/learning-log', { params }),
+  reviewDoubt: (updateId, data) => api.patch(`/updates/${updateId}/doubt-review`, data),
 };
 
 export const attendanceApi = {
@@ -153,6 +155,7 @@ export const customersApi = {
 export const billingApi = {
   list: (params) => api.get('/billing/', { params }),
   create: (data) => api.post('/billing/', data),
+  invoiceLink: (jobId) => api.get(`/billing/job/${encodeURIComponent(jobId)}/invoice-link`),
 };
 
 export const dashboardApi = {

@@ -19,6 +19,7 @@ import UserManagement from './pages/Users/UserManagement';
 import LookupManager from './pages/Settings/LookupManager';
 import StaffList from './pages/Staff/StaffList';
 import StaffFormPage from './pages/Staff/StaffFormPage';
+import LearningLog from './pages/Staff/LearningLog';
 import InventoryDashboard from './pages/Inventory/InventoryDashboard';
 import Reports from './pages/Reports/Reports';
 import Tasks from './pages/Tasks/Tasks';
@@ -71,6 +72,7 @@ function AppRoutes() {
             <Route path="staff" element={<StaffList />} />
             <Route path="staff/new" element={<StaffFormPage />} />
             <Route path="staff/:staffId" element={<StaffFormPage />} />
+            <Route path="learning-log" element={<LearningLog />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="settings" element={<LookupManager />} />

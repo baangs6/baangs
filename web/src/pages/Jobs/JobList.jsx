@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { jobsApi, lookupsApi, staffApi } from '../../api';
 import { MdAdd, MdCheck, MdClose, MdDelete, MdRefresh, MdSearch } from 'react-icons/md';
 import { formatDate } from '../../utils/dateFormat';
+import DateRangePicker from '../../components/DateRangePicker';
 
 const STATUS_LABELS = { pending: 'Pending', in_progress: 'In Progress', complete: 'Complete', cancelled: 'Cancelled' };
 
@@ -266,22 +267,8 @@ export default function JobList() {
               </option>
             ))}
         </select>
-        <input
-          type="date"
-          className="form-input"
-          style={{ width: 140 }}
-          value={filters.date_from}
-          onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
-          title="From Date"
-        />
-        <input
-          type="date"
-          className="form-input"
-          style={{ width: 140 }}
-          value={filters.date_to}
-          onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
-          title="To Date"
-        />
+        <DateRangePicker start={filters.date_from} end={filters.date_to}
+          onChange={(date_from, date_to) => setFilters({ ...filters, date_from, date_to })} />
         <button className="btn btn-secondary btn-icon" onClick={fetchJobs} title="Refresh">
           <MdRefresh />
         </button>

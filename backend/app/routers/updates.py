@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends
-from typing import List
-from ..models.daily_update import DailyUpdateCreate, DailyUpdateResponse, ManualInventoryVerify
-from ..auth.utils import require_admin, get_current_user
+from datetime import datetime, timedelta
+from fastapi import APIRouter, HTTPException, Depends, Query
+from typing import List, Optional
+import pytz
+from ..models.daily_update import DailyUpdateCreate, DailyUpdateResponse, DoubtReview, ManualInventoryVerify
+from ..auth.utils import require_admin, require_admin_or_manager, get_current_user
 from ..database import get_db
 from ..utils.id_generator import generate_update_id, generate_usage_id, generate_transaction_id, generate_inventory_item_id
 from ..utils.timezone import now_ist_str
@@ -10,6 +12,7 @@ from ..utils.notifications import notify_roles
 import uuid
 
 router = APIRouter(prefix="/updates", tags=["Daily Updates"])
+IST = pytz.timezone("Asia/Kolkata")
 
 
 def _location_dict(location):
@@ -83,6 +86,97 @@ async def get_job_updates(job_id: str, current_user: dict = Depends(get_current_
     db = get_db()
     updates = await db.daily_updates.find({"job_id": job_id}).sort("update_time", -1).to_list(200)
     return [_fmt(u) for u in updates]
+
+
+@router.get("/learning-log")
+async def learning_log(
+    period: str = Query("day", pattern="^(day|week|month|year|custom)$"),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    staff_id: Optional[str] = None,
+    doubt_status: Optional[str] = None,
+    _=Depends(require_admin_or_manager),
+):
+    db = get_db()
+    today = datetime.now(IST).date()
+    if period == "day":
+        start = end = today
+    elif period == "week":
+        start = today - timedelta(days=today.weekday())
+        end = start + timedelta(days=6)
+    elif period == "month":
+        start = today.replace(day=1)
+        next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        end = next_month - timedelta(days=1)
+    elif period == "year":
+        start = today.replace(month=1, day=1)
+        end = today.replace(month=12, day=31)
+    else:
+        try:
+            start = datetime.strptime(date_from or "", "%Y-%m-%d").date()
+            end = datetime.strptime(date_to or date_from or "", "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Custom date range is required") from exc
+
+    query = {
+        "update_time": {"$gte": f"{start.isoformat()}T00:00:00", "$lte": f"{end.isoformat()}T23:59:59.999999"},
+        "$or": [
+            {"issues_faced": {"$nin": [None, ""]}},
+            {"learning_notes": {"$nin": [None, ""]}},
+        ],
+    }
+    if staff_id:
+        query["assigned_staff_id"] = staff_id
+    records = await db.daily_updates.find(query).sort("update_time", -1).to_list(1000)
+    if doubt_status:
+        records = [
+            record for record in records
+            if (record.get("doubt_status") or ("open" if record.get("issues_faced") else "resolved")) == doubt_status
+        ]
+    job_ids = list({record.get("job_id") for record in records if record.get("job_id")})
+    jobs = await db.jobs.find({"job_id": {"$in": job_ids}}).to_list(len(job_ids) or 1)
+    jobs_by_id = {job.get("job_id"): job for job in jobs}
+    items = []
+    for record in records:
+        job = jobs_by_id.get(record.get("job_id"), {})
+        items.append({
+            **_fmt(record),
+            "customer_name": job.get("customer_name"),
+            "phone_number": job.get("phone_number"),
+        })
+    return {
+        "period": period,
+        "date_from": start.isoformat(),
+        "date_to": end.isoformat(),
+        "summary": {
+            "total": len(items),
+            "doubts": sum(1 for item in items if item.get("issues_faced")),
+            "open_doubts": sum(1 for item in items if item.get("issues_faced") and item.get("doubt_status", "open") == "open"),
+            "learnings": sum(1 for item in items if item.get("learning_notes")),
+        },
+        "items": items,
+    }
+
+
+@router.patch("/{update_id}/doubt-review")
+async def review_doubt(update_id: str, data: DoubtReview, current_user: dict = Depends(require_admin_or_manager)):
+    if data.doubt_status not in {"open", "answered", "resolved"}:
+        raise HTTPException(status_code=400, detail="Invalid doubt status")
+    db = get_db()
+    values = {
+        "doubt_status": data.doubt_status,
+        "admin_reply": (data.admin_reply or "").strip() or None,
+        "replied_at": now_ist_str(),
+        "replied_by": current_user.get("full_name") or current_user.get("username"),
+    }
+    result = await db.daily_updates.find_one_and_update(
+        {"update_id": update_id, "issues_faced": {"$nin": [None, ""]}},
+        {"$set": values},
+        return_document=True,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Doubt not found")
+    return _fmt(result)
 
 
 @router.post("/", response_model=DailyUpdateResponse)
@@ -213,6 +307,9 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
         "location": _location_dict(data.location),
         "visit_notes": data.visit_notes,
         "issues_faced": data.issues_faced,
+        "learning_notes": data.learning_notes,
+        "learning_category": data.learning_category,
+        "doubt_status": "open" if data.issues_faced else None,
         "expense": data.expense or 0.0,
         "service_charge": data.service_charge or data.service_bill or data.invoice_amount or 0.0,
         "service_bill": data.service_bill or 0.0,
@@ -486,6 +583,11 @@ def _fmt(u: dict) -> dict:
         "location": u.get("location"),
         "visit_notes": u.get("visit_notes"),
         "issues_faced": u.get("issues_faced"),
+        "learning_notes": u.get("learning_notes"),
+        "learning_category": u.get("learning_category"),
+        "doubt_status": u.get("doubt_status", "open" if u.get("issues_faced") else "resolved"),
+        "admin_reply": u.get("admin_reply"),
+        "replied_at": u.get("replied_at"),
         "expense": u.get("expense", 0.0),
         "service_charge": u.get("service_charge", u.get("service_bill", 0.0)),
         "service_bill": u.get("service_bill", 0.0),

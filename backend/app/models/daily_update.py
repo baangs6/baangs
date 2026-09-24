@@ -30,6 +30,8 @@ class DailyUpdateCreate(BaseModel):
     location: Optional[GeoPoint] = None
     visit_notes: Optional[str] = None
     issues_faced: Optional[str] = None
+    learning_notes: Optional[str] = None
+    learning_category: Optional[str] = None
     expense: Optional[float] = 0.0
     service_charge: Optional[float] = 0.0
     service_bill: Optional[float] = 0.0
@@ -53,6 +55,11 @@ class DailyUpdateResponse(BaseModel):
     location: Optional[dict] = None
     visit_notes: Optional[str] = None
     issues_faced: Optional[str] = None
+    learning_notes: Optional[str] = None
+    learning_category: Optional[str] = None
+    doubt_status: str = "open"
+    admin_reply: Optional[str] = None
+    replied_at: Optional[str] = None
     expense: float = 0.0
     service_charge: float = 0.0
     service_bill: float = 0.0
@@ -61,6 +68,11 @@ class DailyUpdateResponse(BaseModel):
     invoice_amount: float = 0.0
     inventory_used: Optional[List[dict]] = Field(default_factory=list)
     manual_inventory_items: Optional[List[dict]] = Field(default_factory=list)
+
+
+class DoubtReview(BaseModel):
+    admin_reply: Optional[str] = None
+    doubt_status: str = "open"
 
 
 class ManualInventoryVerify(BaseModel):

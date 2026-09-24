@@ -1,0 +1,38 @@
+.date-range { position: relative; }
+.date-range__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 50px;
+  padding: 0 15px;
+  border: 1px solid var(--color-border, #e3e8ee);
+  border-radius: 8px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text-secondary, #5b6472);
+  font: inherit;
+  cursor: pointer;
+}
+.date-range__trigger:hover, .date-range__trigger.active { border-color: var(--color-primary, #2563eb); color: var(--color-text, #0e1116); }
+.date-range__trigger:focus-visible { outline: 3px solid rgba(46, 125, 239, 0.25); outline-offset: 2px; }
+.date-range__popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 14px;
+  width: 380px;
+  padding: 16px;
+  border: 1px solid var(--color-border, #e3e8ee);
+  border-radius: 8px;
+  background: var(--color-surface, #fff);
+  box-shadow: 0 18px 40px rgba(14, 17, 22, 0.18);
+}
+.date-range__popover label { display: grid; gap: 6px; color: var(--color-text-secondary, #5b6472); font-size: 13px; font-weight: 700; }
+.date-range__popover input { min-height: 42px; padding: 0 10px; border: 1px solid var(--color-border, #e3e8ee); border-radius: 6px; background: var(--color-surface, #fff); color: var(--color-text, #0e1116); font: inherit; }
+.date-range__popover .btn { grid-column: 1 / -1; justify-self: end; }
+@media (max-width: 560px) {
+  .date-range, .date-range__trigger { width: 100%; }
+  .date-range__popover { position: fixed; top: auto; right: 16px; bottom: 16px; left: 16px; width: auto; grid-template-columns: 1fr; }
+}
