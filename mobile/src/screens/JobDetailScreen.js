@@ -97,13 +97,17 @@ export default function JobDetailScreen({ route }) {
   const isAdmin = user?.role === 'admin';
 
   const load = async () => {
+    setLoading(true);
     try {
-      const [jobRes, updatesRes] = await Promise.all([
-        jobsApi.get(jobId),
-        updatesApi.getJobUpdates(jobId),
-      ]);
+      const jobRes = await jobsApi.get(jobId);
       setJob(jobRes.data);
-      setUpdates(updatesRes.data);
+      try {
+        const updatesRes = await updatesApi.getJobUpdates(jobId);
+        setUpdates(Array.isArray(updatesRes.data) ? updatesRes.data : []);
+      } catch (updatesError) {
+        console.warn('Job updates unavailable', updatesError.response?.data || updatesError.message);
+        setUpdates([]);
+      }
       try {
         const historyRes = await jobsApi.customerHistory(jobId);
         setCustomerHistory(historyRes.data?.history || []);
@@ -113,7 +117,8 @@ export default function JobDetailScreen({ route }) {
       }
       setUpdateForm((prev) => ({ ...prev, status: jobRes.data.status || 'in_progress' }));
     } catch (error) {
-      Alert.alert('Error', 'Failed to load job details');
+      const detail = error.response?.data?.detail;
+      Alert.alert('Error', typeof detail === 'string' ? detail : error.message || 'Failed to load job details');
     } finally {
       setLoading(false);
     }

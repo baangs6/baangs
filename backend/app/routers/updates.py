@@ -575,13 +575,13 @@ async def verify_manual_inventory(
 
 def _fmt(u: dict) -> dict:
     return {
-        "update_id": u["update_id"],
-        "update_time": u["update_time"],
-        "job_id": u["job_id"],
-        "assigned_staff_id": u["assigned_staff_id"],
-        "staff_name": u["staff_name"],
+        "update_id": u.get("update_id") or str(u.get("_id", "")),
+        "update_time": u.get("update_time") or u.get("created_at") or now_ist_str(),
+        "job_id": u.get("job_id", ""),
+        "assigned_staff_id": u.get("assigned_staff_id") or u.get("technician_id") or "",
+        "staff_name": u.get("staff_name") or u.get("technician_name") or "Technician",
         "work_type": u.get("work_type"),
-        "status": u["status"],
+        "status": u.get("status", "in_progress"),
         "work_event": u.get("work_event"),
         "location": u.get("location"),
         "visit_notes": u.get("visit_notes"),
