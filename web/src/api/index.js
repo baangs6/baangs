@@ -147,6 +147,7 @@ export const dashboardApi = {
   fieldStaffStatus: () => api.get('/dashboard/field-staff-status'),
   technicianPerformanceReport: (params) => api.get('/dashboard/technician-performance-report', { params }),
   technicianPerformanceDeepDive: (params) => api.get('/dashboard/technician-performance-deep-dive', { params }),
+  serviceQualityReport: (params) => api.get('/dashboard/service-quality-report', { params }),
 };
 
 // Export

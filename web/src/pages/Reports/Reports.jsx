@@ -28,6 +28,7 @@ export default function Reports() {
   const [techDeepDive, setTechDeepDive] = useState([]);
   const [billingRows, setBillingRows] = useState([]);
   const [stockSummary, setStockSummary] = useState([]);
+  const [qualityReport, setQualityReport] = useState({ summary: {}, technicians: [] });
   const [selectedTechMetric, setSelectedTechMetric] = useState('service');
 
   useEffect(() => {
@@ -42,12 +43,13 @@ export default function Reports() {
         if (technicianFilter !== 'all') {
           params.technician_name = technicianFilter;
         }
-        const [techRes, techReportRes, techDeepDiveRes, billingRes, stockRes] = await Promise.all([
+        const [techRes, techReportRes, techDeepDiveRes, billingRes, stockRes, qualityRes] = await Promise.all([
           dashboardApi.technicianPerformance(params),
           dashboardApi.technicianPerformanceReport(params),
           dashboardApi.technicianPerformanceDeepDive(params),
           billingApi.list({ date_from: dateFilter.from, date_to: dateFilter.to }),
           inventoryApi.stockSummary(),
+          dashboardApi.serviceQualityReport(params),
         ]);
         setTechPerf(techRes.data || []);
         setTechReport(techReportRes.data || {
@@ -59,6 +61,7 @@ export default function Reports() {
         setTechDeepDive(techDeepDiveRes.data || []);
         setBillingRows(billingRes.data || []);
         setStockSummary(stockRes.data || []);
+        setQualityReport(qualityRes.data || { summary: {}, technicians: [] });
       } catch (e) {
         setError(e.response?.data?.detail || 'Error loading reports');
       } finally {
@@ -196,8 +199,40 @@ export default function Reports() {
           </div>
 
           <div className="card">
+            <div className="card-header"><h3 className="card-title">2) Service Quality & Discipline</h3></div>
+            <div className="stat-grid" style={{ marginBottom: 16 }}>
+              {[
+                ['Average Repair / Breakdown Time', `${Number(qualityReport.summary?.average_repair_hours || 0).toFixed(1)} hrs`],
+                ['Repeat Complaint', `${Number(qualityReport.summary?.repeat_complaint_pct || 0).toFixed(1)}%`],
+                ['Customer Satisfaction Score', qualityReport.summary?.customer_satisfaction_score == null ? 'Not yet rated' : `${qualityReport.summary.customer_satisfaction_score}/5`],
+                ['Service Report Completion', `${Number(qualityReport.summary?.service_report_completion_pct || 0).toFixed(1)}%`],
+                ['Service Calls Completed', qualityReport.summary?.service_calls_completed || 0],
+                ['Attendance & Discipline', `${Number(qualityReport.summary?.attendance_discipline_pct || 0).toFixed(1)}%`],
+                ['Issues Reporting', qualityReport.summary?.issues_reported || 0],
+                ['Self Learning', qualityReport.summary?.self_learning_entries || 0],
+                ['Communication & Professional Behaviour', qualityReport.summary?.communication_score == null ? 'Not yet rated' : `${qualityReport.summary.communication_score}/5`],
+                ['Scheduled PM Jobs On Time', `${Number(qualityReport.summary?.pm_on_time_pct || 0).toFixed(1)}%`],
+              ].map(([label, value]) => (
+                <div className="stat-card" key={label}><div className="stat-label">{label}</div><div className="stat-value" style={{ fontSize: 22 }}>{value}</div></div>
+              ))}
+            </div>
+            <div className="table-wrapper" style={{ border: 'none' }}>
+              <table className="table">
+                <thead><tr><th>Technician</th><th>Avg Repair</th><th>Calls</th><th>Reports</th><th>Attendance</th><th>Issues</th><th>Learning</th><th>PM On Time</th></tr></thead>
+                <tbody>
+                  {qualityReport.technicians?.length ? qualityReport.technicians.map((row) => (
+                    <tr key={row.staff_id}>
+                      <td>{row.staff_name || row.staff_id}</td><td>{Number(row.average_repair_hours || 0).toFixed(1)} hrs</td><td>{row.service_calls_completed || 0}</td><td>{Number(row.service_report_completion_pct || 0).toFixed(1)}%</td><td>{Number(row.attendance_discipline_pct || 0).toFixed(1)}%</td><td>{row.issues_reported || 0}</td><td>{row.self_learning_entries || 0}</td><td>{Number(row.pm_on_time_pct || 0).toFixed(1)}%</td>
+                    </tr>
+                  )) : <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>No technician quality data for this date range</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card">
             <div className="card-header">
-              <h3 className="card-title">2) Financial Report</h3>
+              <h3 className="card-title">3) Financial Report</h3>
             </div>
             <div className="stat-grid" style={{ marginBottom: 12 }}>
               <div className="stat-card green">
@@ -245,7 +280,7 @@ export default function Reports() {
 
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">3) Inventory Report</h3>
+              <h3 className="card-title">4) Inventory Report</h3>
             </div>
             <div className="table-wrapper" style={{ border: 'none' }}>
               <table className="table">

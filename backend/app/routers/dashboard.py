@@ -51,6 +51,15 @@ def _minutes_between(start_value: Optional[str], end_value: Optional[str]) -> in
     return {"latitude": latitude, "longitude": longitude}
 
 
+def _date_in_range(value: Optional[str], date_from: Optional[str], date_to: Optional[str]) -> bool:
+    parsed = _parse_date(value)
+    if not parsed:
+        return not (date_from or date_to)
+    start = _parse_date(date_from)
+    end = _parse_date(date_to)
+    return (not start or parsed >= start) and (not end or parsed <= end)
+
+
 def _job_location_payload(location):
     if not location:
         return None
@@ -575,3 +584,124 @@ async def technician_performance_deep_dive(
 
     result.sort(key=lambda x: (x["total_service_completed"] + x["total_installation_completed"]), reverse=True)
     return result
+
+
+@router.get("/service-quality-report")
+async def service_quality_report(
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    technician_name: Optional[str] = Query(None),
+    _=Depends(require_admin_or_manager),
+):
+    db = get_db()
+    staff_rows = await db.staff.find({"is_active": True}).to_list(1000)
+    rows = {}
+    for staff in staff_rows:
+        staff_id = staff.get("staff_id")
+        staff_name = staff.get("name") or staff.get("full_name") or staff_id
+        if staff_id and _technician_name_match(technician_name, staff_name, staff_id):
+            rows[staff_id] = {
+                "staff_id": staff_id, "staff_name": staff_name,
+                "repair_minutes": [], "service_calls_completed": 0,
+                "completed_job_ids": set(), "reported_job_ids": set(),
+                "attendance_days": 0, "checked_out_days": 0,
+                "issues_reported": 0, "self_learning_entries": 0,
+                "pm_scheduled": 0, "pm_completed_on_time": 0,
+            }
+
+    jobs = await db.jobs.find({}).to_list(10000)
+    relevant_jobs = []
+    for job in jobs:
+        event_date = job.get("work_ended_at") or job.get("scheduled_date") or job.get("service_request_date")
+        if not _date_in_range(event_date, date_from, date_to):
+            continue
+        row = rows.get(job.get("assigned_staff_id"))
+        if not row:
+            continue
+        relevant_jobs.append(job)
+        is_complete = job.get("status") == "complete"
+        if is_complete:
+            row["service_calls_completed"] += 1
+            row["completed_job_ids"].add(job.get("job_id"))
+            duration = _minutes_between(job.get("work_started_at"), job.get("work_ended_at"))
+            if duration <= 0:
+                opened = _parse_date(job.get("service_request_date"))
+                closed = _parse_date(job.get("work_ended_at"))
+                if opened and closed and closed >= opened:
+                    duration = (closed - opened).days * 1440
+            if duration >= 0:
+                row["repair_minutes"].append(duration)
+
+        work_type = (job.get("work_type") or "").strip().lower()
+        is_pm = "preventive" in work_type or work_type == "pm" or "maintenance" in work_type
+        if is_pm and job.get("scheduled_date"):
+            row["pm_scheduled"] += 1
+            completed_date = _parse_date(job.get("work_ended_at"))
+            scheduled_date = _parse_date(job.get("scheduled_date"))
+            if is_complete and completed_date and scheduled_date and completed_date <= scheduled_date:
+                row["pm_completed_on_time"] += 1
+
+    update_query = _date_range_filter(date_from, f"{date_to}T23:59:59" if date_to else None, "update_time")
+    updates = await db.daily_updates.find(update_query).to_list(10000)
+    for update in updates:
+        row = rows.get(update.get("assigned_staff_id"))
+        if not row:
+            continue
+        if update.get("visit_notes") or update.get("work_event") == "end_work":
+            row["reported_job_ids"].add(update.get("job_id"))
+        if update.get("issues_faced"):
+            row["issues_reported"] += 1
+        if update.get("learning_notes"):
+            row["self_learning_entries"] += 1
+
+    attendance = await db.attendance.find(_date_range_filter(date_from, date_to, "date")).to_list(10000)
+    for entry in attendance:
+        row = rows.get(entry.get("staff_id"))
+        if row:
+            row["attendance_days"] += 1
+            if entry.get("is_checked_out") or entry.get("checkout_time"):
+                row["checked_out_days"] += 1
+
+    customer_counts = {}
+    for job in relevant_jobs:
+        customer_id = job.get("customer_id")
+        if customer_id:
+            customer_counts[customer_id] = customer_counts.get(customer_id, 0) + 1
+    repeat_count = sum(max(0, count - 1) for count in customer_counts.values())
+    repeat_pct = round(repeat_count / len(relevant_jobs) * 100, 1) if relevant_jobs else 0
+
+    result = []
+    for row in rows.values():
+        completed_count = len(row.pop("completed_job_ids"))
+        reported_count = len(row.pop("reported_job_ids"))
+        repair_minutes = row.pop("repair_minutes")
+        row["average_repair_hours"] = round(sum(repair_minutes) / len(repair_minutes) / 60, 2) if repair_minutes else 0
+        row["service_report_completion_pct"] = round(min(reported_count, completed_count) / completed_count * 100, 1) if completed_count else 0
+        row["attendance_discipline_pct"] = round(row["checked_out_days"] / row["attendance_days"] * 100, 1) if row["attendance_days"] else 0
+        row["pm_on_time_pct"] = round(row["pm_completed_on_time"] / row["pm_scheduled"] * 100, 1) if row["pm_scheduled"] else 0
+        row["customer_satisfaction_score"] = None
+        row["communication_score"] = None
+        result.append(row)
+
+    total_completed = sum(row["service_calls_completed"] for row in result)
+    total_reports = sum(round(row["service_report_completion_pct"] * row["service_calls_completed"] / 100) for row in result)
+    total_attendance = sum(row["attendance_days"] for row in result)
+    total_checkouts = sum(row["checked_out_days"] for row in result)
+    total_pm = sum(row["pm_scheduled"] for row in result)
+    total_pm_on_time = sum(row["pm_completed_on_time"] for row in result)
+    all_repairs = [row["average_repair_hours"] for row in result if row["average_repair_hours"] > 0]
+    return {
+        "summary": {
+            "average_repair_hours": round(sum(all_repairs) / len(all_repairs), 2) if all_repairs else 0,
+            "repeat_complaint_pct": repeat_pct,
+            "customer_satisfaction_score": None,
+            "service_report_completion_pct": round(total_reports / total_completed * 100, 1) if total_completed else 0,
+            "service_calls_completed": total_completed,
+            "attendance_discipline_pct": round(total_checkouts / total_attendance * 100, 1) if total_attendance else 0,
+            "issues_reported": sum(row["issues_reported"] for row in result),
+            "self_learning_entries": sum(row["self_learning_entries"] for row in result),
+            "communication_score": None,
+            "pm_on_time_pct": round(total_pm_on_time / total_pm * 100, 1) if total_pm else 0,
+        },
+        "technicians": result,
+    }
