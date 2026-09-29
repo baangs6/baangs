@@ -1,0 +1,40 @@
+.baangs-login {
+  min-height: 100svh;
+  padding: 28px 6%;
+  color: #16332f;
+  background: linear-gradient(90deg, rgba(244,250,249,.98) 0%, rgba(244,250,249,.94) 38%, rgba(244,250,249,.2) 75%), url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=2400&q=85') center / cover;
+  display: flex;
+  flex-direction: column;
+  letter-spacing: 0;
+}
+.baangs-login-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.baangs-login-header img { width: 150px; height: 58px; object-fit: contain; }
+.baangs-login a { color: #006d79; font-weight: 600; }
+.baangs-login a:hover { text-decoration: underline; }
+.baangs-login a:focus-visible, .baangs-login button:focus-visible { outline: 3px solid #008baf; outline-offset: 4px; }
+.baangs-login-header a { display: inline-flex; align-items: center; gap: 8px; background: #ffffffed; padding: 12px 16px; border-radius: 6px; }
+.baangs-login-content { width: 100%; max-width: 420px; padding: 48px 0; margin: auto 0; }
+.baangs-login-eyebrow { font-size: 12px; font-weight: 700; color: #48635f; margin: 0 0 10px; }
+.baangs-login h1 { font-size: 48px; line-height: 1.1; letter-spacing: 0; margin: 0 0 16px; color: #009ccc; }
+.baangs-login-intro { font-size: 23px; line-height: 1.45; margin: 0 0 30px; }
+.baangs-login h2 { font-size: 18px; margin: 0 0 20px; }
+.baangs-login .form-label { color: #29413e; font-size: 15px; }
+.baangs-login .form-input { background: #ffffffed; color: #18352f; border: 1px solid #aec4bf; min-height: 54px; border-radius: 6px; font-size: 16px; }
+.baangs-login .form-input::placeholder { color: #6a7d79; }
+.baangs-login .btn-primary { background: #007f8b; color: white; border: 0; border-radius: 6px; min-height: 54px; box-shadow: 0 7px 18px #005c6820; font-size: 16px; }
+.baangs-login .btn-primary:hover { background: #006772; }
+.baangs-login-password { position: relative; }
+.baangs-login-password input { padding-right: 54px; width: 100%; }
+.baangs-login-password button { position: absolute; right: 5px; top: 5px; height: 44px; width: 44px; display: grid; place-items: center; background: transparent; border: 0; color: #4e6b65; cursor: pointer; font-size: 22px; }
+.baangs-login-error { padding: 12px; border-left: 3px solid #b83838; background: #fff0ef; color: #8d2424; margin-bottom: 16px; overflow-wrap: anywhere; }
+.baangs-login-customer { margin-top: 24px; font-size: 14px; line-height: 1.8; }
+.baangs-login-customer a { display: inline-flex; align-items: center; gap: 5px; }
+.baangs-login-footer { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 12px; color: #365c54; }
+@media (max-width: 600px) {
+  .baangs-login { padding: 20px 24px; background-image: linear-gradient(90deg, rgba(244,250,249,.94), rgba(244,250,249,.85)), url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=900&q=80'); }
+  .baangs-login-header img { width: 105px; height: 42px; }
+  .baangs-login-header a { font-size: 12px; padding: 10px; }
+  .baangs-login-content { padding: 36px 0; margin: auto; }
+  .baangs-login h1 { font-size: 40px; }
+  .baangs-login-intro { font-size: 21px; }
+}

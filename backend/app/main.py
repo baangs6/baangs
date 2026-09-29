@@ -41,6 +41,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         settings.FRONTEND_URL,
+        "https://baangs.site",
+        "https://www.baangs.site",
+        "https://baangs-web.onrender.com",
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",

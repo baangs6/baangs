@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import Home from './pages/Home';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/useAuth';
 import './index.css';
@@ -28,6 +29,9 @@ import PublicTrackPage from './pages/PublicTrackPage';
 
 function AppRoutes() {
   const { user, loading, isSetup } = useAuth();
+  const { pathname } = useLocation();
+
+  if (pathname === '/') return <Home />;
 
   if (loading) {
     return (
@@ -45,6 +49,7 @@ function AppRoutes() {
       <Route path="/complaint" element={<PublicComplaintPage />} />
       <Route path="/track" element={<PublicTrackPage />} />
       <Route path="/track/:job_id" element={<PublicTrackPage />} />
+      {user && <Route path="/login" element={<Navigate to={user.role === 'sales' ? '/tasks' : '/dashboard'} replace />} />}
       {!user ? (
         <>
           <Route path="/login" element={<Login />} />
@@ -59,7 +64,7 @@ function AppRoutes() {
       ) : (
         <>
           <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
+            <Route path="dashboard" element={<Dashboard />} />
             <Route path="jobs" element={<JobList />} />
             <Route path="jobs/create" element={<JobCreate />} />
             <Route path="jobs/:jobId" element={<JobDetail />} />

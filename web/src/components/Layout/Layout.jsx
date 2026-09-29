@@ -148,7 +148,7 @@ export default function Layout() {
         <nav className="sidebar-nav">
           {!isSales && <>
             <div className="nav-section-title">Overview</div>
-            <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <NavLink to="/dashboard" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <MdDashboard className="nav-icon" /> Dashboard
             </NavLink>
 
