@@ -60,7 +60,7 @@ export default function Layout() {
               });
               browserNotif.onclick = () => {
                 window.focus();
-                if (n.meta?.job_id) window.location.hash = `/jobs/${n.meta.job_id}`;
+                if (n.meta?.job_id) navigate(`/jobs/${encodeURIComponent(n.meta.job_id)}`);
               };
             }
           });
