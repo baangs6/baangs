@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { publicApi } from '../api';
 import { MdSearch, MdCheckCircle, MdSchedule, MdBuild, MdPerson, MdLocationOn, MdHome } from 'react-icons/md';
 import { formatDateTime } from '../utils/dateFormat';
+import { serviceProgress } from '../utils/serviceProgress';
 
 export default function PublicTrackPage() {
   const { job_id } = useParams();
@@ -41,15 +42,7 @@ export default function PublicTrackPage() {
     }
   };
 
-  const getStageStep = (status) => {
-    const s = (status || '').toLowerCase();
-    if (s === 'completed') return 4;
-    if (s === 'in_progress') return 3;
-    if (s === 'assigned') return 2;
-    return 1; // pending
-  };
-
-  const currentStep = job ? getStageStep(job.status) : 1;
+  const { step: currentStep, label: progressLabel } = serviceProgress(job);
 
   return (
     <div className="auth-page" style={{ minHeight: '100vh', padding: '32px 16px', background: 'var(--bg-primary)' }}>
@@ -102,7 +95,7 @@ export default function PublicTrackPage() {
               </div>
               <div
                 className={`badge ${
-                  job.status === 'completed'
+                  currentStep === 4
                     ? 'badge-success'
                     : job.status === 'in_progress'
                     ? 'badge-warning'
@@ -110,7 +103,7 @@ export default function PublicTrackPage() {
                 }`}
                 style={{ fontSize: '0.95rem', padding: '6px 14px', borderRadius: 20, fontWeight: 700 }}
               >
-                {job.status ? job.status.replace('_', ' ').toUpperCase() : 'PENDING'}
+                {progressLabel.toUpperCase()}
               </div>
             </div>
 
@@ -129,7 +122,7 @@ export default function PublicTrackPage() {
                   const isPassed = currentStep >= item.step;
                   const isCurrent = currentStep === item.step;
                   return (
-                    <div key={item.step} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div key={item.step} aria-current={isCurrent ? 'step' : undefined} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div
                         style={{
                           width: 36,
@@ -141,18 +134,18 @@ export default function PublicTrackPage() {
                           fontWeight: 700,
                           fontSize: '0.9rem',
                           background: isCurrent
-                            ? 'var(--color-primary)'
+                            ? 'var(--color-accent)'
                             : isPassed
                             ? 'var(--color-success)'
-                            : 'var(--bg-tertiary)',
-                          color: isPassed || isCurrent ? '#fff' : 'var(--text-muted)',
+                            : 'var(--color-surface-3)',
+                          color: isPassed || isCurrent ? '#fff' : 'var(--color-text-secondary)',
                           marginBottom: 8,
                           transition: 'all 0.3s ease',
                         }}
                       >
                         {isPassed ? <MdCheckCircle /> : item.step}
                       </div>
-                      <span style={{ fontSize: '0.75rem', fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--color-primary)' : 'var(--text-secondary)' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--color-accent)' : 'var(--color-text-secondary)' }}>
                         {item.label}
                       </span>
                     </div>

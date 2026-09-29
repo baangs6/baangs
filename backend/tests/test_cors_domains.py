@@ -8,6 +8,10 @@ from app.main import app
     ('https://baangs.site', True),
     ('https://www.baangs.site', True),
     ('https://baangs-web.onrender.com', True),
+    ('http://localhost:5175', True),
+    ('http://127.0.0.1:5173', True),
+    ('http://127.0.0.1:5174', True),
+    ('http://127.0.0.1:5175', True),
     ('https://untrusted.example', False),
 ])
 def test_login_preflight(origin, allowed):

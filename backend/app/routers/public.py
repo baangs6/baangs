@@ -200,6 +200,7 @@ async def track_public_job(job_id: str):
         "complaint": job.get("complaint"),
         "priority": job.get("priority"),
         "status": job.get("status", "pending"),
+        "is_assigned": bool(job.get("assigned_staff_id") or job.get("additional_staff_ids")),
         "assigned_staff_name": staff_name or "Awaiting Technician Assignment",
         "location": job.get("location"),
         "created_at": job.get("created_at"),
