@@ -543,6 +543,17 @@ async def verify_manual_inventory(
     await db.job_inventory_usage.insert_one(usage_doc)
     await db.inventory_transactions.insert_one(txn_doc)
 
+    from .billing import reconcile_materials, calc_profit
+    billing = await db.billing.find_one({"job_id": job_id})
+    if billing:
+        corrected = await reconcile_materials(db, billing)
+        profit, percentage = calc_profit(corrected["invoice_amount"], corrected.get("collected_amount"),
+                                         corrected.get("expense"), corrected["material_amount"])
+        await db.billing.update_one({"billing_id": billing["billing_id"]}, {"$set": {
+            "material_amount": corrected["material_amount"], "service_amount": corrected["service_amount"],
+            "invoice_amount": corrected["invoice_amount"], "profit": profit, "profit_percentage": percentage,
+        }})
+
     verified_item = {
         **merged_data,
         "model_number": model_number or None,

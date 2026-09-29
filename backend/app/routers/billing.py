@@ -49,8 +49,9 @@ def calc_profit(invoice: float, collected: float, expense: float, material: floa
     return round(profit, 2), round(pct, 2)
 
 
-async def _compute_material_amount(db, job_id: str) -> float:
-    usage_docs = await db.job_inventory_usage.find({"job_id": job_id}).to_list(2000)
+async def _compute_material_amount(db, job_id: str, usage_docs=None) -> float:
+    if usage_docs is None:
+        usage_docs = await db.job_inventory_usage.find({"job_id": job_id}).to_list(2000)
     if not usage_docs:
         return 0.0
 
@@ -67,6 +68,19 @@ async def _compute_material_amount(db, job_id: str) -> float:
             unit_amount = float(unit_amount or 0)
         total += qty * unit_amount
     return round(total, 2)
+
+
+async def reconcile_materials(db, billing: dict) -> dict:
+    # Preserve the service charge while incorporating subsequently verified items.
+    usage = await db.job_inventory_usage.find({"job_id": billing["job_id"]}).to_list(2000)
+    if not usage:
+        return billing
+    material = await _compute_material_amount(db, billing["job_id"], usage)
+    service = billing.get("service_amount")
+    if service is None or (not service and billing.get("invoice_amount", 0) > billing.get("material_amount", 0)):
+        service = max(0, float(billing.get("invoice_amount", 0) or 0) - float(billing.get("material_amount", 0) or 0))
+    return {**billing, "material_amount": material, "service_amount": float(service),
+            "invoice_amount": round(material + float(service), 2)}
 
 
 def _fmt(b: dict) -> dict:
@@ -112,7 +126,7 @@ async def list_billing(
     elif month:
         query["complete_date"] = {"$regex": f"^{month}"}
     billing = await db.billing.find(query).sort("complete_date", -1).to_list(500)
-    return [_fmt(b) for b in billing]
+    return [_fmt(await reconcile_materials(db, b)) for b in billing]
 
 
 @router.post("/", response_model=BillingResponse)
@@ -143,7 +157,7 @@ async def create_billing(data: BillingCreate, _=Depends(require_admin)):
         "complete_date": today_ist_str(),
         "work_type": job.get("work_type"),
         "invoice_amount": invoice_amount,
-        "service_amount": float(data.service_amount or 0.0),
+        "service_amount": max(0, invoice_amount - material_amount),
         "expense": data.expense,
         "material_amount": material_amount,
         "profit": profit,
@@ -207,6 +221,8 @@ async def job_invoice_pdf(job_id: str, current_user: dict = Depends(require_any)
     if not billing:
         raise HTTPException(status_code=404, detail="Create the billing record before generating the invoice")
 
+    billing = await reconcile_materials(db, billing)
+
     usage = await db.job_inventory_usage.find({"job_id": job_id}).to_list(500)
     line_items = []
     for item in usage:
@@ -257,7 +273,7 @@ async def job_invoice_pdf(job_id: str, current_user: dict = Depends(require_any)
     rows = [['SL.#', 'ITEM / SERVICE', 'QTY', 'UNIT PRICE', 'AMOUNT']]
     for index, item in enumerate(line_items, 1):
         amount = item['qty'] * item['price']
-        qty_text = str(int(item['qty'])) if item['qty'].is_integer() else f"{item['qty']:.2f}"
+        qty_text = str(int(item['qty'])) if float(item['qty']).is_integer() else f"{item['qty']:.2f}"
         rows.append([str(index), item['description'].upper(), qty_text, f"Rs {item['price']:,.2f}", f"Rs {amount:,.2f}"])
     total = float(billing.get("invoice_amount", 0) or 0)
     rows.append(['', '', '', 'TOTAL', f"Rs {total:,.2f}"])
@@ -302,7 +318,7 @@ async def get_billing(billing_id: str, _=Depends(require_admin_or_manager)):
     b = await db.billing.find_one({"billing_id": billing_id})
     if not b:
         raise HTTPException(status_code=404, detail="Billing record not found")
-    return _fmt(b)
+    return _fmt(await reconcile_materials(db, b))
 
 
 @router.put("/{billing_id}", response_model=BillingResponse)
@@ -311,6 +327,7 @@ async def update_billing(billing_id: str, data: BillingCreate, _=Depends(require
     profit, profit_pct = calc_profit(data.invoice_amount, data.collected_amount or 0.0, data.expense, data.material_amount)
     update_data = {
         "invoice_amount": data.invoice_amount,
+        "service_amount": max(0, data.invoice_amount - data.material_amount),
         "expense": data.expense,
         "material_amount": data.material_amount,
         "profit": profit,

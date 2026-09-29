@@ -72,8 +72,8 @@ export function createInvoicePdf(job, billing) {
     price: Number(item.unit_selling_price || 0),
   }));
   const material = products.reduce((sum, item) => sum + item.qty * item.price, 0);
-  const total = Number(billing.invoice_amount || 0);
-  const service = Number(billing.service_amount ?? Math.max(0, total - material));
+  const service = Number(billing.service_amount || Math.max(0, Number(billing.invoice_amount || 0) - Number(billing.material_amount || 0)));
+  const total = Math.round((material + service) * 100) / 100;
   if (service > 0 || products.length === 0) products.push({ description: `${job.work_type || 'Service'} service charge`, qty: 1, price: service });
 
   let first = '';
