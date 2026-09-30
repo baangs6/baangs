@@ -43,7 +43,7 @@ export default function Reports() {
         if (technicianFilter !== 'all') {
           params.technician_name = technicianFilter;
         }
-        const [techRes, techReportRes, techDeepDiveRes, billingRes, stockRes, qualityRes] = await Promise.all([
+        const results = await Promise.allSettled([
           dashboardApi.technicianPerformance(params),
           dashboardApi.technicianPerformanceReport(params),
           dashboardApi.technicianPerformanceDeepDive(params),
@@ -51,19 +51,25 @@ export default function Reports() {
           inventoryApi.stockSummary(),
           dashboardApi.serviceQualityReport(params),
         ]);
-        setTechPerf(techRes.data || []);
-        setTechReport(techReportRes.data || {
+        const [techRes, techReportRes, techDeepDiveRes, billingRes, stockRes, qualityRes] = results;
+        const data = (result, fallback) => result.status === 'fulfilled' ? (result.value.data || fallback) : fallback;
+        const failedSections = results
+          .map((result, index) => result.status === 'rejected' ? ['technician performance', 'performance summary', 'technician details', 'financial', 'inventory', 'service quality'][index] : null)
+          .filter(Boolean);
+        setTechPerf(data(techRes, []));
+        setTechReport(data(techReportRes, {
           total_service_completed: 0,
           total_installation_completed: 0,
           average_service_completion_days: 0,
           top_performer: null,
-        });
-        setTechDeepDive(techDeepDiveRes.data || []);
-        setBillingRows(billingRes.data || []);
-        setStockSummary(stockRes.data || []);
-        setQualityReport(qualityRes.data || { summary: {}, technicians: [] });
-      } catch (e) {
-        setError(e.response?.data?.detail || 'Error loading reports');
+        }));
+        setTechDeepDive(data(techDeepDiveRes, []));
+        setBillingRows(data(billingRes, []));
+        setStockSummary(data(stockRes, []));
+        setQualityReport(data(qualityRes, { summary: {}, technicians: [] }));
+        if (failedSections.length) setError(`Some report data could not be loaded: ${failedSections.join(', ')}.`);
+      } catch {
+        setError('Unable to load reports. Please refresh the page.');
       } finally {
         setLoading(false);
       }
@@ -204,7 +210,7 @@ export default function Reports() {
               {[
                 ['Average Repair / Breakdown Time', `${Number(qualityReport.summary?.average_repair_hours || 0).toFixed(1)} hrs`],
                 ['Repeat Complaint', `${Number(qualityReport.summary?.repeat_complaint_pct || 0).toFixed(1)}%`],
-                ['Customer Satisfaction Score', qualityReport.summary?.customer_satisfaction_score == null ? 'Not yet rated' : `${qualityReport.summary.customer_satisfaction_score}/5`],
+                ['Customer Satisfaction Score', qualityReport.summary?.customer_satisfaction_score == null ? 'Not yet rated' : `${qualityReport.summary.customer_satisfaction_score}/5 (${qualityReport.summary.customer_rating_count || 0} ratings)`],
                 ['Service Report Completion', `${Number(qualityReport.summary?.service_report_completion_pct || 0).toFixed(1)}%`],
                 ['Service Calls Completed', qualityReport.summary?.service_calls_completed || 0],
                 ['Attendance & Discipline', `${Number(qualityReport.summary?.attendance_discipline_pct || 0).toFixed(1)}%`],
@@ -218,13 +224,13 @@ export default function Reports() {
             </div>
             <div className="table-wrapper" style={{ border: 'none' }}>
               <table className="table">
-                <thead><tr><th>Technician</th><th>Avg Repair</th><th>Calls</th><th>Reports</th><th>Attendance</th><th>Issues</th><th>Learning</th><th>PM On Time</th></tr></thead>
+                <thead><tr><th>Technician</th><th>Customer Rating</th><th>Avg Repair</th><th>Calls</th><th>Reports</th><th>Attendance</th><th>Issues</th><th>Learning</th><th>PM On Time</th></tr></thead>
                 <tbody>
                   {qualityReport.technicians?.length ? qualityReport.technicians.map((row) => (
                     <tr key={row.staff_id}>
-                      <td>{row.staff_name || row.staff_id}</td><td>{Number(row.average_repair_hours || 0).toFixed(1)} hrs</td><td>{row.service_calls_completed || 0}</td><td>{Number(row.service_report_completion_pct || 0).toFixed(1)}%</td><td>{Number(row.attendance_discipline_pct || 0).toFixed(1)}%</td><td>{row.issues_reported || 0}</td><td>{row.self_learning_entries || 0}</td><td>{Number(row.pm_on_time_pct || 0).toFixed(1)}%</td>
+                      <td>{row.staff_name || row.staff_id}</td><td>{row.customer_satisfaction_score == null ? '-' : `${row.customer_satisfaction_score}/5 (${row.customer_rating_count})`}</td><td>{Number(row.average_repair_hours || 0).toFixed(1)} hrs</td><td>{row.service_calls_completed || 0}</td><td>{Number(row.service_report_completion_pct || 0).toFixed(1)}%</td><td>{Number(row.attendance_discipline_pct || 0).toFixed(1)}%</td><td>{row.issues_reported || 0}</td><td>{row.self_learning_entries || 0}</td><td>{Number(row.pm_on_time_pct || 0).toFixed(1)}%</td>
                     </tr>
-                  )) : <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>No technician quality data for this date range</td></tr>}
+                  )) : <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>No technician quality data for this date range</td></tr>}
                 </tbody>
               </table>
             </div>

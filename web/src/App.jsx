@@ -26,6 +26,7 @@ import Reports from './pages/Reports/Reports';
 import Tasks from './pages/Tasks/Tasks';
 import PublicComplaintPage from './pages/PublicComplaintPage';
 import PublicTrackPage from './pages/PublicTrackPage';
+import CustomerFeedback from './pages/CustomerFeedback';
 
 function AppRoutes() {
   const { user, loading, isSetup } = useAuth();
@@ -49,6 +50,7 @@ function AppRoutes() {
       <Route path="/complaint" element={<PublicComplaintPage />} />
       <Route path="/track" element={<PublicTrackPage />} />
       <Route path="/track/:job_id" element={<PublicTrackPage />} />
+      <Route path="/feedback/:jobId" element={<CustomerFeedback />} />
       {user && <Route path="/login" element={<Navigate to={user.role === 'sales' ? '/tasks' : '/dashboard'} replace />} />}
       {!user ? (
         <>

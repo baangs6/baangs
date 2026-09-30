@@ -4,7 +4,7 @@ import { jobsApi, updatesApi, billingApi, customersApi, staffApi, lookupsApi } f
 import { formatDate } from '../../utils/dateFormat';
 import { createInvoicePdf } from '../../utils/invoicePdf';
 import { calculateBillingProfit } from '../../utils/billingMath';
-import { MdArrowBack, MdEdit, MdAttachMoney, MdVerified, MdClose, MdExpandMore, MdPerson, MdLocationOn, MdEngineering, MdSchedule } from 'react-icons/md';
+import { MdArrowBack, MdEdit, MdAttachMoney, MdVerified, MdClose, MdExpandMore, MdPerson, MdLocationOn, MdEngineering, MdSchedule, MdStar } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { MdDownload } from 'react-icons/md';
 
@@ -193,6 +193,33 @@ export default function JobDetail() {
   });
   const [verifyForm, setVerifyForm] = useState(EMPTY_VERIFY_FORM);
   const [saving, setSaving] = useState(false);
+  const [sharingFeedback, setSharingFeedback] = useState(false);
+
+  const shareFeedback = async () => {
+    const shareWindow = window.open('', '_blank');
+    setSharingFeedback(true);
+    try {
+      const { data } = await jobsApi.feedbackLink(jobId);
+      const link = `https://baangs.site/feedback/${encodeURIComponent(jobId)}?token=${encodeURIComponent(data.token)}`;
+      const phone = String(job.phone_number || '').replace(/\D/g, '');
+      const recipient = phone.length === 10 ? `91${phone}` : phone;
+      const message = `Hello ${job.customer_name || ''}, thank you for choosing BAANGS. Please rate the service for job ${jobId}: ${link}`;
+      const whatsappUrl = `https://wa.me/${recipient}?text=${encodeURIComponent(message)}`;
+      if (shareWindow) {
+        shareWindow.opener = null;
+        shareWindow.location.href = whatsappUrl;
+      } else {
+        window.location.href = whatsappUrl;
+      }
+    } catch (err) {
+      shareWindow?.close();
+      alert(err.response?.status === 404
+        ? 'Customer feedback is not available on the server yet. Please try again after the backend deploys.'
+        : (err.response?.data?.detail || 'Unable to create the feedback link.'));
+    } finally {
+      setSharingFeedback(false);
+    }
+  };
 
   const load = useCallback(async () => {
     const [jobRes, updatesRes] = await Promise.all([
@@ -580,6 +607,17 @@ export default function JobDetail() {
           </div>
         </div>
       )}
+      {job.status === 'complete' && <div className="job-detail-panel" style={{ marginBottom: 16 }}>
+        <h3 className="job-detail-section-title">Customer Feedback</h3>
+        {job.customer_rating != null ? <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 18, fontWeight: 700 }}><MdStar style={{ color: '#d99b19' }} /> {job.customer_rating}/5</div>
+          {job.customer_feedback && <p style={{ marginTop: 10 }}>{job.customer_feedback}</p>}
+          {job.customer_feedback_at && <small>{formatDate(job.customer_feedback_at)}</small>}
+        </> : <>
+          <p style={{ margin: '0 0 14px' }}>Share a rating link with the customer after service or installation.</p>
+          <button type="button" className="btn btn-success" onClick={shareFeedback} disabled={sharingFeedback}><FaWhatsapp /> {sharingFeedback ? 'Preparing link...' : 'Request feedback on WhatsApp'}</button>
+        </>}
+      </div>}
       </>
       )}
 

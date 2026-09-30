@@ -113,6 +113,7 @@ export const jobsApi = {
   customerHistory: (id) => api.get(`/jobs/${id}/customer-history`),
   update: (id, data) => api.put(`/jobs/${id}`, data),
   create: (data) => api.post('/jobs/', data),
+  feedbackLink: (id) => api.post(`/jobs/${encodeURIComponent(id)}/feedback-link`),
 };
 
 export const updatesApi = {

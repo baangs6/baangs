@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
 from typing import List, Optional
+import secrets
 from ..models.job import JobAcceptRequest, JobCreate, JobRejectRequest, JobUpdate, JobResponse
 from ..auth.utils import require_admin, require_admin_or_manager, require_any, get_current_user
 from ..database import get_db
@@ -45,6 +46,9 @@ def _format_job(j: dict, staff_name: str = None) -> dict:
         "is_public_submission": j.get("is_public_submission", False),
         "request_status": j.get("request_status"),
         "rejection_remark": j.get("rejection_remark"),
+        "customer_rating": j.get("customer_rating"),
+        "customer_feedback": j.get("customer_feedback"),
+        "customer_feedback_at": j.get("customer_feedback_at"),
     }
 
 
@@ -349,6 +353,26 @@ async def get_job(job_id: str, current_user: dict = Depends(get_current_user)):
     formatted = _format_job(job)
     formatted["inventory_used"] = usage
     return formatted
+
+
+@router.post("/{job_id}/feedback-link")
+async def create_feedback_link(job_id: str, current_user: dict = Depends(get_current_user)):
+    db = get_db()
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if current_user["role"] == "sales":
+        raise HTTPException(status_code=403, detail="Sales users can access Tasks only")
+    if current_user["role"] == "technician" and job.get("assigned_staff_id") != current_user.get("staff_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if job.get("status") != "complete":
+        raise HTTPException(status_code=400, detail="Feedback can be requested after the job is complete")
+
+    token = job.get("customer_feedback_token")
+    if not token:
+        token = secrets.token_urlsafe(24)
+        await db.jobs.update_one({"job_id": job_id}, {"$set": {"customer_feedback_token": token}})
+    return {"job_id": job_id, "token": token, "rating": job.get("customer_rating")}
 
 
 @router.put("/{job_id}", response_model=JobResponse)

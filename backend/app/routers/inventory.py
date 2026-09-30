@@ -348,23 +348,22 @@ async def adjust_stock(barcode: str, data: Dict[str, Any], current_user: dict = 
 async def get_stock_summary(current_user: dict = Depends(require_admin_or_manager)):
     db = get_db()
     items = await db.inventory.find({"status": "active"}).to_list(1000)
-    
+    # Calculate transaction totals once. The previous per-item aggregation caused
+    # report loading to become progressively slower as inventory grew.
+    transaction_totals = await db.inventory_transactions.aggregate([
+        {"$match": {"transaction_type": {"$ne": TransactionType.OPENING_STOCK}}},
+        {"$group": {"_id": "$barcode", "total_change": {"$sum": "$quantity_changed"}}},
+    ]).to_list(2000)
+    transactions_by_barcode = {
+        row.get("_id"): row.get("total_change", 0)
+        for row in transaction_totals if row.get("_id")
+    }
+
     # Group by model_number as the unique identifier
     model_map = {}
     for item in items:
         model_num = item.get("model_number") or item.get("barcode", "UNKNOWN")
-        
-        # Sum all non-opening transactions for this barcode
-        txns_pipeline = [
-            {"$match": {
-                "barcode": item["barcode"],
-                "transaction_type": {"$ne": TransactionType.OPENING_STOCK}
-            }},
-            {"$group": {"_id": None, "total_change": {"$sum": "$quantity_changed"}}}
-        ]
-        txn_sum_cursor = db.inventory_transactions.aggregate(txns_pipeline)
-        txn_sum_list = await txn_sum_cursor.to_list(1)
-        total_txns = txn_sum_list[0]["total_change"] if txn_sum_list else 0
+        total_txns = transactions_by_barcode.get(item.get("barcode"), 0)
         
         if model_num not in model_map:
             model_map[model_num] = {

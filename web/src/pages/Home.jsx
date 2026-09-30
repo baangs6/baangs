@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MdArrowForward, MdCall, MdMenu, MdClose, MdVideocam, MdBuild, MdHome, MdCheckCircle, MdEast } from 'react-icons/md';
+import { MdArrowForward, MdCall, MdMenu, MdClose, MdVideocam, MdBuild, MdHome, MdCheckCircle, MdEast, MdFence, MdLocalParking, MdBatteryChargingFull } from 'react-icons/md';
 import './Home.css';
 
 const whatsapp = 'https://wa.me/918330033280?text=Hello%20BAANGS%2C%20I%20would%20like%20a%20quote%20for%20CCTV%20sales%20and%20installation.';
+const serviceEnquiry = (service) => `https://wa.me/918330033280?text=${encodeURIComponent(`Hello BAANGS, I would like to enquire about ${service}.`)}`;
 const services = [
   { icon: MdVideocam, title: 'CCTV sales & installation', text: 'Find the right cameras, recording system and coverage for your home, shop or workplace.', image: 'photo-1556782274-d247b2a5ea85', label: 'Explore your options', href: whatsapp },
   { icon: MdBuild, title: 'Repairs & maintenance', text: 'Camera offline? Recording issues? Request a service visit for your existing CCTV system.', image: 'photo-1534157327728-accacabda257', label: 'Request a service', to: '/complaint' },
   { icon: MdHome, title: 'Home automation', text: 'Talk to us about connected solutions that make your everyday spaces easier to manage.', image: 'photo-1486406146926-c627a92ad1ab', label: 'Talk to our team', href: whatsapp },
+  { icon: MdFence, title: 'Automated Gate', text: 'Convenient entry for homes and businesses. Talk to us about gate automation, installation and servicing.', label: 'Enquire about automated gates', href: serviceEnquiry('automated gates'), visual: 'gate' },
+  { icon: MdLocalParking, title: 'Boom Barrier', text: 'Manage vehicle access at parking areas and property entrances with boom barrier installation and service.', label: 'Enquire about boom barriers', href: serviceEnquiry('boom barriers'), visual: 'barrier' },
+  { icon: MdBatteryChargingFull, title: 'UPS', text: 'Power backup for your essential equipment. Discuss UPS sales, installation and service with our team.', label: 'Enquire about UPS', href: serviceEnquiry('UPS power backup'), visual: 'ups' },
 ];
 
 export default function Home() {
@@ -37,7 +41,7 @@ export default function Home() {
       <section id="services" className="site-section">
         <div className="site-section-heading"><div><p className="site-kicker">WHAT WE DO</p><h2>Security starts with<br />the right solution.</h2></div><p>Setting up a new space or looking after an existing system? Let’s find what works for you.</p></div>
         <div className="site-service-grid">{services.map(({ icon: Icon, ...service }) => <article className="site-service" key={service.title}>
-          <img src={`https://images.unsplash.com/${service.image}?auto=format&fit=crop&w=800&q=80`} alt={service.title === 'Home automation' ? 'Modern building exterior' : 'Installed security camera'} loading="lazy" />
+          {service.image ? <img src={`https://images.unsplash.com/${service.image}?auto=format&fit=crop&w=800&q=80`} alt={service.title === 'Home automation' ? 'Modern building exterior' : 'Installed security camera'} loading="lazy" /> : <div className={`site-service-symbol ${service.visual}`} aria-hidden="true"><Icon /></div>}
           <div className="site-service-title"><Icon /><h3>{service.title}</h3></div><p>{service.text}</p>
           {service.to ? <Link to={service.to}>{service.label} <MdEast /></Link> : <a href={service.href} target="_blank" rel="noreferrer">{service.label} <MdEast /></a>}
         </article>)}</div>

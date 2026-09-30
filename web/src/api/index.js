@@ -84,6 +84,7 @@ export const jobsApi = {
   acceptRequest: (id, data) => api.patch(`/jobs/${id}/accept`, data),
   rejectRequest: (id, data) => api.patch(`/jobs/${id}/reject`, data),
   delete: (id) => api.delete(`/jobs/${id}`),
+  feedbackLink: (id) => api.post(`/jobs/${id}/feedback-link`),
   uploadPhoto: (id, file) => {
     const form = new FormData();
     form.append('file', file);
@@ -204,7 +205,9 @@ export const publicApi = {
     form.append('file', file);
     return api.post('/public/complaints/photo', form, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
-  track: (jobId) => api.get(`/public/track/${jobId}`),
+  track: (jobId) => api.get(`/public/track/${encodeURIComponent(jobId)}`),
+  feedback: (jobId, token) => api.get(`/public/feedback/${encodeURIComponent(jobId)}`, { params: { token } }),
+  submitFeedback: (jobId, data) => api.post(`/public/feedback/${encodeURIComponent(jobId)}`, data),
 };
 
 export default api;

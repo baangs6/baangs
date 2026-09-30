@@ -607,6 +607,7 @@ async def service_quality_report(
                 "attendance_days": 0, "checked_out_days": 0,
                 "issues_reported": 0, "self_learning_entries": 0,
                 "pm_scheduled": 0, "pm_completed_on_time": 0,
+                "customer_ratings": [],
             }
 
     jobs = await db.jobs.find({}).to_list(10000)
@@ -631,6 +632,8 @@ async def service_quality_report(
                     duration = (closed - opened).days * 1440
             if duration >= 0:
                 row["repair_minutes"].append(duration)
+            if job.get("customer_rating") is not None:
+                row["customer_ratings"].append(float(job["customer_rating"]))
 
         work_type = (job.get("work_type") or "").strip().lower()
         is_pm = "preventive" in work_type or work_type == "pm" or "maintenance" in work_type
@@ -675,11 +678,14 @@ async def service_quality_report(
         completed_count = len(row.pop("completed_job_ids"))
         reported_count = len(row.pop("reported_job_ids"))
         repair_minutes = row.pop("repair_minutes")
+        customer_ratings = row.pop("customer_ratings")
+        row["customer_rating_total"] = sum(customer_ratings)
         row["average_repair_hours"] = round(sum(repair_minutes) / len(repair_minutes) / 60, 2) if repair_minutes else 0
         row["service_report_completion_pct"] = round(min(reported_count, completed_count) / completed_count * 100, 1) if completed_count else 0
         row["attendance_discipline_pct"] = round(row["checked_out_days"] / row["attendance_days"] * 100, 1) if row["attendance_days"] else 0
         row["pm_on_time_pct"] = round(row["pm_completed_on_time"] / row["pm_scheduled"] * 100, 1) if row["pm_scheduled"] else 0
-        row["customer_satisfaction_score"] = None
+        row["customer_satisfaction_score"] = round(sum(customer_ratings) / len(customer_ratings), 2) if customer_ratings else None
+        row["customer_rating_count"] = len(customer_ratings)
         row["communication_score"] = None
         result.append(row)
 
@@ -690,11 +696,14 @@ async def service_quality_report(
     total_pm = sum(row["pm_scheduled"] for row in result)
     total_pm_on_time = sum(row["pm_completed_on_time"] for row in result)
     all_repairs = [row["average_repair_hours"] for row in result if row["average_repair_hours"] > 0]
+    rating_total = sum(row.pop("customer_rating_total") for row in result)
+    rating_count = sum(row["customer_rating_count"] for row in result)
     return {
         "summary": {
             "average_repair_hours": round(sum(all_repairs) / len(all_repairs), 2) if all_repairs else 0,
             "repeat_complaint_pct": repeat_pct,
-            "customer_satisfaction_score": None,
+            "customer_satisfaction_score": round(rating_total / rating_count, 2) if rating_count else None,
+            "customer_rating_count": rating_count,
             "service_report_completion_pct": round(total_reports / total_completed * 100, 1) if total_completed else 0,
             "service_calls_completed": total_completed,
             "attendance_discipline_pct": round(total_checkouts / total_attendance * 100, 1) if total_attendance else 0,

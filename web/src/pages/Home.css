@@ -33,6 +33,10 @@
 .site-section-heading>p { max-width:340px; }
 .site-service-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:30px; }
 .site-service img { width:100%; aspect-ratio:1.5; object-fit:cover; border-radius:4px; background:#e4eeea; }
+.site-service-symbol { width:100%; aspect-ratio:1.5; border-radius:4px; display:grid; place-items:center; background:#e4eeea; color:#006a57; }
+.site-service-symbol svg { width:96px; height:96px; }
+.site-service-symbol.barrier { background:#e2edf5; color:#296087; }
+.site-service-symbol.ups { background:#f1eddf; color:#736127; }
 .site-service-title { display:flex; gap:12px; align-items:center; margin-top:22px; }
 .site-service-title svg { font-size:24px; flex-shrink:0; color:#007c68; }
 .site-service h3 { font-size:21px; font-weight:500; margin:0; }

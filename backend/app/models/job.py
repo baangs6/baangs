@@ -98,3 +98,6 @@ class JobResponse(BaseModel):
     request_status: Optional[str] = None
     rejection_remark: Optional[str] = None
     inventory_used: Optional[List[dict]] = Field(default_factory=list)
+    customer_rating: Optional[int] = None
+    customer_feedback: Optional[str] = None
+    customer_feedback_at: Optional[str] = None

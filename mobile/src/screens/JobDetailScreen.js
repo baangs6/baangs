@@ -497,6 +497,19 @@ export default function JobDetailScreen({ route }) {
   const canStartWork = canWorkActions && !hasStarted;
   const canUpdateStatus = canWorkActions && job.status === 'in_progress';
 
+  const requestCustomerFeedback = async () => {
+    try {
+      const { data } = await jobsApi.feedbackLink(jobId);
+      const url = `https://baangs.site/feedback/${encodeURIComponent(jobId)}?token=${encodeURIComponent(data.token)}`;
+      const digits = String(job.phone_number || '').replace(/\D/g, '');
+      const recipient = digits.length === 10 ? `91${digits}` : digits;
+      const message = `Hello ${job.customer_name || ''}, thank you for choosing BAANGS. Please rate the service for job ${jobId}: ${url}`;
+      await Linking.openURL(`https://wa.me/${recipient}?text=${encodeURIComponent(message)}`);
+    } catch (error) {
+      Alert.alert('Feedback link unavailable', error.response?.data?.detail || 'Please try again.');
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.jobHeader}>
@@ -597,6 +610,16 @@ export default function JobDetailScreen({ route }) {
           )}
         </View>
       )}
+
+      {job.status === 'complete' && <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Customer Feedback</Text>
+        {job.customer_rating != null ? <>
+          <InfoRow styles={styles} label="Rating" value={`${job.customer_rating} / 5 stars`} />
+          {job.customer_feedback ? <Text style={styles.complaint}>{job.customer_feedback}</Text> : null}
+        </> : <TouchableOpacity style={styles.updateBtn} onPress={requestCustomerFeedback}>
+          <Text style={styles.updateBtnText}>Request rating on WhatsApp</Text>
+        </TouchableOpacity>}
+      </View>}
 
       <View style={styles.card}>
         <TouchableOpacity style={styles.historyHeader} onPress={() => setShowCustomerHistory((visible) => !visible)}>

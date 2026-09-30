@@ -27,6 +27,12 @@ class CustomerLookupRequest(BaseModel):
     phone_number: str
 
 
+class CustomerFeedbackCreate(BaseModel):
+    token: str = Field(..., min_length=16)
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = Field(None, max_length=1000)
+
+
 @router.post("/lookup-customer")
 async def lookup_customer(data: CustomerLookupRequest):
     phone = (data.phone_number or "").strip()
@@ -207,3 +213,43 @@ async def track_public_job(job_id: str):
         "updated_at": job.get("updated_at"),
         "completed_at": job.get("completed_at"),
     }
+
+
+@router.get("/feedback/{job_id}")
+async def get_customer_feedback_form(job_id: str, token: str = Query(..., min_length=16)):
+    db = get_db()
+    job = await db.jobs.find_one({"job_id": job_id, "customer_feedback_token": token})
+    if not job:
+        raise HTTPException(status_code=404, detail="This feedback link is invalid or has expired")
+    if job.get("status") != "complete":
+        raise HTTPException(status_code=400, detail="Feedback is available once the service is complete")
+    return {
+        "job_id": job["job_id"],
+        "customer_name": job.get("customer_name"),
+        "work_type": job.get("work_type"),
+        "technician_name": job.get("assigned_staff_name"),
+        "rating": job.get("customer_rating"),
+        "comment": job.get("customer_feedback"),
+    }
+
+
+@router.post("/feedback/{job_id}")
+async def submit_customer_feedback(job_id: str, data: CustomerFeedbackCreate):
+    db = get_db()
+    job = await db.jobs.find_one({"job_id": job_id, "customer_feedback_token": data.token})
+    if not job:
+        raise HTTPException(status_code=404, detail="This feedback link is invalid or has expired")
+    if job.get("status") != "complete":
+        raise HTTPException(status_code=400, detail="Feedback is available once the service is complete")
+    if job.get("customer_rating") is not None:
+        raise HTTPException(status_code=409, detail="Feedback has already been submitted for this job")
+
+    result = await db.jobs.update_one({"job_id": job_id, "customer_feedback_token": data.token,
+                                       "customer_rating": None, "status": "complete"}, {"$set": {
+        "customer_rating": data.rating,
+        "customer_feedback": (data.comment or "").strip() or None,
+        "customer_feedback_at": now_ist_str(),
+    }})
+    if not result.modified_count:
+        raise HTTPException(status_code=409, detail="Feedback has already been submitted for this job")
+    return {"success": True, "message": "Thank you for your feedback."}
