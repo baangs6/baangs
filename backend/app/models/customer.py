@@ -4,6 +4,7 @@ from typing import Optional
 
 class CustomerCreate(BaseModel):
     customer_name: str = Field(..., min_length=2)
+    nickname: Optional[str] = Field(None, max_length=80)
     phone_number: str
     alternative_phone_number: Optional[str] = None
     location: Optional[str] = None
@@ -14,6 +15,7 @@ class CustomerCreate(BaseModel):
 
 class CustomerUpdate(BaseModel):
     customer_name: Optional[str] = None
+    nickname: Optional[str] = Field(None, max_length=80)
     phone_number: Optional[str] = None
     alternative_phone_number: Optional[str] = None
     location: Optional[str] = None
@@ -25,6 +27,7 @@ class CustomerUpdate(BaseModel):
 class CustomerResponse(BaseModel):
     customer_id: str
     customer_name: str
+    nickname: Optional[str] = None
     phone_number: str
     alternative_phone_number: Optional[str] = None
     location: Optional[str] = None

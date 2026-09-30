@@ -493,6 +493,7 @@ export default function JobDetail() {
               <h2>{job.job_id}</h2>
             </div>
             <p className="job-detail-customer">{job.customer_name}</p>
+            {job.customer_nickname && <p style={{ margin: '0 0 6px', color: 'var(--color-text-secondary)', fontSize: 14 }}>Nickname: {job.customer_nickname}</p>}
             <p className="job-detail-summary">{job.work_type}</p>
             <p className="job-detail-description"><strong>Description :</strong> {job.complaint || '-'}</p>
           </div>

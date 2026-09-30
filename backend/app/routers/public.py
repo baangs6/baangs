@@ -86,6 +86,7 @@ async def register_public_complaint(data: PublicComplaintCreate):
 
     if customer:
         customer_id = customer["customer_id"]
+        customer_nickname = customer.get("nickname") or None
         customer_updates = {"latest_request_date": today_ist_str()}
         if data.location:
             customer_updates["location"] = data.location
@@ -99,6 +100,7 @@ async def register_public_complaint(data: PublicComplaintCreate):
         )
     else:
         customer_id = generate_customer_id()
+        customer_nickname = None
         customer_doc = {
             "customer_id": customer_id,
             "customer_name": name,
@@ -121,6 +123,7 @@ async def register_public_complaint(data: PublicComplaintCreate):
         "job_id": job_id,
         "customer_id": customer_id,
         "customer_name": name,
+        "customer_nickname": customer_nickname,
         "phone_number": phone,
         "location": data.location,
         "map_location": data.map_location,

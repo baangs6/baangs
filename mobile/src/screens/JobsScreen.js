@@ -330,6 +330,7 @@ export default function JobsScreen({ navigation, route }) {
               </View>
             </View>
             <Text style={styles.customerName}>{job.customer_name}</Text>
+            {!!job.customer_nickname && <Text style={styles.detail}>Nickname: {job.customer_nickname}</Text>}
             <Text style={styles.detail}>{job.phone_number} · {job.location || 'No location'}</Text>
             <View style={styles.quickActions}>
               <TouchableOpacity

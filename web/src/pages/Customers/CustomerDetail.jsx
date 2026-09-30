@@ -46,7 +46,7 @@ export default function CustomerDetail() {
       <div className="page-header">
         <div className="page-header-left">
           <h2>{customer.customer_name}</h2>
-          <p>{customer.customer_id} · {customer.phone_number}</p>
+          <p>{customer.nickname ? `${customer.nickname} · ` : ''}{customer.customer_id} · {customer.phone_number}</p>
         </div>
       </div>
 

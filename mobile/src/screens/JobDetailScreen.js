@@ -524,6 +524,7 @@ export default function JobDetailScreen({ route }) {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Customer</Text>
         <InfoRow styles={styles} label="Name" value={job.customer_name} />
+        {!!job.customer_nickname && <InfoRow styles={styles} label="Nickname" value={job.customer_nickname} />}
         <InfoRow styles={styles} label="Phone" value={job.phone_number} />
         <InfoRow styles={styles} label="Location" value={job.location || '-'} />
         <InfoRow styles={styles} label="Map" value={job.map_location || '-'} />

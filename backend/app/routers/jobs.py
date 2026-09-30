@@ -17,6 +17,7 @@ def _format_job(j: dict, staff_name: str = None) -> dict:
         "job_id": j["job_id"],
         "customer_id": j.get("customer_id", ""),
         "customer_name": j.get("customer_name", ""),
+        "customer_nickname": j.get("customer_nickname") or None,
         "phone_number": j.get("phone_number", ""),
         "location": j.get("location"),
         "map_location": j.get("map_location"),
@@ -141,6 +142,7 @@ async def list_jobs(
     if search:
         search_or = [
             {"customer_name": {"$regex": search, "$options": "i"}},
+            {"customer_nickname": {"$regex": search, "$options": "i"}},
             {"phone_number": {"$regex": search, "$options": "i"}},
             {"job_id": {"$regex": search, "$options": "i"}},
             {"location": {"$regex": search, "$options": "i"}},
@@ -164,10 +166,13 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
 
     if customer:
         customer_id = customer["customer_id"]
+        nickname = data.customer_nickname.strip() if data.customer_nickname is not None else (customer.get("nickname") or "")
         location = data.location or customer.get("location")
         map_location = data.map_location or customer.get("map_location")
         site_type = data.site_type or customer.get("site_type")
         customer_updates = {"latest_request_date": today_ist_str()}
+        if data.customer_nickname is not None:
+            customer_updates["nickname"] = nickname
         if data.location is not None:
             customer_updates["location"] = data.location
         if data.map_location is not None:
@@ -179,14 +184,18 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
             {"customer_key": customer_key},
             {"$set": customer_updates, "$inc": {"total_jobs": 1}}
         )
+        if data.customer_nickname is not None:
+            await db.jobs.update_many({"customer_id": customer_id}, {"$set": {"customer_nickname": nickname}})
     else:
         customer_id = generate_customer_id()
+        nickname = (data.customer_nickname or "").strip()
         location = data.location
         map_location = data.map_location
         site_type = data.site_type
         customer_doc = {
             "customer_id": customer_id,
             "customer_name": data.customer_name,
+            "nickname": nickname,
             "phone_number": data.phone_number,
             "location": location,
             "map_location": map_location,
@@ -221,6 +230,7 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
         "job_id": job_id,
         "customer_id": customer_id,
         "customer_name": data.customer_name,
+        "customer_nickname": nickname,
         "phone_number": data.phone_number,
         "location": location,
         "map_location": map_location,

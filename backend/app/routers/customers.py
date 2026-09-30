@@ -13,6 +13,7 @@ def _format_customer(c: dict) -> dict:
     return {
         "customer_id": c["customer_id"],
         "customer_name": c["customer_name"],
+        "nickname": c.get("nickname") or None,
         "phone_number": c["phone_number"],
         "alternative_phone_number": c.get("alternative_phone_number"),
         "location": c.get("location"),
@@ -38,6 +39,7 @@ async def list_customers(
     if search:
         query = {"$or": [
             {"customer_name": {"$regex": search, "$options": "i"}},
+            {"nickname": {"$regex": search, "$options": "i"}},
             {"phone_number": {"$regex": search, "$options": "i"}},
             {"location": {"$regex": search, "$options": "i"}},
         ]}
@@ -52,11 +54,17 @@ async def create_or_get_customer(data: CustomerCreate, _=Depends(require_admin))
 
     existing = await db.customers.find_one({"customer_key": customer_key})
     if existing:
+        if data.nickname is not None and data.nickname.strip() != (existing.get("nickname") or ""):
+            nickname = data.nickname.strip()
+            await db.customers.update_one({"customer_id": existing["customer_id"]}, {"$set": {"nickname": nickname}})
+            await db.jobs.update_many({"customer_id": existing["customer_id"]}, {"$set": {"customer_nickname": nickname}})
+            existing["nickname"] = nickname
         return _format_customer(existing)
 
     customer_doc = {
         "customer_id": generate_customer_id(),
         "customer_name": data.customer_name,
+        "nickname": (data.nickname or "").strip(),
         "phone_number": data.phone_number,
         "alternative_phone_number": data.alternative_phone_number,
         "location": data.location,
@@ -94,6 +102,8 @@ async def get_customer_jobs(customer_id: str, _=Depends(require_admin_or_manager
 async def update_customer(customer_id: str, data: CustomerUpdate, _=Depends(require_admin)):
     db = get_db()
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    if "nickname" in update_data:
+        update_data["nickname"] = update_data["nickname"].strip()
     if "phone_number" in update_data:
         # Recalculate customer_key
         customer = await db.customers.find_one({"customer_id": customer_id})
@@ -109,6 +119,8 @@ async def update_customer(customer_id: str, data: CustomerUpdate, _=Depends(requ
     )
     if not result:
         raise HTTPException(status_code=404, detail="Customer not found")
+    if "nickname" in update_data:
+        await db.jobs.update_many({"customer_id": customer_id}, {"$set": {"customer_nickname": update_data["nickname"]}})
     return _format_customer(result)
 
 

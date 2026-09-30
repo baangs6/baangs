@@ -14,6 +14,7 @@ export default function CustomerList() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     customer_name: '',
+    nickname: '',
     phone_number: '',
     alternative_phone_number: '',
     location: '',
@@ -52,6 +53,7 @@ export default function CustomerList() {
       setShowModal(false);
       setFormData({
         customer_name: '',
+        nickname: '',
         phone_number: '',
         alternative_phone_number: '',
         location: '',
@@ -88,6 +90,7 @@ export default function CustomerList() {
     try {
       await customersApi.update(showEditModal.customer_id, {
         customer_name: showEditModal.customer_name,
+        nickname: showEditModal.nickname || '',
         phone_number: showEditModal.phone_number,
         alternative_phone_number: showEditModal.alternative_phone_number || '',
         location: showEditModal.location || '',
@@ -120,7 +123,7 @@ export default function CustomerList() {
           <MdSearch className="search-icon" />
           <input
             className="form-input search-input"
-            placeholder="Search by name, phone, location..."
+            placeholder="Search by name, nickname, phone, location..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -146,6 +149,7 @@ export default function CustomerList() {
               <tr>
                 <th>Customer ID</th>
                 <th>Name</th>
+                <th>Nickname</th>
                 <th>Phone</th>
                 <th>Alt Phone</th>
                 <th>Location</th>
@@ -165,6 +169,7 @@ export default function CustomerList() {
                     </span>
                   </td>
                   <td style={{ fontWeight: 600 }}>{c.customer_name}</td>
+                  <td>{c.nickname || '-'}</td>
                   <td style={{ color: 'var(--color-text-secondary)' }}>{c.phone_number}</td>
                   <td style={{ color: 'var(--color-text-secondary)' }}>{c.alternative_phone_number || '-'}</td>
                   <td style={{ color: 'var(--color-text-secondary)', fontSize: '0.85rem' }}>{c.location || '-'}</td>
@@ -186,6 +191,7 @@ export default function CustomerList() {
                           setShowEditModal({
                             customer_id: c.customer_id,
                             customer_name: c.customer_name || '',
+                            nickname: c.nickname || '',
                             phone_number: c.phone_number || '',
                             alternative_phone_number: c.alternative_phone_number || '',
                             location: c.location || '',
@@ -235,6 +241,11 @@ export default function CustomerList() {
                   value={formData.customer_name}
                   onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
                 />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nickname (internal)</label>
+                <input className="form-input" maxLength={80} value={formData.nickname}
+                  onChange={(e) => setFormData({ ...formData, nickname: e.target.value })} />
               </div>
               <div className="form-group">
                 <label className="form-label">Phone Number*</label>
@@ -314,6 +325,11 @@ export default function CustomerList() {
                   value={showEditModal.customer_name}
                   onChange={(e) => setShowEditModal({ ...showEditModal, customer_name: e.target.value })}
                 />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nickname (internal)</label>
+                <input className="form-input" maxLength={80} value={showEditModal.nickname || ''}
+                  onChange={(e) => setShowEditModal({ ...showEditModal, nickname: e.target.value })} />
               </div>
               <div className="form-group">
                 <label className="form-label">Phone Number*</label>

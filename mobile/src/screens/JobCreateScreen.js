@@ -5,6 +5,7 @@ import { radius, spacing, useTheme } from '../theme';
 
 const initialForm = {
   customer_name: '',
+  customer_nickname: '',
   phone_number: '',
   location: '',
   map_location: '',
@@ -38,13 +39,14 @@ export default function JobCreateScreen({ navigation }) {
   const customerMatches = React.useMemo(() => {
     const q = `${form.customer_name} ${form.phone_number}`.trim().toLowerCase();
     if (q.length < 2) return [];
-    return customers.filter((c) => `${c.customer_name || c.name || ''} ${c.phone_number || c.phone || ''}`.toLowerCase().includes(q)).slice(0, 6);
+    return customers.filter((c) => `${c.customer_name || c.name || ''} ${c.nickname || ''} ${c.phone_number || c.phone || ''}`.toLowerCase().includes(q)).slice(0, 6);
   }, [customers, form.customer_name, form.phone_number]);
 
   const selectCustomer = (c) => {
     setForm((prev) => ({
       ...prev,
       customer_name: c.customer_name || c.name || prev.customer_name,
+      customer_nickname: c.nickname || '',
       phone_number: c.phone_number || c.phone || prev.phone_number,
       location: c.location || c.address || prev.location,
       map_location: c.map_location || prev.map_location,
@@ -62,6 +64,7 @@ export default function JobCreateScreen({ navigation }) {
       const payload = {
         ...form,
         customer_name: form.customer_name.trim(),
+        customer_nickname: form.customer_nickname.trim(),
         phone_number: form.phone_number.trim(),
         location: form.location.trim(),
         complaint: form.complaint.trim(),
@@ -82,6 +85,7 @@ export default function JobCreateScreen({ navigation }) {
       <Text style={styles.sub}>Add the same job details from the web panel inside the app.</Text>
 
       <Field label="Customer Name" value={form.customer_name} onChangeText={(v) => update('customer_name', v)} colors={colors} />
+      <Field label="Nickname (internal)" value={form.customer_nickname} onChangeText={(v) => update('customer_nickname', v)} colors={colors} />
       <Field label="Phone Number" value={form.phone_number} onChangeText={(v) => update('phone_number', v)} keyboardType="phone-pad" colors={colors} />
       {customerMatches.length > 0 && (
         <View style={styles.suggestionBox}>
@@ -89,6 +93,7 @@ export default function JobCreateScreen({ navigation }) {
           {customerMatches.map((c) => (
             <TouchableOpacity key={c.customer_id || c.phone_number} style={styles.suggestionItem} onPress={() => selectCustomer(c)}>
               <Text style={styles.suggestionName}>{c.customer_name || c.name}</Text>
+              {!!c.nickname && <Text style={styles.suggestionMeta}>Nickname: {c.nickname}</Text>}
               <Text style={styles.suggestionMeta}>{c.phone_number || c.phone} | {c.location || '-'}</Text>
             </TouchableOpacity>
           ))}

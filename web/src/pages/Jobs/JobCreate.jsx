@@ -149,7 +149,7 @@ export default function JobCreate() {
   const [error, setError] = useState('');
   const [photo, setPhoto] = useState(null);
   const [form, setForm] = useState({
-    customer_name: '', phone_number: '', location: '', map_location: '', site_type: '',
+    customer_name: '', customer_nickname: '', phone_number: '', location: '', map_location: '', site_type: '',
     work_type: '', complaint: '', priority: 'medium',
     scheduled_date: '', preferred_time: '', assigned_staff_id: '',
     additional_staff_ids: [],
@@ -166,11 +166,12 @@ export default function JobCreate() {
 
   const handleCustomerChange = (val) => {
     set('customer_name', val);
-    const existing = customers.find(c => c.customer_name.toLowerCase() === val.toLowerCase());
+    const existing = customers.find(c => c.customer_name.toLowerCase() === val.toLowerCase() || c.nickname?.toLowerCase() === val.toLowerCase());
     if (existing) {
       setForm(f => ({
         ...f,
         customer_name: existing.customer_name,
+        customer_nickname: existing.nickname || '',
         phone_number: existing.phone_number || f.phone_number,
         location: existing.location || f.location,
         map_location: existing.map_location || f.map_location,
@@ -186,6 +187,7 @@ export default function JobCreate() {
       setForm(f => ({
         ...f,
         customer_name: existing.customer_name || f.customer_name,
+        customer_nickname: existing.nickname || '',
         phone_number: existing.phone_number,
         location: existing.location || f.location,
         map_location: existing.map_location || f.map_location,
@@ -231,7 +233,7 @@ export default function JobCreate() {
           <div className="job-ticket-section-title">Customer Details</div>
           <div className="job-ticket-grid">
             <datalist id="customer-names">
-              {customers.map(c => <option key={c.customer_id} value={c.customer_name} />)}
+              {customers.map(c => <option key={c.customer_id} value={c.customer_name} label={c.nickname || c.customer_name} />)}
             </datalist>
             <datalist id="customer-phones">
               {customers.map(c => <option key={c.customer_id} value={c.phone_number} />)}
@@ -239,6 +241,10 @@ export default function JobCreate() {
             <div className="form-group form-full">
               <label className="form-label">Customer Name *</label>
               <input className="form-input" list="customer-names" value={form.customer_name} onChange={e => handleCustomerChange(e.target.value)} required placeholder="Full name" />
+            </div>
+            <div className="form-group form-full">
+              <label className="form-label">Nickname (internal)</label>
+              <input className="form-input" maxLength={80} value={form.customer_nickname} onChange={e => set('customer_nickname', e.target.value)} placeholder="Optional name used by staff" />
             </div>
             <div className="form-group">
               <label className="form-label">Phone Number *</label>

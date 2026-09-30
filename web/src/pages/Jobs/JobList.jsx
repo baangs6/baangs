@@ -319,6 +319,7 @@ export default function JobList() {
                   </td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{job.customer_name}</div>
+                    {job.customer_nickname && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Nickname: {job.customer_nickname}</div>}
                     <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{job.phone_number}</div>
                   </td>
                   <td style={{ color: 'var(--color-text-secondary)', fontSize: '0.85rem' }}>{job.location || '—'}</td>

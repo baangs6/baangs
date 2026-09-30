@@ -20,6 +20,7 @@ class JobPriority(str, Enum):
 class JobCreate(BaseModel):
     # Customer fields (auto-dedup by phone number)
     customer_name: str
+    customer_nickname: Optional[str] = Field(None, max_length=80)
     phone_number: str
     location: Optional[str] = None
     map_location: Optional[str] = None
@@ -68,6 +69,7 @@ class JobResponse(BaseModel):
     job_id: str
     customer_id: str
     customer_name: str
+    customer_nickname: Optional[str] = None
     phone_number: str
     location: Optional[str] = None
     map_location: Optional[str] = None
