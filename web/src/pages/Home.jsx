@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MdArrowForward, MdCall, MdMenu, MdClose, MdVideocam, MdBuild, MdHome, MdCheckCircle, MdEast, MdFence, MdLocalParking, MdBatteryChargingFull } from 'react-icons/md';
 import './Home.css';
+import GoogleTestimonials, { ReviewStars } from '../components/GoogleTestimonials';
+import { googleRating, googleReviews } from '../data/googleReviews';
 
 const whatsapp = 'https://wa.me/918330033280?text=Hello%20BAANGS%2C%20I%20would%20like%20a%20quote%20for%20CCTV%20sales%20and%20installation.';
 const serviceEnquiry = (service) => `https://wa.me/918330033280?text=${encodeURIComponent(`Hello BAANGS, I would like to enquire about ${service}.`)}`;
@@ -22,7 +24,7 @@ export default function Home() {
       <Link to="/" className="site-brand" aria-label="BAANGS home">BAANGS<span>CCTV & HOME AUTOMATION</span></Link>
       <button className="site-menu" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} aria-controls="site-navigation" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <MdClose /> : <MdMenu />}</button>
       <nav id="site-navigation" className={menuOpen ? 'is-open' : ''} aria-label="Main navigation" onClick={() => setMenuOpen(false)}>
-        <a href="#services">Our services</a><a href="#approach">How we work</a><a href="#contact">Contact</a>
+        <a href="#services">Our services</a><a href="#approach">How we work</a><a href="#testimonials">Testimonials</a><a href="#contact">Contact</a>
         <Link to="/login">Employee login</Link><Link className="site-button small" to="/complaint">Customer support <MdArrowForward /></Link>
       </nav>
     </header>
@@ -35,6 +37,7 @@ export default function Home() {
           <p>From a new installation to the cameras you already rely on. BAANGS helps you take care of what matters.</p>
           <div className="site-actions"><a className="site-button" href={whatsapp} target="_blank" rel="noreferrer">Get a quote <MdArrowForward /></a><a className="site-call" href="tel:+918330033280"><MdCall /> Call our team</a></div>
           <div className="site-hero-note"><MdCheckCircle /> Homes <span>/</span> Shops <span>/</span> Workplaces</div>
+          <a className="site-hero-rating" href="#testimonials"><ReviewStars rating={googleRating} /><strong>{googleRating}/5</strong><span>{googleReviews.length} Google reviews</span></a>
         </div>
       </section>
       <div className="site-service-strip"><span>BAANGS TECHNOMAC LLP</span><span>Installation</span><span>Service & repair</span><span>Maintenance</span></div>
@@ -50,6 +53,7 @@ export default function Home() {
         <div><p className="site-kicker">FROM FIRST CALL TO FOLLOW-UP</p><h2>A clear way forward.</h2><p>One team to discuss your requirements, plan your installation and help with service requests.</p><a href={whatsapp} target="_blank" rel="noreferrer" className="site-text-link">Let’s talk about your space <MdArrowForward /></a></div>
         <ol>{[['Tell us what you need', 'Share your location and what you want to secure or fix.'], ['Plan the right solution', 'Discuss camera coverage, equipment and installation requirements with our team.'], ['Stay connected', 'Register a service request online and track its progress whenever you need support.']].map(([title, text], index) => <li key={title}><span>0{index + 1}</span><div><h3>{title}</h3><p>{text}</p></div></li>)}</ol>
       </section>
+      <GoogleTestimonials />
       <section className="site-support site-section"><div><p className="site-kicker">ALREADY A CUSTOMER?</p><h2>We’re here for the next step.</h2><p>Report a problem with your system or check an existing service request.</p></div><div className="site-actions"><Link className="site-button" to="/complaint">Request support <MdArrowForward /></Link><Link className="site-text-link" to="/track">Track a request <MdArrowForward /></Link></div></section>
       <section id="contact" className="site-contact site-section"><div><p className="site-kicker">LET’S CONNECT</p><h2>Let’s talk security.</h2><p>Sales enquiries, installation plans or a system that needs attention. Start a conversation with BAANGS.</p><a className="site-contact-phone" href="tel:+918330033280">83300 33280 <MdArrowForward /></a><a href="tel:+918848133004">Alternate: 88481 33004</a></div><address><h3>BAANGS Technomac LLP</h3><p>1/278 & 1/279, Vadakkumbad<br />Thalassery, Kannur<br />Kerala, India 670105</p><a href="mailto:support@baangs.in">support@baangs.in</a><a href={whatsapp} target="_blank" rel="noreferrer">Message on WhatsApp <MdArrowForward /></a></address></section>
     </main>
