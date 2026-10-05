@@ -79,6 +79,7 @@ export const customersApi = {
   },
   get: (id) => api.get(`/customers/${id}`),
   getJobs: (id) => api.get(`/customers/${id}/jobs`),
+  getWarranty: (id) => api.get(`/customers/${id}/warranty`),
   update: (id, data) => api.put(`/customers/${id}`, data),
   create: (data) => api.post('/customers/', data),
   delete: (id) => api.delete(`/customers/${id}`),

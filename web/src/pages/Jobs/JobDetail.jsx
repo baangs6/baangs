@@ -401,6 +401,7 @@ export default function JobDetail() {
       purchase_price: '',
       selling_price: '',
       quantity: item.quantity_used || '',
+      warranty_years: item.warranty_years ?? '',
     });
     setShowVerifyModal(true);
   };
@@ -420,6 +421,7 @@ export default function JobDetail() {
           purchase_price: Number(verifyForm.purchase_price) || 0,
           selling_price: Number(verifyForm.selling_price) || 0,
           opening_quantity: Number(verifyForm.quantity) || 0,
+          warranty_years: verifyForm.warranty_years === '' ? null : Number(verifyForm.warranty_years),
         }
       );
       await load();
@@ -902,6 +904,14 @@ export default function JobDetail() {
                 <div className="form-group">
                   <label className="form-label">Selling Price</label>
                   <input className="form-input" type="number" value={verifyForm.selling_price} onChange={(event) => setVerifyForm((prev) => ({ ...prev, selling_price: event.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Warranty Period</label>
+                  <select className="form-select" value={verifyForm.warranty_years ?? ''} onChange={(event) => setVerifyForm((prev) => ({ ...prev, warranty_years: event.target.value }))}>
+                    <option value="">Not recorded</option>
+                    <option value="0">No warranty</option>
+                    {[1, 2, 3, 4, 5].map(years => <option key={years} value={years}>{years} {years === 1 ? 'year' : 'years'}</option>)}
+                  </select>
                 </div>
               </div>
             </div>

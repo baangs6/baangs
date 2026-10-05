@@ -76,6 +76,7 @@ class DoubtReview(BaseModel):
 
 
 class ManualInventoryVerify(BaseModel):
+    warranty_years: Optional[int] = Field(default=None, ge=0, le=5)
     barcode: Optional[str] = None
     item_name: Optional[str] = None
     model_number: Optional[str] = None

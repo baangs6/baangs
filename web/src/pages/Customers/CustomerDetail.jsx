@@ -10,10 +10,23 @@ export default function CustomerDetail() {
   const navigate = useNavigate();
   const [customer, setCustomer] = useState(null);
   const [jobs, setJobs] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [warrantyLoading, setWarrantyLoading] = useState(true);
+  const [warrantyError, setWarrantyError] = useState('');
 
   useEffect(() => {
     customersApi.get(customerId).then((r) => setCustomer(r.data)).catch(console.error);
     customersApi.getJobs(customerId).then((r) => setJobs(r.data)).catch(console.error);
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return null;
+      setWarrantyLoading(true);
+      setWarrantyError('');
+      return customersApi.getWarranty(customerId);
+    }).then(r => { if (active && r) setProducts(r.data); })
+      .catch(() => { if (active) setWarrantyError('Unable to load product warranties.'); })
+      .finally(() => { if (active) setWarrantyLoading(false); });
+    return () => { active = false; };
   }, [customerId]);
 
   if (!customer) {
@@ -142,6 +155,28 @@ export default function CustomerDetail() {
           </div>
         </div>
       </div>
+
+      <section style={{ marginBottom: 24 }}>
+        <h3 className="card-title" style={{ marginBottom: 12 }}>Products & Warranty</h3>
+        {warrantyLoading ? <p>Loading warranties...</p> : warrantyError ? <p role="alert">{warrantyError}</p> : products.length === 0 ? <p>No recorded products used.</p> : (
+          <div className="table-wrapper">
+            <table className="table">
+              <thead><tr><th>Product / Model</th><th>Serial Number</th><th>Quantity</th><th>Installed On</th><th>Days Completed</th><th>Warranty</th><th>Expires On</th><th>Status</th><th>Job</th></tr></thead>
+              <tbody>{products.map(product => (
+                <tr key={product.usage_id}>
+                  <td>{product.item_name || '-'}<br /><small>{product.model_number || '-'}</small></td>
+                  <td>{product.serial_number || '-'}</td><td>{product.quantity_used}</td>
+                  <td>{formatDate(product.installation_date)}</td><td>{product.days_completed ?? '-'}</td>
+                  <td>{product.warranty_years == null ? 'Not recorded' : product.warranty_years === 0 ? 'None' : `${product.warranty_years} years`}</td>
+                  <td>{formatDate(product.warranty_expiry)}</td>
+                  <td><span className={`badge badge-${product.warranty_status === 'under_warranty' ? 'complete' : product.warranty_status === 'expired' ? 'cancelled' : 'pending'}`}>{({ under_warranty: 'Under warranty', expired: 'Expired', no_warranty: 'No warranty', not_recorded: 'Not recorded', awaiting_installation: 'Awaiting completion' })[product.warranty_status]}</span>{product.warranty_status === 'under_warranty' && <div><small>{product.days_remaining} days remaining</small></div>}</td>
+                  <td><button className="btn btn-secondary btn-sm" onClick={() => navigate(`/jobs/${product.job_id}`)}>{product.job_id}</button></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <div className="card">
         <div className="card-header">

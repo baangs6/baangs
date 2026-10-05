@@ -5,6 +5,7 @@ from ..auth.utils import require_admin, require_admin_or_manager, require_any
 from ..database import get_db
 from ..utils.id_generator import generate_customer_id, make_customer_key
 from ..utils.timezone import now_ist_str, today_ist_str
+from ..utils.warranty import warranty_details
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
 
@@ -96,6 +97,40 @@ async def get_customer_jobs(customer_id: str, _=Depends(require_admin_or_manager
     return [{"job_id": j["job_id"], "work_type": j["work_type"], "status": j["status"],
              "service_request_date": j["service_request_date"], "priority": j["priority"]}
             for j in jobs]
+
+
+@router.get("/{customer_id}/warranty")
+async def get_customer_warranty(customer_id: str, _=Depends(require_admin_or_manager)):
+    db = get_db()
+    if not await db.customers.find_one({"customer_id": customer_id}):
+        raise HTTPException(status_code=404, detail="Customer not found")
+    jobs = await db.jobs.find({"customer_id": customer_id}).to_list(None)
+    job_map = {job["job_id"]: job for job in jobs}
+    job_ids = list(job_map)
+    bills = await db.billing.find({"job_id": {"$in": job_ids}}).to_list(None)
+    bill_dates = {bill["job_id"]: bill.get("complete_date") for bill in bills}
+    updates = await db.daily_updates.find({"job_id": {"$in": job_ids}}).to_list(None)
+    completion_dates = {}
+    for update in updates:
+        if update.get("status") == "complete" and update.get("update_time"):
+            job_id = update["job_id"]
+            completion_dates[job_id] = max(completion_dates.get(job_id, ""), update["update_time"])
+    usages = await db.job_inventory_usage.find({"job_id": {"$in": job_ids}}).to_list(None)
+    for update in updates:
+        for index, item in enumerate(update.get("manual_inventory_items") or []):
+            if item.get("verification_status") != "verified":
+                usages.append({**item, "_id": item.get("manual_item_id") or f"{update['update_id']}-{index}", "job_id": update["job_id"]})
+    products = []
+    for usage in usages:
+        job = job_map[usage["job_id"]]
+        completed_at = None
+        if job.get("status") == "complete":
+            completed_at = job.get("work_ended_at") or completion_dates.get(job["job_id"]) or bill_dates.get(job["job_id"])
+        products.append({"usage_id": str(usage["_id"]), "job_id": job["job_id"],
+                         "item_name": usage.get("item_name"), "model_number": usage.get("model_number"),
+                         "serial_number": usage.get("serial_number"), "quantity_used": usage.get("quantity_used"),
+                         **warranty_details(completed_at, usage.get("warranty_years"))})
+    return products
 
 
 @router.put("/{customer_id}", response_model=CustomerResponse)

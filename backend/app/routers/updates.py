@@ -251,6 +251,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
                 "serial_number": serial_number or None,
                 "quantity_used": item_usage.quantity_used,
                 "unit_selling_price": float(inv_item.get("selling_price", 0) or 0),
+                "warranty_years": inv_item.get("warranty_years"),
                 "technician_id": staff_id,
                 "usage_datetime": now_ist_str()
             }
@@ -458,6 +459,8 @@ async def verify_manual_inventory(
     existing = next((item for item in manual_items if item.get("manual_item_id") == manual_item_id), None)
     if not existing:
         raise HTTPException(status_code=404, detail="Manual inventory item not found")
+    if existing.get("verification_status") == "verified":
+        raise HTTPException(status_code=409, detail="This item is already verified")
 
     # Combine data
     merged_data = {
@@ -495,6 +498,7 @@ async def verify_manual_inventory(
         "unit_type": merged_data.get("unit_type") or "Pcs",
         "purchase_price": purchase_price,
         "selling_price": selling_price,
+        "warranty_years": merged_data.get("warranty_years"),
         "opening_quantity": opening_quantity,
         "current_quantity": new_quantity,
         "minimum_stock_level": 0.0,
@@ -521,6 +525,7 @@ async def verify_manual_inventory(
         "serial_number": serial_number or None,
         "quantity_used": qty_used,
         "unit_selling_price": selling_price,
+        "warranty_years": merged_data.get("warranty_years"),
         "technician_id": technician_id,
         "usage_datetime": now_str
     }
