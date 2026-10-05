@@ -75,10 +75,19 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState(getInitialDateFilter);
 
+  const filteredDestination = (destination) => {
+    const [path, query = ''] = destination.split('?');
+    if (path !== '/jobs') return destination;
+    const params = new URLSearchParams(query);
+    if (dateFilter.from) params.set('date_from', dateFilter.from);
+    if (dateFilter.to) params.set('date_to', dateFilter.to);
+    return params.size ? `${path}?${params.toString()}` : path;
+  };
+
   const openWithKeyboard = (event, destination) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      navigate(destination);
+      navigate(filteredDestination(destination));
     }
   };
 
@@ -87,7 +96,7 @@ export default function Dashboard() {
     tabIndex: 0,
     title: label,
     'aria-label': label,
-    onClick: () => navigate(destination),
+    onClick: () => navigate(filteredDestination(destination)),
     onKeyDown: (event) => openWithKeyboard(event, destination),
     style: { cursor: 'pointer' },
   });

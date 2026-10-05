@@ -49,9 +49,19 @@ export default function JobList() {
     work_type: '',
     site_type: '',
     assigned_staff_id: '',
-    date_from: '',
-    date_to: '',
+    date_from: searchParams.get('date_from') || '',
+    date_to: searchParams.get('date_to') || '',
   });
+
+  useEffect(() => {
+    setFilters(current => ({
+      ...current,
+      status: searchParams.get('status') || '',
+      priority: searchParams.get('priority') || '',
+      date_from: searchParams.get('date_from') || '',
+      date_to: searchParams.get('date_to') || '',
+    }));
+  }, [searchParams]);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
