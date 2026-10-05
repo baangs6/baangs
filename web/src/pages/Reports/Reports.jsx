@@ -3,6 +3,7 @@ import { billingApi, dashboardApi, inventoryApi } from '../../api';
 import { formatDate } from '../../utils/dateFormat';
 import { calculateBillingProfit } from '../../utils/billingMath';
 import DateRangePicker from '../../components/DateRangePicker';
+import './Reports.css';
 
 function currentMonthRange() {
   const now = new Date();
@@ -88,13 +89,13 @@ export default function Reports() {
   }, [billingRows]);
 
   return (
-    <div className="animate-fade">
+    <div className="animate-fade reports-page">
       <div className="page-header">
         <div className="page-header-left">
           <h2>Reports</h2>
           <p>Technician performance, finance, and inventory reporting</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="reports-filters">
           <label style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Technician</label>
           <select
             className="form-select"
@@ -116,12 +117,12 @@ export default function Reports() {
 
       {error && <div className="toast toast-error" style={{ marginBottom: 12 }}>⚠️ {error}</div>}
       {loading ? <div className="loading-center"><div className="spinner" /><span>Loading reports...</span></div> : (
-        <div style={{ display: 'grid', gap: 16 }}>
+        <div className="reports-sections">
           <div className="card">
             <div className="card-header">
               <h3 className="card-title">1) Technician Performance</h3>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginBottom: 12 }}>
+            <div className="reports-metrics">
               <button className="stat-card" style={{ textAlign: 'left' }} onClick={() => setSelectedTechMetric('service')}>
                 <div className="stat-value">{techReport.total_service_completed}</div>
                 <div className="stat-label">Total Service Completed</div>

@@ -1,0 +1,70 @@
+.reports-page,
+.reports-sections,
+.reports-page .card,
+.reports-page .table-wrapper {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.reports-page .page-header {
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.reports-page .page-header-left {
+  min-width: 0;
+}
+
+.reports-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.reports-filters .form-select {
+  width: auto;
+  max-width: 100%;
+}
+
+.reports-sections {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.reports-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.reports-page .stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+}
+
+.reports-page .stat-card {
+  min-width: 0;
+}
+
+.reports-page .stat-value,
+.reports-page .stat-label {
+  overflow-wrap: anywhere;
+}
+
+.reports-page .table-wrapper {
+  overflow-x: auto;
+}
+
+@media (max-width: 600px) {
+  .reports-filters {
+    width: 100%;
+  }
+
+  .reports-page .stat-value {
+    font-size: 28px;
+  }
+}
