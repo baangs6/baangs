@@ -67,6 +67,16 @@ export const staffApi = {
 // Customers
 export const customersApi = {
   list: (params) => api.get('/customers/', { params }),
+  listAll: async () => {
+    const customers = [];
+    const limit = 200;
+    for (let skip = 0; ; skip += limit) {
+      const response = await api.get('/customers/', { params: { skip, limit } });
+      const page = response.data || [];
+      customers.push(...page);
+      if (page.length < limit) return { data: customers };
+    }
+  },
   get: (id) => api.get(`/customers/${id}`),
   getJobs: (id) => api.get(`/customers/${id}/jobs`),
   update: (id, data) => api.put(`/customers/${id}`, data),

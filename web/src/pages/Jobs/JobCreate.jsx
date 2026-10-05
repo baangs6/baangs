@@ -159,7 +159,7 @@ export default function JobCreate() {
   useEffect(() => {
     staffApi.list().then(r => setStaff(r.data)).catch(console.error);
     lookupsApi.all().then(r => setLookups(r.data)).catch(console.error);
-    customersApi.list().then(r => setCustomers(r.data)).catch(console.error);
+    customersApi.listAll().then(r => setCustomers(r.data)).catch(() => setError('Unable to load saved customers. Please refresh and try again.'));
   }, []);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -233,7 +233,7 @@ export default function JobCreate() {
           <div className="job-ticket-section-title">Customer Details</div>
           <div className="job-ticket-grid">
             <datalist id="customer-names">
-              {customers.map(c => <option key={c.customer_id} value={c.customer_name} label={c.nickname || c.customer_name} />)}
+              {customers.map(c => <option key={c.customer_id} value={c.customer_name} label={[c.nickname, c.phone_number].filter(Boolean).join(' - ')} />)}
             </datalist>
             <datalist id="customer-phones">
               {customers.map(c => <option key={c.customer_id} value={c.phone_number} />)}
