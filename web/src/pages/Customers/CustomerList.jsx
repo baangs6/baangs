@@ -25,7 +25,7 @@ export default function CustomerList() {
   const fetchCustomers = async (q = '') => {
     setLoading(true);
     try {
-      const res = await customersApi.list(q ? { search: q } : {});
+      const res = await customersApi.listAll(q ? { search: q } : {});
       setCustomers(res.data);
     } finally {
       setLoading(false);
