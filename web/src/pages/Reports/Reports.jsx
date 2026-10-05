@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { billingApi, dashboardApi, inventoryApi } from '../../api';
+import { billingApi, dashboardApi, inventoryApi, staffApi } from '../../api';
 import { formatDate } from '../../utils/dateFormat';
 import { calculateBillingProfit } from '../../utils/billingMath';
 import DateRangePicker from '../../components/DateRangePicker';
@@ -10,7 +10,8 @@ function currentMonthRange() {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, '0');
   const month = `${y}-${m}`;
-  return { from: `${month}-01`, to: `${month}-31` };
+  const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+  return { from: `${month}-01`, to: `${month}-${lastDay}` };
 }
 
 export default function Reports() {
@@ -19,7 +20,10 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [techPerf, setTechPerf] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
+  useEffect(() => {
+    staffApi.list().then(response => setTechnicians(response.data || [])).catch(() => setError('Unable to load technician filters.'));
+  }, []);
   const [techReport, setTechReport] = useState({
     total_service_completed: 0,
     total_installation_completed: 0,
@@ -33,6 +37,7 @@ export default function Reports() {
   const [selectedTechMetric, setSelectedTechMetric] = useState('service');
 
   useEffect(() => {
+    let ignore = false;
     const load = async () => {
       setLoading(true);
       setError('');
@@ -45,19 +50,18 @@ export default function Reports() {
           params.technician_name = technicianFilter;
         }
         const results = await Promise.allSettled([
-          dashboardApi.technicianPerformance(params),
           dashboardApi.technicianPerformanceReport(params),
           dashboardApi.technicianPerformanceDeepDive(params),
-          billingApi.list({ date_from: dateFilter.from, date_to: dateFilter.to }),
+          billingApi.list(params),
           inventoryApi.stockSummary(),
           dashboardApi.serviceQualityReport(params),
         ]);
-        const [techRes, techReportRes, techDeepDiveRes, billingRes, stockRes, qualityRes] = results;
+        const [techReportRes, techDeepDiveRes, billingRes, stockRes, qualityRes] = results;
+        if (ignore) return;
         const data = (result, fallback) => result.status === 'fulfilled' ? (result.value.data || fallback) : fallback;
         const failedSections = results
-          .map((result, index) => result.status === 'rejected' ? ['technician performance', 'performance summary', 'technician details', 'financial', 'inventory', 'service quality'][index] : null)
+          .map((result, index) => result.status === 'rejected' ? ['performance summary', 'technician details', 'financial', 'inventory', 'service quality'][index] : null)
           .filter(Boolean);
-        setTechPerf(data(techRes, []));
         setTechReport(data(techReportRes, {
           total_service_completed: 0,
           total_installation_completed: 0,
@@ -70,21 +74,23 @@ export default function Reports() {
         setQualityReport(data(qualityRes, { summary: {}, technicians: [] }));
         if (failedSections.length) setError(`Some report data could not be loaded: ${failedSections.join(', ')}.`);
       } catch {
-        setError('Unable to load reports. Please refresh the page.');
+        if (!ignore) setError('Unable to load reports. Please refresh the page.');
       } finally {
-        setLoading(false);
+        if (!ignore) setLoading(false);
       }
     };
     load();
+    return () => { ignore = true; };
   }, [dateFilter.from, dateFilter.to, technicianFilter]);
 
   const financialTotals = useMemo(() => {
     const totals = billingRows.reduce((acc, row) => {
       acc.revenue += Number(row.invoice_amount || 0);
       acc.expense += Number(row.expense || 0);
+      acc.material += Number(row.material_amount || 0);
       acc.profit += calculateBillingProfit(row).profit;
       return acc;
-    }, { revenue: 0, expense: 0, profit: 0 });
+    }, { revenue: 0, expense: 0, material: 0, profit: 0 });
     return totals;
   }, [billingRows]);
 
@@ -105,9 +111,9 @@ export default function Reports() {
             style={{ minWidth: 180 }}
           >
             <option value="all">All</option>
-            {techPerf.map((t) => (
-              <option key={t.staff_id} value={t.staff_name || t.staff_id}>
-                {t.staff_name || t.staff_id}
+            {technicians.map((t) => (
+              <option key={t.staff_id} value={t.staff_id}>
+                {t.name || t.full_name || t.staff_id}
               </option>
             ))}
           </select>
@@ -160,6 +166,7 @@ export default function Reports() {
                       <th>Installations Completed</th>
                       <th>Services Attended</th>
                       <th>Services Completed</th>
+                      <th>Avg Service Completion</th>
                       <th>Site Visits</th>
                       <th>New Projects</th>
                       <th>Food Expense</th>
@@ -168,7 +175,7 @@ export default function Reports() {
                   </thead>
                   <tbody>
                     {techDeepDive.length ? techDeepDive.map((row) => (
-                      <tr key={row.staff_id} style={{ cursor: 'pointer' }} onClick={() => setTechnicianFilter(row.staff_name || row.staff_id)}>
+                      <tr key={row.staff_id} style={{ cursor: 'pointer' }} onClick={() => setTechnicianFilter(row.staff_id)}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             {row.photo_url ? <img src={row.photo_url} alt="" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover' }} /> : null}
@@ -181,6 +188,7 @@ export default function Reports() {
                         <td>{row.total_installation_completed || 0}</td>
                         <td>{row.total_service_attended || 0}</td>
                         <td>{row.total_service_completed || 0}</td>
+                        <td>{Number(row.average_service_completion_days || 0).toFixed(1)} days</td>
                         <td>{row.total_site_visits || 0}</td>
                         <td>{row.new_projects_created || 0}</td>
                         <td>₹{Number(row.food_expense || 0).toLocaleString()}</td>
@@ -188,7 +196,7 @@ export default function Reports() {
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={11} style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+                        <td colSpan={12} style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>
                           No technician deep-dive data for this date range
                         </td>
                       </tr>
@@ -251,6 +259,10 @@ export default function Reports() {
                 <div className="stat-value">₹{financialTotals.expense.toLocaleString()}</div>
               </div>
               <div className="stat-card accent">
+                <div className="stat-label">Material</div>
+                <div className="stat-value">₹{financialTotals.material.toLocaleString()}</div>
+              </div>
+              <div className="stat-card accent">
                 <div className="stat-label">Profit</div>
                 <div className="stat-value">₹{financialTotals.profit.toLocaleString()}</div>
               </div>
@@ -264,6 +276,7 @@ export default function Reports() {
                     <th>Date</th>
                     <th>Invoice</th>
                     <th>Expense</th>
+                    <th>Material</th>
                     <th>Profit</th>
                   </tr>
                 </thead>
@@ -275,10 +288,11 @@ export default function Reports() {
                       <td>{formatDate(b.complete_date)}</td>
                       <td>₹{Number(b.invoice_amount || 0).toLocaleString()}</td>
                       <td>₹{Number(b.expense || 0).toLocaleString()}</td>
+                      <td>₹{Number(b.material_amount || 0).toLocaleString()}</td>
                       <td>₹{calculateBillingProfit(b).profit.toLocaleString()}</td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>No financial records for this date range</td></tr>
+                    <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--color-text-secondary)' }}>No financial records for this date range</td></tr>
                   )}
                 </tbody>
               </table>
@@ -287,7 +301,7 @@ export default function Reports() {
 
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">4) Inventory Report</h3>
+              <h3 className="card-title">4) Inventory Report - Current Stock</h3>
             </div>
             <div className="table-wrapper" style={{ border: 'none' }}>
               <table className="table">

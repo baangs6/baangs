@@ -113,6 +113,7 @@ async def list_billing(
     month: Optional[str] = Query(None, description="YYYY-MM"),
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    technician_name: Optional[str] = Query(None),
     _=Depends(require_admin_or_manager)
 ):
     db = get_db()
@@ -125,7 +126,12 @@ async def list_billing(
             query["complete_date"]["$lte"] = date_to
     elif month:
         query["complete_date"] = {"$regex": f"^{month}"}
-    billing = await db.billing.find(query).sort("complete_date", -1).to_list(500)
+    if technician_name:
+        staff = await db.staff.find({}).to_list(None)
+        ids = [s.get("staff_id") for s in staff if technician_name.strip().lower() in [(s.get("name") or s.get("full_name") or "").strip().lower(), (s.get("staff_id") or "").lower()]]
+        jobs = await db.jobs.find({"assigned_staff_id": {"$in": ids}}).to_list(None)
+        query["job_id"] = {"$in": [j["job_id"] for j in jobs]}
+    billing = await db.billing.find(query).sort("complete_date", -1).to_list(None)
     return [_fmt(await reconcile_materials(db, b)) for b in billing]
 
 

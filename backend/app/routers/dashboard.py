@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime
 from ..auth.utils import get_current_user, require_admin_or_manager
 from ..database import get_db
-from ..utils.timezone import today_ist_str
+from ..utils.timezone import today_ist_str, IST
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -22,6 +22,11 @@ def _parse_date(date_str: Optional[str]):
     if not date_str:
         return None
     try:
+        if "T" in str(date_str):
+            value = datetime.fromisoformat(str(date_str).replace("Z", "+00:00"))
+            if value.tzinfo is None:
+                value = IST.localize(value)
+            return value.astimezone(IST).date()
         return datetime.strptime(date_str[:10], "%Y-%m-%d").date()
     except Exception:
         return None
@@ -45,6 +50,10 @@ def _minutes_between(start_value: Optional[str], end_value: Optional[str]) -> in
     try:
         start = datetime.fromisoformat(str(start_value).replace("Z", "+00:00"))
         end = datetime.fromisoformat(str(end_value).replace("Z", "+00:00"))
+        if start.tzinfo is None:
+            start = IST.localize(start)
+        if end.tzinfo is None:
+            end = IST.localize(end)
         return max(0, int((end - start).total_seconds() // 60))
     except Exception:
         return 0
@@ -418,64 +427,18 @@ async def technician_performance_report(
     technician_name: Optional[str] = Query(None),
     _=Depends(require_admin_or_manager)
 ):
-    db = get_db()
-
-    billing_query = _date_range_filter(date_from, date_to, "complete_date")
-    billing_rows = await db.billing.find(billing_query).to_list(5000)
-    if not billing_rows:
-        return {
-            "total_service_completed": 0,
-            "total_installation_completed": 0,
-            "average_service_completion_days": 0,
-            "top_performer": None,
-        }
-
-    job_ids = [b.get("job_id") for b in billing_rows if b.get("job_id")]
-    jobs = await db.jobs.find({"job_id": {"$in": job_ids}}).to_list(5000)
-    jobs_by_id = {j.get("job_id"): j for j in jobs}
-
-    total_service_completed = 0
-    total_installation_completed = 0
-    service_durations = []
-    staff_completed_map = {}
-
-    for bill in billing_rows:
-        job = jobs_by_id.get(bill.get("job_id"))
-        if not job:
-            continue
-        if not _technician_name_match(technician_name, job.get("assigned_staff_name"), job.get("assigned_staff_id")):
-            continue
-
-        work_type = (job.get("work_type") or "").strip().lower()
-        is_installation = work_type == "installation"
-        if is_installation:
-            total_installation_completed += 1
-        else:
-            total_service_completed += 1
-
-        staff_id = job.get("assigned_staff_id")
-        staff_name = job.get("assigned_staff_name") or staff_id or "Unknown"
-        if staff_id:
-            if staff_id not in staff_completed_map:
-                staff_completed_map[staff_id] = {"staff_id": staff_id, "staff_name": staff_name, "completed_jobs": 0}
-            staff_completed_map[staff_id]["completed_jobs"] += 1
-
-        if not is_installation:
-            req_date = _parse_date(job.get("service_request_date"))
-            comp_date = _parse_date(bill.get("complete_date"))
-            if req_date and comp_date and comp_date >= req_date:
-                service_durations.append((comp_date - req_date).days)
-
-    avg_days = round(sum(service_durations) / len(service_durations), 2) if service_durations else 0
-    top_performer = None
-    if staff_completed_map:
-        top_performer = max(staff_completed_map.values(), key=lambda x: x["completed_jobs"])
-
+    detail = await technician_performance_deep_dive(date_from, date_to, technician_name, _)
+    durations = [duration for row in detail for duration in row.get("service_completion_days", [])]
+    ranked = sorted(detail, key=lambda row: row["total_service_completed"] + row["total_installation_completed"], reverse=True)
+    top = ranked[0] if ranked and (ranked[0]["total_service_completed"] + ranked[0]["total_installation_completed"]) else None
     return {
-        "total_service_completed": total_service_completed,
-        "total_installation_completed": total_installation_completed,
-        "average_service_completion_days": avg_days,
-        "top_performer": top_performer,
+        "total_service_completed": sum(row["total_service_completed"] for row in detail),
+        "total_installation_completed": sum(row["total_installation_completed"] for row in detail),
+        "average_service_completion_days": round(sum(durations) / len(durations), 2) if durations else 0,
+        "top_performer": {
+            "staff_id": top["staff_id"], "staff_name": top["staff_name"],
+            "completed_jobs": top["total_service_completed"] + top["total_installation_completed"],
+        } if top else None,
     }
 
 
@@ -488,7 +451,7 @@ async def technician_performance_deep_dive(
 ):
     db = get_db()
 
-    staff_rows = await db.staff.find({"is_active": True}).to_list(1000)
+    staff_rows = await db.staff.find({}).to_list(None)
     tech_map = {}
     for staff in staff_rows:
         staff_id = staff.get("staff_id")
@@ -513,11 +476,17 @@ async def technician_performance_deep_dive(
             "_service_durations": [],
         }
 
-    jobs = await db.jobs.find(_date_range_filter(date_from, date_to, "scheduled_date")).to_list(5000)
+    billing_rows = await db.billing.find({}).to_list(None)
+    billing_dates = {bill.get("job_id"): bill.get("complete_date") for bill in billing_rows}
+    jobs = await db.jobs.find({}).to_list(None)
     for job in jobs:
         staff_id = job.get("assigned_staff_id")
         row = tech_map.get(staff_id)
         if not row:
+            continue
+        completion_date = job.get("work_ended_at") or billing_dates.get(job.get("job_id"))
+        event_date = completion_date if job.get("status") == "complete" else (job.get("scheduled_date") or job.get("service_request_date"))
+        if not _date_in_range(event_date, date_from, date_to):
             continue
         work_type = (job.get("work_type") or "").strip().lower()
         is_installation = "install" in work_type
@@ -526,18 +495,22 @@ async def technician_performance_deep_dive(
             if job.get("status") == "complete":
                 row["total_installation_completed"] += 1
         else:
-            row["total_service_attended"] += 1
+            if job.get("work_started_at"):
+                row["total_service_attended"] += 1
             if job.get("status") == "complete":
                 row["total_service_completed"] += 1
                 req_date = _parse_date(job.get("service_request_date"))
-                comp_date = _parse_date(job.get("work_ended_at"))
+                comp_date = _parse_date(completion_date)
                 if req_date and comp_date and comp_date >= req_date:
                     row["_service_durations"].append((comp_date - req_date).days)
 
-    attendance_rows = await db.attendance.find(_date_range_filter(date_from, date_to, "date")).to_list(5000)
+    attendance_rows = await db.attendance.find(_date_range_filter(date_from, date_to, "date")).to_list(None)
+    attendance_days = set()
     for attendance in attendance_rows:
         row = tech_map.get(attendance.get("staff_id"))
-        if row:
+        key = (attendance.get("staff_id"), attendance.get("date"))
+        if row and attendance.get("checkin_time") and key not in attendance_days:
+            attendance_days.add(key)
             row["attendance_days"] += 1
             row["working_minutes"] += _minutes_between(attendance.get("checkin_time"), attendance.get("checkout_time"))
 
@@ -548,13 +521,13 @@ async def technician_performance_deep_dive(
             update_query["update_time"]["$gte"] = date_from
         if date_to:
             update_query["update_time"]["$lte"] = f"{date_to}T23:59:59"
-    updates = await db.daily_updates.find({**update_query, "work_event": "start_work"}).to_list(5000)
+    updates = await db.daily_updates.find({**update_query, "work_event": "start_work"}).to_list(None)
     for update in updates:
         row = tech_map.get(update.get("assigned_staff_id"))
         if row:
             row["total_site_visits"] += 1
 
-    allowance_rows = await db.attendance_allowances.find(_date_range_filter(date_from, date_to, "date")).to_list(5000)
+    allowance_rows = await db.attendance_allowances.find(_date_range_filter(date_from, date_to, "date")).to_list(None)
     for allowance in allowance_rows:
         row = tech_map.get(allowance.get("staff_id"))
         if not row:
@@ -565,16 +538,17 @@ async def technician_performance_deep_dive(
         elif expense_type == "petrol":
             row["petrol_expense"] += float(allowance.get("amount", 0) or 0)
 
-    staff_users = await db.users.find({"staff_id": {"$ne": None}}).to_list(1000)
+    staff_users = await db.users.find({"staff_id": {"$ne": None}}).to_list(None)
     user_to_staff = {u.get("user_id"): u.get("staff_id") for u in staff_users}
     for job in jobs:
         creator_staff_id = user_to_staff.get(job.get("created_by_user_id"))
-        if creator_staff_id in tech_map:
+        if creator_staff_id in tech_map and _date_in_range(job.get("service_request_date"), date_from, date_to):
             tech_map[creator_staff_id]["new_projects_created"] += 1
 
     result = []
     for row in tech_map.values():
         durations = row.pop("_service_durations", [])
+        row["service_completion_days"] = durations
         row["average_service_completion_days"] = round(sum(durations) / len(durations), 2) if durations else 0
         row["working_hours"] = round(row.pop("working_minutes") / 60, 2)
         row["installation_hours"] = round(row.pop("installation_minutes") / 60, 2)
@@ -594,7 +568,7 @@ async def service_quality_report(
     _=Depends(require_admin_or_manager),
 ):
     db = get_db()
-    staff_rows = await db.staff.find({"is_active": True}).to_list(1000)
+    staff_rows = await db.staff.find({}).to_list(None)
     rows = {}
     for staff in staff_rows:
         staff_id = staff.get("staff_id")
@@ -610,10 +584,22 @@ async def service_quality_report(
                 "customer_ratings": [],
             }
 
-    jobs = await db.jobs.find({}).to_list(10000)
+    jobs = await db.jobs.find({}).to_list(None)
+    bills = await db.billing.find({}).to_list(None)
+    completion_dates = {bill.get("job_id"): bill.get("complete_date") for bill in bills}
     relevant_jobs = []
     for job in jobs:
-        event_date = job.get("work_ended_at") or job.get("scheduled_date") or job.get("service_request_date")
+        completed_at = job.get("work_ended_at") or completion_dates.get(job.get("job_id"))
+        row = rows.get(job.get("assigned_staff_id"))
+        work_type = (job.get("work_type") or "").strip().lower()
+        is_pm = "preventive" in work_type or work_type == "pm" or "maintenance" in work_type
+        if row and is_pm and job.get("scheduled_date") and _date_in_range(job.get("scheduled_date"), date_from, date_to):
+            row["pm_scheduled"] += 1
+            completed_date = _parse_date(completed_at)
+            scheduled_date = _parse_date(job.get("scheduled_date"))
+            if job.get("status") == "complete" and completed_date and completed_date <= scheduled_date:
+                row["pm_completed_on_time"] += 1
+        event_date = completed_at if job.get("status") == "complete" else (job.get("scheduled_date") or job.get("service_request_date"))
         if not _date_in_range(event_date, date_from, date_to):
             continue
         row = rows.get(job.get("assigned_staff_id"))
@@ -625,27 +611,13 @@ async def service_quality_report(
             row["service_calls_completed"] += 1
             row["completed_job_ids"].add(job.get("job_id"))
             duration = _minutes_between(job.get("work_started_at"), job.get("work_ended_at"))
-            if duration <= 0:
-                opened = _parse_date(job.get("service_request_date"))
-                closed = _parse_date(job.get("work_ended_at"))
-                if opened and closed and closed >= opened:
-                    duration = (closed - opened).days * 1440
-            if duration >= 0:
+            if duration > 0 and "install" not in (job.get("work_type") or "").lower():
                 row["repair_minutes"].append(duration)
             if job.get("customer_rating") is not None:
                 row["customer_ratings"].append(float(job["customer_rating"]))
 
-        work_type = (job.get("work_type") or "").strip().lower()
-        is_pm = "preventive" in work_type or work_type == "pm" or "maintenance" in work_type
-        if is_pm and job.get("scheduled_date"):
-            row["pm_scheduled"] += 1
-            completed_date = _parse_date(job.get("work_ended_at"))
-            scheduled_date = _parse_date(job.get("scheduled_date"))
-            if is_complete and completed_date and scheduled_date and completed_date <= scheduled_date:
-                row["pm_completed_on_time"] += 1
-
     update_query = _date_range_filter(date_from, f"{date_to}T23:59:59" if date_to else None, "update_time")
-    updates = await db.daily_updates.find(update_query).to_list(10000)
+    updates = await db.daily_updates.find(update_query).to_list(None)
     for update in updates:
         row = rows.get(update.get("assigned_staff_id"))
         if not row:
@@ -657,27 +629,38 @@ async def service_quality_report(
         if update.get("learning_notes"):
             row["self_learning_entries"] += 1
 
-    attendance = await db.attendance.find(_date_range_filter(date_from, date_to, "date")).to_list(10000)
+    attendance = await db.attendance.find(_date_range_filter(date_from, date_to, "date")).to_list(None)
+    attended_days = set()
     for entry in attendance:
         row = rows.get(entry.get("staff_id"))
-        if row:
+        key = (entry.get("staff_id"), entry.get("date"))
+        if row and entry.get("checkin_time") and key not in attended_days:
+            attended_days.add(key)
             row["attendance_days"] += 1
             if entry.get("is_checked_out") or entry.get("checkout_time"):
                 row["checked_out_days"] += 1
 
     customer_counts = {}
     for job in relevant_jobs:
+        if (job.get("work_type") or "").lower() != "complaint":
+            continue
         customer_id = job.get("customer_id")
         if customer_id:
             customer_counts[customer_id] = customer_counts.get(customer_id, 0) + 1
     repeat_count = sum(max(0, count - 1) for count in customer_counts.values())
-    repeat_pct = round(repeat_count / len(relevant_jobs) * 100, 1) if relevant_jobs else 0
+    complaint_count = sum(1 for job in relevant_jobs if (job.get("work_type") or "").lower() == "complaint")
+    repeat_pct = round(repeat_count / complaint_count * 100, 1) if complaint_count else 0
 
     result = []
+    all_repair_minutes = []
+    total_reports = 0
     for row in rows.values():
-        completed_count = len(row.pop("completed_job_ids"))
-        reported_count = len(row.pop("reported_job_ids"))
+        completed_ids = row.pop("completed_job_ids")
+        completed_count = len(completed_ids)
+        reported_count = len(row.pop("reported_job_ids") & completed_ids)
+        total_reports += reported_count
         repair_minutes = row.pop("repair_minutes")
+        all_repair_minutes.extend(repair_minutes)
         customer_ratings = row.pop("customer_ratings")
         row["customer_rating_total"] = sum(customer_ratings)
         row["average_repair_hours"] = round(sum(repair_minutes) / len(repair_minutes) / 60, 2) if repair_minutes else 0
@@ -690,17 +673,15 @@ async def service_quality_report(
         result.append(row)
 
     total_completed = sum(row["service_calls_completed"] for row in result)
-    total_reports = sum(round(row["service_report_completion_pct"] * row["service_calls_completed"] / 100) for row in result)
     total_attendance = sum(row["attendance_days"] for row in result)
     total_checkouts = sum(row["checked_out_days"] for row in result)
     total_pm = sum(row["pm_scheduled"] for row in result)
     total_pm_on_time = sum(row["pm_completed_on_time"] for row in result)
-    all_repairs = [row["average_repair_hours"] for row in result if row["average_repair_hours"] > 0]
     rating_total = sum(row.pop("customer_rating_total") for row in result)
     rating_count = sum(row["customer_rating_count"] for row in result)
     return {
         "summary": {
-            "average_repair_hours": round(sum(all_repairs) / len(all_repairs), 2) if all_repairs else 0,
+            "average_repair_hours": round(sum(all_repair_minutes) / len(all_repair_minutes) / 60, 2) if all_repair_minutes else 0,
             "repeat_complaint_pct": repeat_pct,
             "customer_satisfaction_score": round(rating_total / rating_count, 2) if rating_count else None,
             "customer_rating_count": rating_count,

@@ -347,13 +347,13 @@ async def adjust_stock(barcode: str, data: Dict[str, Any], current_user: dict = 
 @router.get("/reports/stock-summary")
 async def get_stock_summary(current_user: dict = Depends(require_admin_or_manager)):
     db = get_db()
-    items = await db.inventory.find({"status": "active"}).to_list(1000)
+    items = await db.inventory.find({"status": "active"}).to_list(None)
     # Calculate transaction totals once. The previous per-item aggregation caused
     # report loading to become progressively slower as inventory grew.
     transaction_totals = await db.inventory_transactions.aggregate([
         {"$match": {"transaction_type": {"$ne": TransactionType.OPENING_STOCK}}},
         {"$group": {"_id": "$barcode", "total_change": {"$sum": "$quantity_changed"}}},
-    ]).to_list(2000)
+    ]).to_list(None)
     transactions_by_barcode = {
         row.get("_id"): row.get("total_change", 0)
         for row in transaction_totals if row.get("_id")
