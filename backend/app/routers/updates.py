@@ -251,7 +251,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
                 "serial_number": serial_number or None,
                 "quantity_used": item_usage.quantity_used,
                 "unit_selling_price": float(inv_item.get("selling_price", 0) or 0),
-                "warranty_years": inv_item.get("warranty_years"),
+                "warranty_years": item_usage.warranty_years if "warranty_years" in item_usage.model_fields_set else inv_item.get("warranty_years"),
                 "technician_id": staff_id,
                 "usage_datetime": now_ist_str()
             }

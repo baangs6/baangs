@@ -8,11 +8,13 @@ class GeoPoint(BaseModel):
     accuracy: Optional[float] = None
 
 class JobInventoryUsageCreate(BaseModel):
+    warranty_years: Optional[int] = Field(default=None, ge=0, le=5)
     barcode: str
     serial_number: Optional[str] = None
     quantity_used: float
 
 class ManualInventoryItemCreate(BaseModel):
+    warranty_years: Optional[int] = Field(default=None, ge=0, le=5)
     barcode: Optional[str] = None
     item_name: str
     model_number: Optional[str] = None

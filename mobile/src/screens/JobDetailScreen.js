@@ -34,6 +34,25 @@ const EMPTY_MANUAL_ITEM = {
 
 const LEARNING_CATEGORIES = ['CCTV', 'Networking', 'Electrical', 'Software', 'Customer Handling', 'Other'];
 
+function WarrantySelect({ value, onChange, styles }) {
+  const [open, setOpen] = useState(false);
+  const options = [null, 0, 1, 2, 3, 4, 5];
+  const label = years => years == null ? 'Not recorded' : years === 0 ? 'No warranty' : `${years} ${years === 1 ? 'year' : 'years'}`;
+  return (
+    <View style={{ width: '100%', marginTop: 8 }}>
+      <Text style={styles.label}>Warranty Period</Text>
+      <TouchableOpacity style={styles.input} accessibilityRole="button" accessibilityLabel="Select warranty period" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)}>
+        <Text style={styles.selectedText}>{label(value)} {open ? '-' : 'v'}</Text>
+      </TouchableOpacity>
+      {open && <View style={styles.suggestionBox}>{options.map(years => (
+        <TouchableOpacity key={years ?? 'unknown'} style={styles.suggestionItem} accessibilityRole="button" accessibilityState={{ selected: value === years }} onPress={() => { onChange(years); setOpen(false); }}>
+          <Text style={styles.suggestionTitle}>{label(years)}</Text>
+        </TouchableOpacity>
+      ))}</View>}
+    </View>
+  );
+}
+
 export default function JobDetailScreen({ route }) {
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme.colors), [theme.colors]);
@@ -223,6 +242,7 @@ export default function JobDetailScreen({ route }) {
           barcode: item.barcode,
           serial_number: item.serial_number || null,
           quantity_used: item.quantity_used,
+          warranty_years: item.warranty_years ?? null,
         })),
         manual_inventory_items: updateForm.manual_inventory_items.map((item) => ({
           barcode: item.barcode || null,
@@ -230,6 +250,7 @@ export default function JobDetailScreen({ route }) {
           model_number: item.model_number || null,
           serial_number: item.serial_number || null,
           quantity_used: item.quantity_used,
+          warranty_years: item.warranty_years ?? null,
           category: 'Miscellaneous',
           brand: null,
           unit_type: 'Pcs',
@@ -371,6 +392,7 @@ export default function JobDetailScreen({ route }) {
           model_number: foundItem.model_number || '',
           serial_number: serialInput.trim(),
           quantity_used: quantityUsed,
+          warranty_years: foundItem.warranty_years ?? null,
         },
       ],
     }));
@@ -974,7 +996,7 @@ export default function JobDetailScreen({ route }) {
               ) : null}
 
               {updateForm.inventory_used.map((item) => (
-                <View key={item.barcode} style={styles.selectedRow}>
+                <View key={item.barcode} style={[styles.selectedRow, { flexWrap: 'wrap' }]}>
                   <Text style={styles.selectedText}>
                     {item.quantity_used} x {item.item_name} ({item.barcode})
                     {item.model_number ? ` | Model: ${item.model_number}` : ''}
@@ -983,6 +1005,7 @@ export default function JobDetailScreen({ route }) {
                   <TouchableOpacity onPress={() => removeKnownInventory(item.barcode)}>
                     <Text style={styles.removeText}>Remove</Text>
                   </TouchableOpacity>
+                  <WarrantySelect value={item.warranty_years ?? null} styles={styles} onChange={years => setUpdateForm(prev => ({ ...prev, inventory_used: prev.inventory_used.map(product => product.barcode === item.barcode ? { ...product, warranty_years: years } : product) }))} />
                 </View>
               ))}
             </View>
@@ -1064,7 +1087,7 @@ export default function JobDetailScreen({ route }) {
               </TouchableOpacity>
 
               {updateForm.manual_inventory_items.map((item, index) => (
-                <View key={`${item.item_name}-${index}`} style={styles.selectedRow}>
+                <View key={`${item.item_name}-${index}`} style={[styles.selectedRow, { flexWrap: 'wrap' }]}>
                   <Text style={styles.selectedText}>
                     {item.quantity_used} x {item.item_name}
                     {item.model_number ? ` | Model: ${item.model_number}` : ''}
@@ -1073,6 +1096,7 @@ export default function JobDetailScreen({ route }) {
                   <TouchableOpacity onPress={() => removeManualInventory(index)}>
                     <Text style={styles.removeText}>Remove</Text>
                   </TouchableOpacity>
+                  <WarrantySelect value={item.warranty_years ?? null} styles={styles} onChange={years => setUpdateForm(prev => ({ ...prev, manual_inventory_items: prev.manual_inventory_items.map((product, itemIndex) => itemIndex === index ? { ...product, warranty_years: years } : product) }))} />
                 </View>
               ))}
             </View>

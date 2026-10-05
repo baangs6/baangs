@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
-from app.models.daily_update import ManualInventoryVerify
+from app.models.daily_update import ManualInventoryVerify, DailyUpdateCreate, JobInventoryUsageCreate, ManualInventoryItemCreate
 from app.mock_database import MockCollection
 from app.routers import customers
 from app.utils.warranty import warranty_details
@@ -30,6 +30,18 @@ def test_warranty_period_validation():
     for years in (-1, 6):
         with pytest.raises(ValidationError):
             ManualInventoryVerify(warranty_years=years)
+
+
+def test_job_update_keeps_individual_product_warranties():
+    update = DailyUpdateCreate(job_id='J', status='complete',
+                              inventory_used=[{'barcode': 'B', 'quantity_used': 1, 'warranty_years': 3}],
+                              manual_inventory_items=[{'item_name': 'Camera', 'quantity_used': 2, 'warranty_years': 5}])
+    assert update.inventory_used[0].warranty_years == 3
+    assert update.manual_inventory_items[0].model_dump()['warranty_years'] == 5
+    assert JobInventoryUsageCreate(barcode='B', quantity_used=1, warranty_years=0).warranty_years == 0
+    for model, fields in [(JobInventoryUsageCreate, {'barcode': 'B'}), (ManualInventoryItemCreate, {'item_name': 'Camera'})]:
+        with pytest.raises(ValidationError):
+            model(**fields, quantity_used=1, warranty_years=6)
 
 
 def test_customer_warranty_uses_completion_not_usage_date(monkeypatch):
