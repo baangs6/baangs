@@ -3,30 +3,33 @@ import { ActivityIndicator, Alert, Modal, RefreshControl, ScrollView, StyleSheet
 import { customersApi, dashboardApi, inventoryApi, staffApi, usersApi } from '../api';
 import { radius, spacing, useTheme } from '../theme';
 import { callPhone, openJobMap } from '../utils/contactActions';
+import useLiveRefresh from '../hooks/useLiveRefresh';
+import AmcPanel from '../components/AmcPanel';
 
 function useList(loader) {
   const [items, setItems] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [error, setError] = React.useState('');
 
   const load = React.useCallback(async () => {
     try {
       const res = await loader();
       setItems(Array.isArray(res.data) ? res.data : []);
+      setError('');
     } catch (e) {
-      Alert.alert('Loading failed', e?.response?.data?.detail || e.message || 'Please try again.');
-      setItems([]);
+      setError(e?.response?.data?.detail || e.message || 'Unable to refresh. Pull down to retry.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [loader]);
 
-  React.useEffect(() => { load(); }, [load]);
-  return { items, loading, refreshing, setRefreshing, load, setItems };
+  useLiveRefresh(load);
+  return { items, loading, refreshing, setRefreshing, load, setItems, error };
 }
 
-function ScreenShell({ title, subtitle, children, loading, refreshing, onRefresh }) {
+function ScreenShell({ title, subtitle, children, loading, refreshing, onRefresh, error }) {
   const { colors } = useTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (loading) return <View style={styles.center}><ActivityIndicator color={colors.accent} size="large" /></View>;
@@ -38,6 +41,7 @@ function ScreenShell({ title, subtitle, children, loading, refreshing, onRefresh
     >
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
+      {!!error && <Text style={{ color: colors.danger, marginBottom: spacing.md }}>{error}</Text>}
       {children}
     </ScrollView>
   );
@@ -72,6 +76,7 @@ export function CustomersScreen() {
                 <Text style={styles.smallBtnText}>Map</Text>
               </TouchableOpacity>
             </View>
+            <ScrollView style={{ maxHeight: 350 }}>{selected && <AmcPanel key={selected.customer_id} customer={selected} styles={styles} />}</ScrollView>
             <TouchableOpacity style={styles.closeBtn} onPress={() => setSelected(null)}>
               <Text style={styles.closeBtnText}>Close</Text>
             </TouchableOpacity>
@@ -252,7 +257,7 @@ export function ReportsScreen() {
       setRefreshing(false);
     }
   }, []);
-  React.useEffect(() => { load(); }, [load]);
+  useLiveRefresh(load);
 
   return (
     <ScreenShell title="Reports" subtitle="Dashboard report view" loading={loading} refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }}>

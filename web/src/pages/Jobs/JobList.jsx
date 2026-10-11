@@ -329,6 +329,7 @@ export default function JobList() {
                   </td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{job.customer_name}</div>
+                    <AmcIndicator coverage={job.amc_coverage} />
                     {job.customer_nickname && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Nickname: {job.customer_nickname}</div>}
                     <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{job.phone_number}</div>
                   </td>
@@ -396,6 +397,7 @@ export default function JobList() {
                 <div className="form-group">
                   <label className="form-label">Customer</label>
                   <div style={{ fontWeight: 600 }}>{acceptJob.customer_name} - {acceptJob.phone_number}</div>
+                  <AmcIndicator coverage={acceptJob.amc_coverage} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Assign Technician *</label>
@@ -504,3 +506,4 @@ export default function JobList() {
   );
 }
 
+import AmcIndicator from '../../components/AmcIndicator';

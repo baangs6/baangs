@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 import storage from '../utils/storage';
+import { publish } from '../utils/appEvents';
 
 const DEFAULT_API_BASE = 'https://baangs-backend-docker.onrender.com';
 
@@ -20,7 +21,7 @@ export const API_BASE_URL = resolveApiBase();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 45000,
 });
 
 async function uploadAttendancePhoto(path, attendanceId, uri, fileName) {
@@ -87,15 +88,27 @@ api.interceptors.request.use(async (config) => {
   const token = await storage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else {
+    delete config.headers.Authorization;
   }
+  if (config.method === 'get') config.headers['Cache-Control'] = 'no-cache';
   return config;
 });
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    if (['post', 'put', 'patch', 'delete'].includes(res.config.method) && !res.config.url.includes('/auth/') && !res.config.url.includes('/push-token')) {
+      publish('dataChanged');
+    }
+    return res;
+  },
   async (error) => {
     if (error.response?.status === 401) {
-      await storage.multiRemove(['token', 'user']);
+      const currentToken = await storage.getItem('token');
+      if (currentToken && error.config?.headers?.Authorization === `Bearer ${currentToken}`) {
+        await storage.multiRemove(['token', 'user']);
+        publish('sessionExpired');
+      }
     }
     return Promise.reject(error);
   }
@@ -103,12 +116,23 @@ api.interceptors.response.use(
 
 export const authApi = {
   setupStatus: () => api.get('/auth/setup-status'),
-  login: (data) => api.post('/auth/login', data, { timeout: 10000 }),
+  login: (data) => api.post('/auth/login', data),
   me: () => api.get('/auth/me'),
 };
 
 export const jobsApi = {
   list: (params) => api.get('/jobs/', { params }),
+  listAll: async (params = {}) => {
+    const rows = [];
+    const limit = 200;
+    for (let skip = 0; ; skip += limit) {
+      const response = await api.get('/jobs/', { params: { ...params, skip, limit } });
+      const page = Array.isArray(response.data) ? response.data : [];
+      rows.push(...page);
+      if (page.length < limit) break;
+    }
+    return { data: Array.from(new Map(rows.map(row => [row.job_id, row])).values()) };
+  },
   get: (id) => api.get(`/jobs/${id}`),
   customerHistory: (id) => api.get(`/jobs/${id}/customer-history`),
   update: (id, data) => api.put(`/jobs/${id}`, data),
@@ -151,6 +175,14 @@ export const customersApi = {
   create: (data) => api.post('/customers/', data),
   update: (id, data) => api.put(`/customers/${id}`, data),
   delete: (id) => api.delete(`/customers/${id}`),
+};
+
+export const amcApi = {
+  list: id => api.get(`/customers/${id}/amc`),
+  create: (id, data) => api.post(`/customers/${id}/amc`, data),
+  cancel: (id, contract) => api.patch(`/customers/${id}/amc/${contract}/cancel`),
+  job: id => api.get(`/jobs/${id}/amc`),
+  link: (id, data) => api.put(`/jobs/${id}/amc`, data),
 };
 
 export const billingApi = {
@@ -196,6 +228,7 @@ export const notificationsApi = {
   list: (limit = 50) => api.get('/notifications/', { params: { limit } }),
   unreadCount: () => api.get('/notifications/unread-count'),
   registerPushToken: (data) => api.post('/notifications/push-token', data),
+  unregisterPushToken: (token) => api.delete('/notifications/push-token', { data: { token }, timeout: 5000 }),
   markRead: (id) => api.patch(`/notifications/${id}/read`),
   clear: () => api.delete('/notifications/clear'),
 };

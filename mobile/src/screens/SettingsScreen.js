@@ -1,9 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Platform, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Platform, Switch, Linking } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, spacing, radius } from '../theme';
 import { leavesApi } from '../api';
+import storage from '../utils/storage';
+import { subscribe } from '../utils/appEvents';
+import { configurePhoneNotifications, NOTIFICATION_STATUS_KEY } from '../utils/phoneNotifications';
 
 function toYmd(date) {
   const y = date.getFullYear();
@@ -43,6 +46,11 @@ export default function SettingsScreen() {
   const [showToPicker, setShowToPicker] = React.useState(false);
   const [myLeaves, setMyLeaves] = React.useState([]);
   const [savingLeave, setSavingLeave] = React.useState(false);
+  const [notificationStatus, setNotificationStatus] = React.useState('Checking phone notifications...');
+  React.useEffect(() => {
+    storage.getItem(NOTIFICATION_STATUS_KEY).then(value => { if (value) setNotificationStatus(value); });
+    return subscribe('notificationStatus', setNotificationStatus);
+  }, []);
   const leaveTypeOptions = React.useMemo(() => ([
     { value: 'casual', label: 'Casual' },
     { value: 'sick', label: 'Sick' },
@@ -121,6 +129,14 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={styles.sectionTitle}>Account Actions</Text>
+      <View style={styles.card}>
+        <Text style={styles.actionBtnTextNeutral}>Phone Notifications</Text>
+        <Text style={styles.detail}>{notificationStatus}</Text>
+        <TouchableOpacity style={styles.themeSystemBtn} onPress={() => configurePhoneNotifications().catch(() => Alert.alert('Notification setup failed', 'Please check your connection.'))}>
+          <Text style={styles.themeSystemText}>Retry Notification Setup</Text>
+        </TouchableOpacity>
+        {Platform.OS !== 'web' && <TouchableOpacity style={styles.themeSystemBtn} onPress={() => Linking.openSettings()}><Text style={styles.themeSystemText}>Open Phone Settings</Text></TouchableOpacity>}
+      </View>
       <View style={styles.card}>
         <View style={styles.themeRow}>
           <View style={styles.themeTextWrap}>

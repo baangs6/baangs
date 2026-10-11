@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { billingApi } from '../../api';
 import { MdAttachMoney, MdTrendingUp, MdDownload } from 'react-icons/md';
 import { exportApi } from '../../api';
@@ -25,7 +26,7 @@ export default function BillingList() {
     load().catch(console.error);
   }, [monthFilter]);
 
-  const totalRevenue = billing.reduce((acc, b) => acc + b.invoice_amount + (b.collected_amount || 0), 0);
+  const totalRevenue = billing.reduce((acc, b) => acc + Number(b.invoice_amount || 0), 0);
   const totalProfit = billing.reduce((acc, b) => acc + calculateBillingProfit(b).profit, 0);
   const totalCollected = billing.reduce((acc, b) => acc + (b.collected_amount || 0), 0);
 
@@ -97,7 +98,7 @@ export default function BillingList() {
             <tbody>
               {billing.map(b => (
                 <tr key={b.billing_id}>
-                  <td style={{ fontFamily: 'monospace', color: 'var(--color-accent)', fontSize: '0.8rem' }}>{b.job_id}</td>
+                  <td style={{ fontFamily: 'monospace', color: 'var(--color-accent)', fontSize: '0.8rem' }}><Link to={`/jobs/${encodeURIComponent(b.job_id)}`} style={{ color: 'inherit', textDecoration: 'underline' }} aria-label={`Open job ${b.job_id}`}>{b.job_id}</Link></td>
                   <td style={{ fontWeight: 600 }}>{b.customer_name || '—'}</td>
                   <td style={{ fontSize: '0.8rem' }}>{formatDate(b.complete_date)}</td>
                   <td style={{ fontSize: '0.85rem' }}>{b.work_type || '—'}</td>

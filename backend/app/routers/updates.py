@@ -9,6 +9,8 @@ from ..utils.id_generator import generate_update_id, generate_usage_id, generate
 from ..utils.timezone import now_ist_str
 from ..models.inventory import TransactionType
 from ..utils.notifications import notify_roles
+from ..utils.job_access import is_assigned_to_job
+from ..utils.amc import complete_visit, sync_bill
 import uuid
 
 router = APIRouter(prefix="/updates", tags=["Daily Updates"])
@@ -84,7 +86,12 @@ async def _compute_material_amount(db, job_id: str) -> float:
 @router.get("/job/{job_id}", response_model=List[DailyUpdateResponse])
 async def get_job_updates(job_id: str, current_user: dict = Depends(get_current_user)):
     db = get_db()
-    updates = await db.daily_updates.find({"job_id": job_id}).sort("update_time", -1).to_list(200)
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if current_user.get("role") == "sales" or (current_user.get("role") == "technician" and not is_assigned_to_job(job, current_user.get("staff_id"))):
+        raise HTTPException(status_code=403, detail="Access denied")
+    updates = await db.daily_updates.find({"job_id": job_id}).sort("update_time", -1).to_list(None)
     return [_fmt(u) for u in updates]
 
 
@@ -187,7 +194,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
         raise HTTPException(status_code=404, detail="Job not found")
 
     if current_user["role"] == "technician":
-        if job.get("assigned_staff_id") != current_user.get("staff_id"):
+        if not is_assigned_to_job(job, current_user.get("staff_id")):
             raise HTTPException(status_code=403, detail="Not assigned to this job")
 
     # Get staff info
@@ -335,6 +342,8 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
     if inventory_records:
         await db.job_inventory_usage.insert_many(inventory_records)
 
+    if data.status == "complete":
+        job = await complete_visit(db, job)
     job_update = {"status": data.status}
     if data.work_event == "start_work":
         map_location = _map_location_from_geo(update_doc["location"])
@@ -377,6 +386,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
         or bool(data.expense and data.expense > 0)
         or bool(data.collected_amount and data.collected_amount > 0)
         or service_charge > 0
+        or (data.status == "complete" and bool(job.get("amc_id")))
     )
     if should_update_billing:
         from .billing import calc_profit
@@ -409,7 +419,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
             }
             await db.billing.insert_one(billing_doc)
         else:
-            existing_service = billing.get("service_amount")
+            existing_service = billing.get("service_gross_amount", billing.get("service_amount"))
             if existing_service is None:
                 existing_service = max(
                     0.0,
@@ -432,6 +442,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
                 {"$set": {
                     "invoice_amount": new_invoice,
                     "service_amount": new_service,
+                    **({"service_gross_amount": new_service, "material_gross_amount": material_amount} if job.get("amc_benefits") else {}),
                     "expense": new_expense,
                     "collected_amount": new_collected,
                     "material_amount": material_amount,
@@ -440,6 +451,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
                 }}
             )
 
+    await sync_bill(db, job)
     return _fmt(update_doc)
 
 
@@ -557,6 +569,8 @@ async def verify_manual_inventory(
         await db.billing.update_one({"billing_id": billing["billing_id"]}, {"$set": {
             "material_amount": corrected["material_amount"], "service_amount": corrected["service_amount"],
             "invoice_amount": corrected["invoice_amount"], "profit": profit, "profit_percentage": percentage,
+            **({key: corrected[key] for key in ("material_gross_amount", "service_gross_amount", "amc_product_discount", "amc_service_waiver")}
+               if corrected.get("amc_benefits") else {}),
         }})
 
     verified_item = {

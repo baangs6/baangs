@@ -8,13 +8,26 @@ from ..utils.id_generator import generate_job_id, make_customer_key, generate_cu
 from ..utils.timezone import now_ist_str, today_ist_str
 from ..utils.cloudinary_helper import upload_image_bytes
 from ..utils.notifications import notify_roles, notify_users
+from ..utils.job_access import is_assigned_to_job, technician_job_filter
+from ..utils.amc import complete_visit, sync_bill, summary, site_key
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
+
+
+async def annotate_amc(db, jobs):
+    customer_ids = list({j.get('customer_id') for j in jobs if j.get('customer_id')})
+    contracts = await db.amc_contracts.find({'customer_id': {'$in': customer_ids}}).to_list(None) if customer_ids else []
+    for job in jobs:
+        job['amc_coverage'] = next((summary(c) for c in contracts
+            if c['customer_id'] == job.get('customer_id')
+            and site_key(c.get('location')) == site_key(job.get('location'))
+            and summary(c)['status'] == 'active'), None)
 
 
 def _format_job(j: dict, staff_name: str = None) -> dict:
     return {
         "job_id": j["job_id"],
+        "amc_coverage": j.get("amc_coverage"),
         "customer_id": j.get("customer_id", ""),
         "customer_name": j.get("customer_name", ""),
         "customer_nickname": j.get("customer_nickname") or None,
@@ -113,11 +126,6 @@ async def list_jobs(
     query = {}
 
     # Technicians only see their own jobs
-    if current_user["role"] == "technician":
-        staff_id = current_user.get("staff_id")
-        if staff_id:
-            query["assigned_staff_id"] = staff_id
-
     if status:
         query["status"] = status
     if priority:
@@ -129,7 +137,7 @@ async def list_jobs(
     if assigned_staff_id == "__unassigned":
         query["assigned_staff_id"] = None
     elif assigned_staff_id:
-        query["assigned_staff_id"] = assigned_staff_id
+        query["$and"] = [technician_job_filter(assigned_staff_id)]
     if site_type:
         query["site_type"] = site_type
     if date_from or date_to:
@@ -148,11 +156,14 @@ async def list_jobs(
             {"location": {"$regex": search, "$options": "i"}},
         ]
         if "$or" in query:
-            query["$and"] = [{"$or": query.pop("$or")}, {"$or": search_or}]
+            query.setdefault("$and", []).extend([{"$or": query.pop("$or")}, {"$or": search_or}])
         else:
             query["$or"] = search_or
 
+    if current_user["role"] == "technician":
+        query.setdefault("$and", []).append(technician_job_filter(current_user.get("staff_id")))
     jobs = await db.jobs.find(query).sort([("_id", -1)]).skip(skip).limit(limit).to_list(limit)
+    await annotate_amc(db, jobs)
     return [_format_job(j) for j in jobs]
 
 
@@ -263,6 +274,7 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
         tech_user = await db.users.find_one({"staff_id": sid, "role": "technician", "status": "active"})
         if tech_user and tech_user.get("user_id"):
             await notify_users(db, [tech_user["user_id"]], title, msg, {"job_id": job_id, "type": "job_assigned"})
+    await annotate_amc(db, [job_doc])
     return _format_job(job_doc, staff_name)
 
 
@@ -275,7 +287,7 @@ async def get_customer_history(job_id: str, current_user: dict = Depends(get_cur
     current_job = await db.jobs.find_one({"job_id": job_id})
     if not current_job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if current_user["role"] == "technician" and current_job.get("assigned_staff_id") != current_user.get("staff_id"):
+    if current_user["role"] == "technician" and not is_assigned_to_job(current_job, current_user.get("staff_id")):
         raise HTTPException(status_code=403, detail="Access denied")
 
     customer_id = current_job.get("customer_id")
@@ -352,7 +364,7 @@ async def get_job(job_id: str, current_user: dict = Depends(get_current_user)):
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if current_user["role"] == "technician" and job.get("assigned_staff_id") != current_user.get("staff_id"):
+    if current_user["role"] == "technician" and not is_assigned_to_job(job, current_user.get("staff_id")):
         raise HTTPException(status_code=403, detail="Access denied")
 
     usage_cursor = db.job_inventory_usage.find({"job_id": job_id})
@@ -360,6 +372,7 @@ async def get_job(job_id: str, current_user: dict = Depends(get_current_user)):
     for u in usage:
         u["_id"] = str(u["_id"])
 
+    await annotate_amc(db, [job])
     formatted = _format_job(job)
     formatted["inventory_used"] = usage
     return formatted
@@ -373,7 +386,7 @@ async def create_feedback_link(job_id: str, current_user: dict = Depends(get_cur
         raise HTTPException(status_code=404, detail="Job not found")
     if current_user["role"] == "sales":
         raise HTTPException(status_code=403, detail="Sales users can access Tasks only")
-    if current_user["role"] == "technician" and job.get("assigned_staff_id") != current_user.get("staff_id"):
+    if current_user["role"] == "technician" and not is_assigned_to_job(job, current_user.get("staff_id")):
         raise HTTPException(status_code=403, detail="Access denied")
     if job.get("status") != "complete":
         raise HTTPException(status_code=400, detail="Feedback can be requested after the job is complete")
@@ -396,7 +409,7 @@ async def update_job(job_id: str, data: JobUpdate, current_user: dict = Depends(
 
     if current_user["role"] == "technician":
         # Technicians can only update status on their own jobs
-        if job.get("assigned_staff_id") != current_user.get("staff_id"):
+        if not is_assigned_to_job(job, current_user.get("staff_id")):
             raise HTTPException(status_code=403, detail="Access denied")
         allowed = {"status"}
         update_data = {k: v for k, v in data.model_dump().items() if v is not None and k in allowed}
@@ -414,6 +427,9 @@ async def update_job(job_id: str, data: JobUpdate, current_user: dict = Depends(
                     names.append(s["name"])
             update_data["additional_staff_names"] = names
 
+    if update_data.get("status") == "complete":
+        job = await complete_visit(db, {**job, **update_data})
+        await sync_bill(db, job)
     result = await db.jobs.find_one_and_update(
         {"job_id": job_id},
         {"$set": update_data},

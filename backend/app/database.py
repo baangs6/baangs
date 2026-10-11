@@ -46,6 +46,8 @@ async def create_indexes():
     # Customers
     await db.customers.create_index("phone_number")
     await db.customers.create_index("customer_key", unique=True)
+    await db.amc_contracts.create_index("amc_id", unique=True)
+    await db.amc_contracts.create_index([("customer_id", 1), ("start_date", 1)])
     # Jobs
     await db.jobs.create_index("job_id", unique=True)
     await db.jobs.create_index([("customer_id", 1), ("status", 1)])

@@ -65,6 +65,13 @@ export const staffApi = {
 };
 
 // Customers
+export const amcApi = {
+  list: id => api.get(`/customers/${id}/amc`),
+  create: (id, data) => api.post(`/customers/${id}/amc`, data),
+  cancel: (id, contract) => api.patch(`/customers/${id}/amc/${contract}/cancel`),
+  job: id => api.get(`/jobs/${id}/amc`),
+  link: (id, data) => api.put(`/jobs/${id}/amc`, data),
+};
 export const customersApi = {
   list: (params) => api.get('/customers/', { params }),
   listAll: async (params = {}) => {

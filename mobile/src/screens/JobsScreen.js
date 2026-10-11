@@ -7,6 +7,7 @@ import { colors, spacing, radius, useTheme } from '../theme';
 import { callPhone, openJobMap } from '../utils/contactActions';
 import storage from '../utils/storage';
 import { formatDate } from '../utils/dateFormat';
+import useLiveRefresh from '../hooks/useLiveRefresh';
 
 export default function JobsScreen({ navigation, route }) {
   const theme = useTheme();
@@ -25,6 +26,7 @@ export default function JobsScreen({ navigation, route }) {
   const [allServiceTypes, setAllServiceTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
   const [priorityMode, setPriorityMode] = useState(false);
   const [jobOrder, setJobOrder] = useState([]);
   const [daysSort, setDaysSort] = useState(null);
@@ -33,18 +35,20 @@ export default function JobsScreen({ navigation, route }) {
   const orderKey = `jobOrder:${assignedStaffId || user?.staff_id || user?.user_id || 'default'}`;
   const canPrioritize = user?.role === 'technician' || !!assignedStaffId;
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (isCurrent = () => true) => {
     try {
-      const params = {};
+      const params = assignedStaffId ? { assigned_staff_id: assignedStaffId } : {};
       const [jobsRes, lookupsRes] = await Promise.allSettled([
-        jobsApi.list(params),
+        jobsApi.listAll(params),
         lookupsApi.all()
       ]);
+      if (!isCurrent()) return;
 
       if (jobsRes.status === 'fulfilled') {
         setJobs(Array.isArray(jobsRes.value.data) ? jobsRes.value.data : []);
+        setError('');
       } else {
-        setJobs([]);
+        setError(jobsRes.reason.response?.data?.detail || 'Unable to refresh jobs. Check your connection and pull to retry.');
       }
 
       if (
@@ -59,12 +63,11 @@ export default function JobsScreen({ navigation, route }) {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent()) { setLoading(false); setRefreshing(false); }
     }
   };
 
-  useEffect(() => { fetchJobs(); }, []);
+  useLiveRefresh(fetchJobs, `${user?.user_id}:${assignedStaffId || ''}`);
 
   useEffect(() => {
     let mounted = true;
@@ -129,7 +132,7 @@ export default function JobsScreen({ navigation, route }) {
   const filteredJobs = useMemo(() => {
     let res = dateFilteredJobs;
     if (assignedStaffId) {
-      res = res.filter((j) => j.assigned_staff_id === assignedStaffId || j.primary_technician_id === assignedStaffId);
+      res = res.filter((j) => j.assigned_staff_id === assignedStaffId || (j.additional_staff_ids || []).includes(assignedStaffId));
     }
     if (filter !== 'all') res = res.filter(j => String(j.status || '').toLowerCase() === filter);
     if (serviceTypeFilter !== 'all') res = res.filter(j => j.work_type === serviceTypeFilter);
@@ -179,6 +182,7 @@ export default function JobsScreen({ navigation, route }) {
           </TouchableOpacity>
         )}
       </View>
+      {!!error && <Text style={{ color: colors.danger, padding: spacing.base }} accessibilityRole="alert">{error}</Text>}
 
       {canPrioritize && (
         <View style={styles.priorityPanel}>
@@ -330,6 +334,7 @@ export default function JobsScreen({ navigation, route }) {
               </View>
             </View>
             <Text style={styles.customerName}>{job.customer_name}</Text>
+            {job.amc_coverage && <Text style={{ color: '#20b878', fontWeight: '700', marginVertical: 6 }}>AMC Customer | {job.amc_coverage.free_visits_used}/4 visits used | {job.amc_coverage.free_visits_remaining} free remaining{job.amc_coverage.free_visits_remaining === 0 ? ' | Extra visit charges apply' : ''}</Text>}
             {!!job.customer_nickname && <Text style={styles.detail}>Nickname: {job.customer_nickname}</Text>}
             <Text style={styles.detail}>{job.phone_number} · {job.location || 'No location'}</Text>
             <View style={styles.quickActions}>

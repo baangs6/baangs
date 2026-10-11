@@ -4,6 +4,7 @@ import Icon from '@expo/vector-icons/MaterialIcons';
 import { updatesApi } from '../api';
 import { useTheme } from '../theme';
 import { formatDateTime } from '../utils/dateFormat';
+import useLiveRefresh from '../hooks/useLiveRefresh';
 
 const periods = ['day', 'week', 'month', 'year'];
 
@@ -28,7 +29,7 @@ export default function LearningLogScreen({ navigation }) {
     }
   }, [period]);
 
-  React.useEffect(() => { setLoading(true); load(); }, [load]);
+  useLiveRefresh(load, period);
 
   const review = async (item, status) => {
     try {

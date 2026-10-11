@@ -66,6 +66,7 @@ class JobRejectRequest(BaseModel):
 
 
 class JobResponse(BaseModel):
+    amc_coverage: Optional[dict] = None
     job_id: str
     customer_id: str
     customer_name: str

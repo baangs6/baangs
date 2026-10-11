@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AmcIndicator from '../../components/AmcIndicator';
 import { jobsApi, staffApi, lookupsApi, customersApi } from '../../api';
 import { MdArrowBack, MdUpload, MdClose, MdExpandMore } from 'react-icons/md';
 
@@ -308,6 +309,7 @@ export default function JobCreate() {
               <input className="form-input" type="time" value={form.preferred_time} onChange={e => set('preferred_time', e.target.value)} />
             </div>
             <div className="form-group form-full job-ticket-technicians">
+              <AmcIndicator customer={customers.find(c => c.customer_name?.toLowerCase() === form.customer_name.toLowerCase() && c.phone_number === form.phone_number)} location={form.location} />
               <TechnicianPicker
                 staff={staff}
                 primaryId={form.assigned_staff_id}

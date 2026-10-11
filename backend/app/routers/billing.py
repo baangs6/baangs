@@ -8,6 +8,7 @@ from ..auth.utils import create_access_token, decode_token, require_admin, requi
 from ..database import get_db
 from ..utils.id_generator import generate_billing_id
 from ..utils.timezone import today_ist_str
+from ..utils.amc import complete_visit, sync_bill, price_bill
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
@@ -79,8 +80,12 @@ async def reconcile_materials(db, billing: dict) -> dict:
     service = billing.get("service_amount")
     if service is None or (not service and billing.get("invoice_amount", 0) > billing.get("material_amount", 0)):
         service = max(0, float(billing.get("invoice_amount", 0) or 0) - float(billing.get("material_amount", 0) or 0))
-    return {**billing, "material_amount": material, "service_amount": float(service),
-            "invoice_amount": round(material + float(service), 2)}
+    corrected = {**billing, "material_amount": material, "service_amount": float(service),
+                 "invoice_amount": round(material + float(service), 2)}
+    if billing.get("amc_benefits"):
+        corrected["material_gross_amount"] = material
+        corrected = price_bill(corrected, billing["amc_benefits"])
+    return corrected
 
 
 def _fmt(b: dict) -> dict:
@@ -105,6 +110,9 @@ def _fmt(b: dict) -> dict:
         "payment_mode": b.get("payment_mode"),
         "payment_id": b.get("payment_id"),
         "service_amount": b.get("service_amount", max(0, float(b.get("invoice_amount", 0) or 0) - float(b.get("material_amount", 0) or 0))),
+        "amc_service_waiver": b.get("amc_service_waiver", 0),
+        "amc_product_discount": b.get("amc_product_discount", 0),
+        "amc_benefits": b.get("amc_benefits"),
     }
 
 
@@ -172,6 +180,9 @@ async def create_billing(data: BillingCreate, _=Depends(require_admin)):
         "payment_mode": data.payment_mode,
         "payment_id": data.payment_id,
     }
+    job = await complete_visit(db, job)
+    if job.get("amc_benefits"):
+        billing_doc = price_bill(billing_doc, job["amc_benefits"])
     await db.billing.insert_one(billing_doc)
     # Mark job as complete
     await db.jobs.update_one({"job_id": data.job_id}, {"$set": {"status": "complete"}})
@@ -179,7 +190,8 @@ async def create_billing(data: BillingCreate, _=Depends(require_admin)):
 
 
 def _ensure_invoice_access(job: dict, current_user: dict):
-    if current_user.get("role") == "technician" and job.get("assigned_staff_id") != current_user.get("staff_id"):
+    from ..utils.job_access import is_assigned_to_job
+    if current_user.get("role") == "technician" and not is_assigned_to_job(job, current_user.get("staff_id")):
         raise HTTPException(status_code=403, detail="This job is not assigned to you")
 
 
@@ -243,7 +255,9 @@ async def job_invoice_pdf(job_id: str, current_user: dict = Depends(require_any)
             "price": float(price or 0),
         })
     service_amount = float(billing.get("service_amount", 0) or 0)
-    if service_amount <= 0:
+    if not line_items and billing.get("amc_benefits") and billing.get("material_amount"):
+        line_items.append({"description": "Replacement products", "qty": 1, "price": billing["material_amount"]})
+    if service_amount <= 0 and not billing.get("amc_benefits"):
         service_amount = max(0, float(billing.get("invoice_amount", 0) or 0) - sum(i["qty"] * i["price"] for i in line_items))
     if service_amount > 0 or not line_items:
         line_items.append({"description": f"{job.get('work_type') or 'Service'} service charge", "qty": 1, "price": service_amount})
@@ -281,6 +295,11 @@ async def job_invoice_pdf(job_id: str, current_user: dict = Depends(require_any)
         amount = item['qty'] * item['price']
         qty_text = str(int(item['qty'])) if float(item['qty']).is_integer() else f"{item['qty']:.2f}"
         rows.append([str(index), item['description'].upper(), qty_text, f"Rs {item['price']:,.2f}", f"Rs {amount:,.2f}"])
+    if billing.get("amc_service_waiver"):
+        # The service row is already net of the waiver.
+        rows.append(['', 'AMC SERVICE VISIT INCLUDED', '', '', 'Rs 0.00'])
+    if billing.get("amc_product_discount"):
+        rows.append(['', 'AMC REPLACEMENT DISCOUNT (10%)', '', '', f"-Rs {billing['amc_product_discount']:,.2f}"])
     total = float(billing.get("invoice_amount", 0) or 0)
     rows.append(['', '', '', 'TOTAL', f"Rs {total:,.2f}"])
     item_table = Table(rows, colWidths=[13 * mm, 83 * mm, 15 * mm, 25 * mm, 28 * mm], repeatRows=1)
@@ -330,6 +349,11 @@ async def get_billing(billing_id: str, _=Depends(require_admin_or_manager)):
 @router.put("/{billing_id}", response_model=BillingResponse)
 async def update_billing(billing_id: str, data: BillingCreate, _=Depends(require_admin)):
     db = get_db()
+    existing = await db.billing.find_one({"billing_id": billing_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Billing record not found")
+    if existing["job_id"] != data.job_id:
+        raise HTTPException(status_code=400, detail="Billing job cannot be changed")
     profit, profit_pct = calc_profit(data.invoice_amount, data.collected_amount or 0.0, data.expense, data.material_amount)
     update_data = {
         "invoice_amount": data.invoice_amount,
@@ -342,6 +366,10 @@ async def update_billing(billing_id: str, data: BillingCreate, _=Depends(require
         "payment_mode": data.payment_mode,
         "payment_id": data.payment_id,
     }
+    if existing.get("amc_benefits"):
+        update_data["service_amount"] = data.service_amount if "service_amount" in data.model_fields_set else existing.get("service_gross_amount", 0)
+        update_data = price_bill(update_data, existing["amc_benefits"])
+        update_data["profit"], update_data["profit_percentage"] = calc_profit(update_data["invoice_amount"], data.collected_amount, data.expense, data.material_amount)
     result = await db.billing.find_one_and_update(
         {"billing_id": billing_id},
         {"$set": update_data},

@@ -4,6 +4,7 @@ import { customersApi } from '../../api';
 import { MdArrowBack, MdWork } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { formatDate } from '../../utils/dateFormat';
+import AmcPanel from '../../components/AmcPanel';
 
 export default function CustomerDetail() {
   const { customerId } = useParams();
@@ -156,6 +157,7 @@ export default function CustomerDetail() {
         </div>
       </div>
 
+      <AmcPanel key={customerId} customer={customer} />
       <section style={{ marginBottom: 24 }}>
         <h3 className="card-title" style={{ marginBottom: 12 }}>Products & Warranty</h3>
         {warrantyLoading ? <p>Loading warranties...</p> : warrantyError ? <p role="alert">{warrantyError}</p> : products.length === 0 ? <p>No recorded products used.</p> : (

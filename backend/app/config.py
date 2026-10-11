@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     APP_NAME: str = "Baangs FSM"
     ENVIRONMENT: str = "development"
+    ENABLE_BACKGROUND_REMINDERS: bool = True
     FRONTEND_URL: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(env_file=".env", extra="allow", protected_namespaces=())

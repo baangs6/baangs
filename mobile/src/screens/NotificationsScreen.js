@@ -3,6 +3,8 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, A
 import { notificationsApi } from '../api';
 import { colors, spacing, radius, useTheme } from '../theme';
 import { formatDateTime } from '../utils/dateFormat';
+import useLiveRefresh from '../hooks/useLiveRefresh';
+import * as Notifications from 'expo-notifications';
 
 export default function NotificationsScreen({ navigation }) {
   const theme = useTheme();
@@ -10,21 +12,22 @@ export default function NotificationsScreen({ navigation }) {
   const [rows, setRows] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState('');
 
   const load = async () => {
     try {
       const res = await notificationsApi.list(50);
       setRows(Array.isArray(res.data) ? res.data : []);
+      setError('');
     } catch (e) {
       console.error(e);
+      setError('Unable to refresh notifications. Pull down to retry.');
     } finally {
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useLiveRefresh(load);
 
   const openRow = async (row) => {
     if (!row.is_read) {
@@ -59,6 +62,7 @@ export default function NotificationsScreen({ navigation }) {
             setClearing(true);
             try {
               await notificationsApi.clear();
+              await Notifications.dismissAllNotificationsAsync();
               setRows([]);
             } catch (e) {
               Alert.alert('Error', e?.response?.data?.detail || 'Failed to clear notifications');
@@ -91,7 +95,8 @@ export default function NotificationsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {rows.length === 0 ? (
+      {!!error && <Text style={{ color: colors.danger, padding: spacing.base }}>{error}</Text>}
+      {rows.length === 0 && !error ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>No notifications</Text>
         </View>

@@ -228,6 +228,7 @@ def _collection_names():
         "users",
         "staff",
         "customers",
+        "amc_contracts",
         "jobs",
         "daily_updates",
         "attendance",
@@ -466,6 +467,10 @@ def _matches(doc: dict, query: dict):
         return True
 
     for key, expected in query.items():
+        if key == "$and":
+            if not all(_matches(doc, subquery) for subquery in expected):
+                return False
+            continue
         if key == "$or":
             if not any(_matches(doc, subquery) for subquery in expected):
                 return False

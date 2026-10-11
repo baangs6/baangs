@@ -72,9 +72,13 @@ export function createInvoicePdf(job, billing) {
     price: Number(item.unit_selling_price || 0),
   }));
   const material = products.reduce((sum, item) => sum + item.qty * item.price, 0);
+  if (billing.amc_benefits && products.length > 12) throw new Error('This AMC invoice needs the server PDF because it contains more than 12 products. Please retry when the server is available.');
+  if (billing.amc_benefits && !products.length && billing.material_amount) products.push({ description: 'Replacement products', qty: 1, price: Number(billing.material_amount) });
   const service = Number(billing.service_amount || Math.max(0, Number(billing.invoice_amount || 0) - Number(billing.material_amount || 0)));
-  const total = Math.round((material + service) * 100) / 100;
+  const total = billing.amc_benefits ? Number(billing.invoice_amount || 0) : Math.round((material + service) * 100) / 100;
   if (service > 0 || products.length === 0) products.push({ description: `${job.work_type || 'Service'} service charge`, qty: 1, price: service });
+  if (billing.amc_service_waiver) products.push({ description: 'AMC service visit included', qty: 1, price: 0 });
+  if (billing.amc_product_discount) products.push({ description: 'AMC replacement discount (10%)', qty: 1, price: -Number(billing.amc_product_discount) });
 
   let first = '';
   first += text('BAANGS', 72, 755, 38, true, '0.03 0.62 0.85');

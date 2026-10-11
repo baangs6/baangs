@@ -6,6 +6,7 @@ import { attendanceApi, billingApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { spacing, radius, useTheme } from '../theme';
 import { formatDate } from '../utils/dateFormat';
+import useLiveRefresh from '../hooks/useLiveRefresh';
 
 export default function FinanceScreen() {
   const theme = useTheme();
@@ -26,31 +27,28 @@ export default function FinanceScreen() {
     bill_uri: null,
   });
 
-  const load = async () => {
+  const load = async (isCurrent = () => true) => {
     setError('');
     try {
-      const [billingRes, allowanceRes] = await Promise.all([
-        billingApi.list().catch((e) => {
-          setError(e.response?.status === 403 ? 'Finance billing is available for admin and manager users.' : 'Unable to load billing records.');
-          return { data: [] };
-        }),
-        user?.staff_id ? attendanceApi.allowances({ staff_id: user.staff_id, limit: 20 }).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+      const [billingRes, allowanceRes] = await Promise.allSettled([
+        billingApi.list(),
+        user?.staff_id ? attendanceApi.allowances({ staff_id: user.staff_id, limit: 20 }) : Promise.resolve({ data: [] }),
       ]);
-      setBilling(billingRes.data || []);
-      setAllowances(allowanceRes.data || []);
+      if (!isCurrent()) return;
+      const failures = [];
+      if (billingRes.status === 'fulfilled') setBilling(billingRes.value.data || []);
+      else failures.push(billingRes.reason.response?.status === 403 ? 'Finance billing is available for admin and manager users.' : 'Unable to refresh billing records.');
+      if (allowanceRes.status === 'fulfilled') setAllowances(allowanceRes.value.data || []);
+      else failures.push('Unable to refresh daily allowances.');
+      setError(failures.join(' '));
     } catch (e) {
-      setBilling([]);
-      setAllowances([]);
-      setError('Unable to load finance records.');
+      if (isCurrent()) setError('Unable to load finance records.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent()) { setLoading(false); setRefreshing(false); }
     }
   };
 
-  useEffect(() => {
-    load();
-  }, [user?.staff_id]);
+  useLiveRefresh(load, user?.user_id);
 
   const pickBillPhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();

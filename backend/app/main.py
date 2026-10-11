@@ -14,14 +14,16 @@ from .routers import auth, users, staff, customers, jobs, updates, billing, atte
 async def lifespan(app: FastAPI):
     await connect_db()
     configure_cloudinary()
-    reminder_task = asyncio.create_task(job_reminder_loop(get_db()))
-    logout_task = asyncio.create_task(logout_reminder_loop(get_db()))
+    tasks = []
+    if settings.ENABLE_BACKGROUND_REMINDERS:
+        tasks = [asyncio.create_task(job_reminder_loop(get_db())),
+                 asyncio.create_task(logout_reminder_loop(get_db()))]
     try:
         yield
     finally:
-        reminder_task.cancel()
-        logout_task.cancel()
-        for t in [reminder_task, logout_task]:
+        for t in tasks:
+            t.cancel()
+        for t in tasks:
             try:
                 await t
             except asyncio.CancelledError:
@@ -62,6 +64,8 @@ app.add_middleware(
 )
 
 # Register routers
+from .routers import amc
+app.include_router(amc.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(staff.router)

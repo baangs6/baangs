@@ -24,6 +24,9 @@ class BillingCreate(BaseModel):
 
 
 class BillingResponse(BaseModel):
+    amc_service_waiver: float = 0
+    amc_product_discount: float = 0
+    amc_benefits: Optional[dict] = None
     billing_id: str
     job_id: str
     customer_name: Optional[str] = None

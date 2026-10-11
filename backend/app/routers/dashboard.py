@@ -4,6 +4,7 @@ from datetime import datetime
 from ..auth.utils import get_current_user, require_admin_or_manager
 from ..database import get_db
 from ..utils.timezone import today_ist_str, IST
+from ..utils.job_access import technician_job_filter
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -102,8 +103,8 @@ async def summary(
 
     if current_user["role"] == "technician":
         staff_id = current_user.get("staff_id")
-        jobs_query = {"assigned_staff_id": staff_id, **jobs_date_query}
-        jobs = await db.jobs.find(jobs_query).to_list(1000)
+        jobs_query = {**technician_job_filter(staff_id), **jobs_date_query}
+        jobs = await db.jobs.find(jobs_query).to_list(None)
         job_ids = [job["job_id"] for job in jobs]
         customer_ids = {job["customer_id"] for job in jobs if job.get("customer_id")}
 
@@ -327,7 +328,7 @@ async def technician_performance(
 
     if current_user["role"] == "technician":
         staff_id = current_user.get("staff_id")
-        jobs = await db.jobs.find({"assigned_staff_id": staff_id, **jobs_date_query}).to_list(1000)
+        jobs = await db.jobs.find({**technician_job_filter(staff_id), **jobs_date_query}).to_list(None)
         return [{
             "staff_id": staff_id,
             "staff_name": current_user.get("full_name") or current_user.get("username"),

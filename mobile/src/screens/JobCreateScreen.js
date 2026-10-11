@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { customersApi, jobsApi, lookupsApi, staffApi } from '../api';
+import { amcApi, customersApi, jobsApi, lookupsApi, staffApi } from '../api';
 import { radius, spacing, useTheme } from '../theme';
 
 const initialForm = {
@@ -26,6 +26,20 @@ export default function JobCreateScreen({ navigation }) {
   const [customers, setCustomers] = React.useState([]);
   const [lookups, setLookups] = React.useState({});
   const [saving, setSaving] = React.useState(false);
+  const [amcRows, setAmcRows] = React.useState([]);
+  const [amcError, setAmcError] = React.useState(false);
+  const selectedCustomer = customers.find(c => c.customer_name === form.customer_name && c.phone_number === form.phone_number);
+  React.useEffect(() => {
+    let active = true;
+    setAmcRows([]);
+    setAmcError(false);
+    if (selectedCustomer?.customer_id) amcApi.list(selectedCustomer.customer_id).then(({ data }) => {
+      if (active) setAmcRows(data);
+    }).catch(() => { if (active) setAmcError(true); });
+    return () => { active = false; };
+  }, [selectedCustomer?.customer_id]);
+  const siteKey = value => (value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  const coverage = amcRows.find(c => c.status === 'active' && siteKey(c.location) === siteKey(form.location));
 
   React.useEffect(() => {
     Promise.allSettled([staffApi.list(), lookupsApi.all(), customersApi.list()]).then(([staffRes, lookupRes, customersRes]) => {
@@ -85,6 +99,8 @@ export default function JobCreateScreen({ navigation }) {
       <Text style={styles.sub}>Add the same job details from the web panel inside the app.</Text>
 
       <Field label="Customer Name" value={form.customer_name} onChangeText={(v) => update('customer_name', v)} colors={colors} />
+      {amcError && <Text style={{ color: colors.text }}>Unable to check AMC coverage.</Text>}
+      {coverage && <Text style={{ color: '#20b878', fontWeight: '700', marginVertical: 10 }}>AMC Customer | {coverage.free_visits_used}/4 visits used | {coverage.free_visits_remaining} free remaining{coverage.free_visits_remaining === 0 ? ' | Extra visit charges apply' : ''}</Text>}
       <Field label="Nickname (internal)" value={form.customer_nickname} onChangeText={(v) => update('customer_nickname', v)} colors={colors} />
       <Field label="Phone Number" value={form.phone_number} onChangeText={(v) => update('phone_number', v)} keyboardType="phone-pad" colors={colors} />
       {customerMatches.length > 0 && (

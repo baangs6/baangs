@@ -6,6 +6,7 @@ import Icon from '@expo/vector-icons/MaterialIcons';
 import { attendanceApi, dashboardApi, jobsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing, radius, useTheme } from '../theme';
+import useLiveRefresh from '../hooks/useLiveRefresh';
 
 export default function DashboardScreen({ navigation, route }) {
   const theme = useTheme();
@@ -17,32 +18,33 @@ export default function DashboardScreen({ navigation, route }) {
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
   const [checkingOut, setCheckingOut] = useState(false);
   const selectedTechnician = route?.params?.selectedTechnician;
 
-  const load = async () => {
+  const load = async (isCurrent = () => true) => {
     try {
       const [sumRes, techRes, attendanceRes, selectedJobsRes] = await Promise.all([
         dashboardApi.summary(),
         dashboardApi.technicianPerformance(),
         user?.staff_id ? attendanceApi.today(user.staff_id).catch(() => ({ data: null })) : Promise.resolve({ data: null }),
-        selectedTechnician?.staff_id ? jobsApi.list({ assigned_staff_id: selectedTechnician.staff_id }).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        selectedTechnician?.staff_id ? jobsApi.listAll({ assigned_staff_id: selectedTechnician.staff_id }) : Promise.resolve({ data: [] }),
       ]);
+      if (!isCurrent()) return;
+      setError('');
       setSummary(sumRes.data);
       setTechPerf(techRes.data);
       setTodayAttendance(attendanceRes.data);
       setTechJobs(Array.isArray(selectedJobsRes.data) ? selectedJobsRes.data : []);
     } catch (e) {
       console.error(e);
+      if (isCurrent()) setError(e.response?.data?.detail || 'Unable to refresh dashboard. Pull down to retry.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent()) { setLoading(false); setRefreshing(false); }
     }
   };
 
-  useEffect(() => {
-    load();
-  }, [user?.staff_id, selectedTechnician?.staff_id]);
+  useLiveRefresh(load, `${user?.user_id}:${selectedTechnician?.staff_id || ''}`);
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -119,7 +121,8 @@ export default function DashboardScreen({ navigation, route }) {
   const openJobs = (status) => {
     navigation.navigate('Jobs', {
       screen: 'JobsList',
-      params: status ? { statusFilter: status } : { statusFilter: 'all' },
+      params: { statusFilter: status || 'all', assigned_staff_id: selectedTechnician?.staff_id || null,
+        technicianName: selectedTechnician ? selectedTechnician.full_name || selectedTechnician.name || selectedTechnician.staff_id : null },
     });
   };
   const rootNavigation = navigation.getParent?.()?.getParent?.() || navigation.getParent?.();
@@ -151,6 +154,7 @@ export default function DashboardScreen({ navigation, route }) {
         </View>
       </View>
 
+      {!!error && <Text style={{ color: colors.danger, padding: spacing.base }}>{error}</Text>}
       {user?.staff_id && !selectedTechnician && (
         <View style={styles.logoutPanel}>
           <View style={{ flex: 1 }}>

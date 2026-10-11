@@ -2,7 +2,12 @@
   "expo": {
     "name": "Baangs",
     "slug": "baangs",
-    "version": "1.0.10",
+    "extra": {
+      "eas": {
+        "projectId": "1c209de7-c973-48ed-8833-32c36cc48b5d"
+      }
+    },
+    "version": "1.0.12",
     "platforms": [
       "ios",
       "android",
@@ -21,6 +26,7 @@
       "supportsTablet": true
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#2563eb"
@@ -35,7 +41,7 @@
         "VIBRATE"
       ],
       "package": "com.anonymous.mobile",
-      "versionCode": 11
+      "versionCode": 13
     },
     "notification": {
       "icon": "./assets/adaptive-icon.png",
@@ -62,7 +68,7 @@
         "expo-notifications",
         {
           "sounds": [
-            "./assets/attendance-reminder.wav"
+            "./assets/attendance_reminder.wav"
           ]
         }
       ],

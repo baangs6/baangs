@@ -4,6 +4,7 @@ from typing import List
 from ..auth.utils import get_current_user
 from ..database import get_db
 from ..utils.timezone import now_ist_str
+from ..utils.job_access import is_assigned_to_job
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
@@ -34,8 +35,8 @@ async def _is_visible_notification(db, notification: dict, current_user: dict) -
     if not job_id:
         return True
 
-    job = await db.jobs.find_one({"job_id": job_id}, {"assigned_staff_id": 1})
-    return bool(job and job.get("assigned_staff_id") == current_user.get("staff_id"))
+    job = await db.jobs.find_one({"job_id": job_id}, {"assigned_staff_id": 1, "additional_staff_ids": 1})
+    return bool(job and is_assigned_to_job(job, current_user.get("staff_id")))
 
 
 async def _visible_notifications(db, rows: list[dict], current_user: dict) -> list[dict]:
@@ -96,6 +97,13 @@ async def register_push_token(data: PushTokenRegister, current_user: dict = Depe
         upsert=True,
     )
     return {"message": "Push token registered"}
+
+
+@router.delete("/push-token")
+async def unregister_push_token(data: PushTokenRegister, current_user: dict = Depends(get_current_user)):
+    db = get_db()
+    await db.push_tokens.update_one({"token": data.token, "user_id": current_user["user_id"]}, {"$set": {"status": "inactive", "updated_at": now_ist_str()}})
+    return {"message": "Push token unregistered"}
 
 
 @router.patch("/{notification_id}/read")

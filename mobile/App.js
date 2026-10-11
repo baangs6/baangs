@@ -4,9 +4,10 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { Platform, View, ActivityIndicator, StatusBar, StyleSheet, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { AppState, Platform, View, ActivityIndicator, StatusBar, StyleSheet, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
+import { configurePhoneNotifications, showNewPhoneAlerts } from './src/utils/phoneNotifications';
+import { subscribe, publish } from './src/utils/appEvents';
 import Icon from '@expo/vector-icons/MaterialIcons';
 import { attendanceApi, notificationsApi, staffApi } from './src/api';
 import { ThemeProvider, useTheme } from './src/theme';
@@ -106,7 +107,7 @@ function AdminOverlay() {
 
   const menuItems = [
     { label: 'Dashboard', icon: 'dashboard', action: () => go('MainTabs', { screen: 'Dashboard' }) },
-    { label: 'Jobs', icon: 'work', action: () => go('MainTabs', { screen: 'Jobs', params: { screen: 'JobsList' } }) },
+    { label: 'Jobs', icon: 'work', action: () => go('MainTabs', { screen: 'Jobs', params: { screen: 'JobsList', params: { assigned_staff_id: null, technicianName: null, statusFilter: 'all' } } }) },
     { label: 'Create Job', icon: 'add-task', action: () => go('MainTabs', { screen: 'Jobs', params: { screen: 'JobCreate' } }) },
     { label: 'Customers', icon: 'people', action: () => go('Customers') },
     { label: 'Staff / Technicians', icon: 'engineering', action: () => go('Staff') },
@@ -187,91 +188,45 @@ function MainTabs() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    let mounted = true;
-    let intervalId;
-
-    async function requestNotificationAccess() {
-      if (Platform.OS === 'web' || !user) return;
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelGroupAsync('baangs-notifications', {
-          name: 'Baangs notifications',
-        });
-        await Notifications.setNotificationChannelAsync('baangs-stack', {
-          name: 'Baangs notifications',
-          importance: Notifications.AndroidImportance.HIGH,
-          sound: 'attendance-reminder.wav',
-          vibrationPattern: [0, 250, 250, 250],
-          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          groupId: 'baangs-notifications',
-        });
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'Default notifications',
-          importance: Notifications.AndroidImportance.HIGH,
-          sound: 'attendance-reminder.wav',
-          vibrationPattern: [0, 250, 250, 250],
-          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          groupId: 'baangs-notifications',
-        });
-        await Notifications.setNotificationChannelAsync('jobs', {
-          name: 'Job notifications',
-          importance: Notifications.AndroidImportance.HIGH,
-          sound: 'attendance-reminder.wav',
-          vibrationPattern: [0, 250, 250, 250],
-          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          groupId: 'baangs-notifications',
-        });
-        await Notifications.setNotificationChannelAsync('attendance-reminders', {
-          name: 'Attendance reminders',
-          importance: Notifications.AndroidImportance.HIGH,
-          sound: 'attendance-reminder.wav',
-          vibrationPattern: [0, 350, 180, 350],
-          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          groupId: 'baangs-notifications',
-        });
-      }
-
-      const existing = await Notifications.getPermissionsAsync();
-      if (existing.status !== 'granted') {
-        const requested = await Notifications.requestPermissionsAsync();
-        if (requested.status !== 'granted') return;
-      }
-
-      const projectId =
-        Constants.expoConfig?.extra?.eas?.projectId ||
-        Constants.easConfig?.projectId ||
-        Constants.manifest2?.extra?.eas?.projectId;
-      const tokenResult = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
-      await notificationsApi.registerPushToken({
-        token: tokenResult.data,
-        platform: Platform.OS,
-        device_id: Constants.sessionId || Constants.installationId || null,
-      });
+    let disposed = false;
+    let polling = false;
+    let remotePushReady = false;
+    let registering = false;
+    async function register() {
+      if (registering || disposed || Platform.OS === 'web' || AppState.currentState === 'background') return;
+      registering = true;
+      try { remotePushReady = await configurePhoneNotifications(); }
+      catch (error) { console.warn('Notification setup failed', error.message); }
+      finally { registering = false; }
     }
-
-    async function pollNotifications() {
+    async function poll() {
+      if (disposed || polling || AppState.currentState === 'background' || AppState.currentState === 'inactive') return;
+      polling = true;
       try {
-        const countRes = await notificationsApi.unreadCount();
-
-        if (!mounted) return;
-        const nextCount = Number(countRes.data?.count || 0);
-        setUnreadCount(nextCount);
-      } catch (error) {
-        console.warn('Notification poll failed', error);
-      }
+        const [count, rows] = await Promise.all([notificationsApi.unreadCount(), notificationsApi.list(200)]);
+        if (!disposed) {
+          setUnreadCount(Number(count.data?.count || 0));
+          if (!remotePushReady) await showNewPhoneAlerts(user.user_id, rows.data || []);
+        }
+      } catch (error) { console.warn('Notification sync failed', error.message); }
+      finally { polling = false; }
     }
-
-    requestNotificationAccess().catch((error) => console.warn('Notification permission failed', error));
-    pollNotifications();
-    intervalId = setInterval(pollNotifications, 30000);
-
-    return () => {
-      mounted = false;
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [user]);
-
+    register().then(poll);
+    const timer = setInterval(poll, 30000);
+    const registrationTimer = setInterval(() => { if (!remotePushReady) register(); }, 300000);
+    const appState = AppState.addEventListener('change', state => { if (state === 'active') register().then(poll); });
+    const unsubscribe = subscribe('dataChanged', poll);
+    const received = Notifications.addNotificationReceivedListener(() => { publish('dataChanged'); poll(); });
+    return () => { disposed = true; clearInterval(timer); clearInterval(registrationTimer); appState.remove(); unsubscribe(); received.remove(); };
+  }, [user?.user_id]);
   useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    let disposed = false;
+    let handledId;
+    const openNotification = (response) => {
+      if (disposed || !response || !navigationRef.current?.isReady()) return;
+      const id = response.notification.request.identifier;
+      if (handledId === id) return;
+      handledId = id;
       const jobId = response.notification.request.content.data?.job_id;
       if (jobId && navigationRef.current?.isReady()) {
         navigationRef.current.navigate('MainTabs', {
@@ -281,10 +236,14 @@ function MainTabs() {
             params: { jobId },
           },
         });
+      } else {
+        navigationRef.current.navigate('MainTabs', { screen: 'Notifications' });
       }
-    });
-
-    return () => subscription.remove();
+      Notifications.clearLastNotificationResponseAsync().catch(() => {});
+    };
+    const subscription = Notifications.addNotificationResponseReceivedListener(openNotification);
+    Notifications.getLastNotificationResponseAsync().then(openNotification).catch(() => {});
+    return () => { disposed = true; subscription.remove(); };
   }, []);
 
   return (
@@ -381,7 +340,7 @@ function AppNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef} key={themeMode}>
+    <NavigationContainer ref={navigationRef} key={`${user?.user_id || 'guest'}:${themeMode}`}>
       <StatusBar barStyle={themeMode === 'light' ? 'dark-content' : 'light-content'} backgroundColor={colors.bg} />
       {user ? (
         checkingAttendance ? (

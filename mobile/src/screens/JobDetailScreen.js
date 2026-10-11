@@ -20,9 +20,11 @@ import * as Sharing from 'expo-sharing';
 import { jobsApi, updatesApi, billingApi, inventoryApi, API_BASE_URL } from '../api';
 import { formatDate } from '../utils/dateFormat';
 import { useAuth } from '../context/AuthContext';
+import AmcPanel from '../components/AmcPanel';
 import { colors, spacing, radius, useTheme } from '../theme';
 import { callPhone, openJobMap } from '../utils/contactActions';
 import storage from '../utils/storage';
+import useLiveRefresh from '../hooks/useLiveRefresh';
 
 const EMPTY_MANUAL_ITEM = {
   barcode: '',
@@ -70,6 +72,7 @@ export default function JobDetailScreen({ route }) {
   const [customerHistory, setCustomerHistory] = useState([]);
   const [showCustomerHistory, setShowCustomerHistory] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionSaving, setActionSaving] = useState(false);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
@@ -115,13 +118,16 @@ export default function JobDetailScreen({ route }) {
 
   const isAdmin = user?.role === 'admin';
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (showLoading = true, isCurrent = () => true) => {
+    if (showLoading) setLoading(true);
     try {
       const jobRes = await jobsApi.get(jobId);
+      if (!isCurrent()) return;
       setJob(jobRes.data);
+      setLoadError('');
       try {
         const updatesRes = await updatesApi.getJobUpdates(jobId);
+        if (!isCurrent()) return;
         setUpdates(Array.isArray(updatesRes.data) ? updatesRes.data : []);
       } catch (updatesError) {
         console.warn('Job updates unavailable', updatesError.response?.data || updatesError.message);
@@ -129,6 +135,7 @@ export default function JobDetailScreen({ route }) {
       }
       try {
         const historyRes = await jobsApi.customerHistory(jobId);
+        if (!isCurrent()) return;
         setCustomerHistory(historyRes.data?.history || []);
       } catch (historyError) {
         console.warn('Customer history unavailable', historyError);
@@ -137,15 +144,15 @@ export default function JobDetailScreen({ route }) {
       setUpdateForm((prev) => ({ ...prev, status: jobRes.data.status || 'in_progress' }));
     } catch (error) {
       const detail = error.response?.data?.detail;
-      Alert.alert('Error', typeof detail === 'string' ? detail : error.message || 'Failed to load job details');
+      if (isCurrent()) setLoadError(typeof detail === 'string' ? detail : error.message || 'Failed to load job details');
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
-  useEffect(() => {
-    load();
-  }, [jobId]);
+  useLiveRefresh(isCurrent => {
+    if (!showUpdateModal && !showBillingModal && !saving && !actionSaving) return load(false, isCurrent);
+  }, `${jobId}:${showUpdateModal}:${showBillingModal}`);
 
   const loadInventorySuggestions = async () => {
     try {
@@ -506,13 +513,19 @@ export default function JobDetailScreen({ route }) {
     setShowScannerModal(false);
   };
 
-  if (loading || !job) {
+  if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
   }
+  if (!job) return (
+    <View style={styles.center}>
+      <Text style={styles.selectedText}>{loadError || 'Job unavailable'}</Text>
+      <TouchableOpacity style={styles.findBtn} onPress={() => load()}><Text style={styles.findBtnText}>Retry</Text></TouchableOpacity>
+    </View>
+  );
 
   const canWorkActions = !isAdmin && job.status !== 'cancelled' && job.status !== 'complete';
   const hasStarted = !!job.work_started_at || job.status === 'in_progress';
@@ -534,6 +547,7 @@ export default function JobDetailScreen({ route }) {
 
   return (
     <ScrollView style={styles.container}>
+      {!!loadError && <Text style={{ color: colors.danger, padding: spacing.base }}>{loadError}</Text>}
       <View style={styles.jobHeader}>
         <Text style={styles.jobId}>{job.job_id}</Text>
         <View style={[styles.badge, { backgroundColor: `${STATUS_COLORS[job.status] || colors.textMuted}22`, borderColor: STATUS_COLORS[job.status] || colors.textMuted }]}>
@@ -544,6 +558,7 @@ export default function JobDetailScreen({ route }) {
       </View>
 
       <View style={styles.card}>
+        <AmcPanel key={jobId} job={job} styles={styles} />
         <Text style={styles.sectionTitle}>Customer</Text>
         <InfoRow styles={styles} label="Name" value={job.customer_name} />
         {!!job.customer_nickname && <InfoRow styles={styles} label="Nickname" value={job.customer_nickname} />}

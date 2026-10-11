@@ -4,6 +4,7 @@ import { jobsApi, updatesApi, billingApi, customersApi, staffApi, lookupsApi } f
 import { formatDate } from '../../utils/dateFormat';
 import { createInvoicePdf } from '../../utils/invoicePdf';
 import { calculateBillingProfit } from '../../utils/billingMath';
+import AmcPanel from '../../components/AmcPanel';
 import { MdArrowBack, MdEdit, MdAttachMoney, MdVerified, MdClose, MdExpandMore, MdPerson, MdLocationOn, MdEngineering, MdSchedule, MdStar } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { MdDownload } from 'react-icons/md';
@@ -532,6 +533,7 @@ export default function JobDetail() {
 
       {activeTab === 'details' && (
       <>
+      <AmcPanel key={jobId} job={job} />
       <div className="job-detail-main-grid">
         <div className="job-detail-panel">
           <h3 className="job-detail-section-title">Ticket Details</h3>
@@ -602,6 +604,7 @@ export default function JobDetail() {
             ))}
           </div>
           <div style={{ marginTop: 8, fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+            {!!billing.amc_benefits && <p>AMC service waived: Rs {billing.amc_service_waiver || 0} | Replacement discount: Rs {billing.amc_product_discount || 0}</p>}
             Payment: {billing.payment_mode} {billing.payment_id ? `| ${billing.payment_id}` : ''} | Collected: Rs {billing.collected_amount || 0}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
