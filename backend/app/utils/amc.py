@@ -27,12 +27,12 @@ def summary(contract, today=None):
     }
 
 
-async def complete_visit(db, job):
+async def complete_visit(db, job, session=None):
     """CAS ledger makes concurrent completions and retries consume at most four free visits."""
     if not job.get("amc_id") or job.get("amc_benefits") is not None:
         return job
     for _ in range(10):
-        contract = await db.amc_contracts.find_one({"amc_id": job["amc_id"]})
+        contract = await db.amc_contracts.find_one({"amc_id": job["amc_id"]}, session=session)
         if not contract:
             raise HTTPException(409, "Linked AMC no longer exists")
         visit = next((v for v in contract.get("visits", []) if v["job_id"] == job["job_id"]), None)
@@ -41,7 +41,7 @@ async def complete_visit(db, job):
                 raise HTTPException(409, "Job location does not match the linked AMC")
             if summary(contract)["status"] != "active":
                 benefits = {"amc_id": contract["amc_id"], "free_service": False, "product_discount_percent": 0}
-                await db.jobs.update_one({"job_id": job["job_id"]}, {"$set": {"amc_benefits": benefits}})
+                await db.jobs.update_one({"job_id": job["job_id"]}, {"$set": {"amc_benefits": benefits}}, session=session)
                 return {**job, "amc_benefits": benefits}
             visit = {"job_id": job["job_id"], "completed_on": today_ist_str(),
                      "free_service": summary(contract)["free_visits_remaining"] > 0,
@@ -49,11 +49,11 @@ async def complete_visit(db, job):
             revision = contract.get("revision", 0)
             updated = await db.amc_contracts.find_one_and_update(
                 {"amc_id": contract["amc_id"], "revision": revision},
-                {"$set": {"visits": contract.get("visits", []) + [visit], "revision": revision + 1}}, return_document=True)
+                {"$set": {"visits": contract.get("visits", []) + [visit], "revision": revision + 1}}, return_document=True, session=session)
             if not updated:
                 continue
         benefits = {"amc_id": contract["amc_id"], **visit}
-        await db.jobs.update_one({"job_id": job["job_id"]}, {"$set": {"amc_benefits": benefits}})
+        await db.jobs.update_one({"job_id": job["job_id"]}, {"$set": {"amc_benefits": benefits}}, session=session)
         return {**job, "amc_benefits": benefits}
     raise HTTPException(409, "AMC changed during completion. Please retry")
 
@@ -72,12 +72,12 @@ def price_bill(bill, benefits):
             "profit": profit, "profit_percentage": round(profit / invoice * 100, 2) if invoice else 0}
 
 
-async def sync_bill(db, job):
+async def sync_bill(db, job, session=None):
     if not job.get("amc_benefits"):
         return
-    bill = await db.billing.find_one({"job_id": job["job_id"]})
+    bill = await db.billing.find_one({"job_id": job["job_id"]}, session=session)
     if bill:
         priced = price_bill(bill, job["amc_benefits"])
         from ..routers.billing import calc_profit
         priced["profit"], priced["profit_percentage"] = calc_profit(priced["invoice_amount"], priced.get("collected_amount"), priced.get("expense"), priced["material_amount"])
-        await db.billing.update_one({"job_id": job["job_id"]}, {"$set": {k: v for k, v in priced.items() if k != "_id"}})
+        await db.billing.update_one({"job_id": job["job_id"]}, {"$set": {k: v for k, v in priced.items() if k != "_id"}}, session=session)

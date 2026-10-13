@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
-from ..models.user import LoginRequest, TokenResponse, SetupRequest, UserResponse, UserRole, UserStatus
+from ..models.user import LoginRequest, TokenResponse, SetupRequest
 from ..auth.utils import hash_password, verify_password, create_access_token, get_current_user
 from ..database import get_db
 from ..utils.id_generator import generate_attendance_id, generate_user_id
@@ -163,24 +163,7 @@ async def login(data: LoginRequest, request: Request):
     if user.get("status") != "active":
         raise HTTPException(status_code=403, detail="Account is inactive")
 
-    # Enforce platform restrictions
-    if user["role"] == UserRole.technician:
-        if data.platform != "mobile":
-            raise HTTPException(
-                status_code=403, 
-                detail="Staff accounts can only log in via the mobile app"
-            )
-    elif user["role"] in [UserRole.admin, UserRole.manager, UserRole.sales]:
-        if data.platform == "mobile":
-            # For now, allow admins on mobile too, but if user meant ONLY mobile for staff 
-            # and ONLY web for admin, we could block admin on mobile.
-            # User said "staff login will be only on mobile app".
-            pass
-        elif data.platform == "web":
-            pass
-
-    if data.platform != "mobile":
-        await _auto_check_in(db, user)
+    await _auto_check_in(db, user)
     token = create_access_token({"sub": user["user_id"], "token_use": "access", "token_version": user.get("token_version", 0)})
     user_payload = await _user_response(db, user)
     return {

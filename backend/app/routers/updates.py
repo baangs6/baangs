@@ -2,9 +2,10 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 import pytz
+from pymongo.errors import OperationFailure
 from ..models.daily_update import DailyUpdateCreate, DailyUpdateResponse, DoubtReview, ManualInventoryVerify
 from ..auth.utils import require_admin, require_admin_or_manager, get_current_user
-from ..database import get_db
+from ..database import get_db, get_db_mode
 from ..utils.id_generator import generate_update_id, generate_usage_id, generate_transaction_id, generate_inventory_item_id
 from ..utils.timezone import now_ist_str
 from ..models.inventory import TransactionType
@@ -45,6 +46,124 @@ def _ms_key(model_number: str, serial_number: str) -> str:
     return f"{(model_number or '').strip().lower()}|{(serial_number or '').strip().lower()}"
 
 
+async def _persist_job_update(db, session, data, job, staff_id, staff_name, update_doc,
+                              reserved_quantities, transaction_records, inventory_records):
+    for barcode, quantity in reserved_quantities.items():
+        updated_item = await db.inventory.find_one_and_update(
+            {"barcode": barcode, "status": "active", "current_quantity": {"$gte": quantity}},
+            {"$inc": {"current_quantity": -quantity}, "$set": {"updated_at": now_ist_str()}},
+            session=session,
+            return_document=True,
+        )
+        if updated_item is None:
+            raise HTTPException(status_code=409, detail="Inventory changed; please retry the update")
+        balance = updated_item["current_quantity"] + quantity
+        for record in transaction_records:
+            if record["barcode"] == barcode:
+                balance += record["quantity_changed"]
+                record["balance_after_transaction"] = balance
+
+    await db.daily_updates.insert_one(update_doc, session=session)
+    if transaction_records:
+        await db.inventory_transactions.insert_many(transaction_records, session=session)
+        await db.job_inventory_usage.insert_many(inventory_records, session=session)
+
+    if data.status == "complete":
+        job = await complete_visit(db, job, session=session)
+    job_update = {"status": data.status}
+    if data.work_event == "start_work":
+        map_location = _map_location_from_geo(update_doc["location"])
+        job_update.update({
+            "work_started_at": update_doc["update_time"],
+            "work_started_by": staff_name or staff_id,
+            "work_start_location": update_doc["location"],
+        })
+        if map_location:
+            job_update["map_location"] = map_location
+    elif data.work_event == "end_work":
+        job_update.update({
+            "work_ended_at": update_doc["update_time"],
+            "work_ended_by": staff_name or staff_id,
+            "work_end_location": update_doc["location"],
+        })
+
+    await db.jobs.update_one({"job_id": data.job_id}, {"$set": job_update}, session=session)
+    if data.work_event == "start_work" and job_update.get("map_location") and job.get("customer_id"):
+        await db.customers.update_one(
+            {"customer_id": job["customer_id"]},
+            {"$set": {"map_location": job_update["map_location"]}},
+            session=session,
+        )
+
+    service_charge = float(data.service_charge or data.service_bill or data.invoice_amount or 0)
+    should_update_billing = (
+        bool(inventory_records)
+        or bool(data.expense and data.expense > 0)
+        or bool(data.collected_amount and data.collected_amount > 0)
+        or service_charge > 0
+        or (data.status == "complete" and bool(job.get("amc_id")))
+    )
+    if should_update_billing:
+        from .billing import calc_profit
+        from ..utils.id_generator import generate_billing_id
+        from ..utils.timezone import today_ist_str
+
+        material_amount = await _compute_material_amount(db, data.job_id, session=session)
+        billing = await db.billing.find_one({"job_id": data.job_id}, session=session)
+        if not billing:
+            service_amount = service_charge
+            invoice_amount = material_amount + service_amount
+            collected = float(data.collected_amount or 0)
+            expense = float(data.expense or 0)
+            profit, profit_pct = calc_profit(invoice_amount, collected, expense, material_amount)
+            billing_doc = {
+                "billing_id": generate_billing_id(),
+                "job_id": data.job_id,
+                "customer_name": job.get("customer_name"),
+                "complete_date": today_ist_str(),
+                "work_type": job.get("work_type"),
+                "invoice_amount": invoice_amount,
+                "service_amount": service_amount,
+                "expense": expense,
+                "material_amount": material_amount,
+                "profit": profit,
+                "profit_percentage": profit_pct,
+                "collected_amount": collected,
+                "payment_mode": "cash",
+                "payment_id": "",
+            }
+            await db.billing.insert_one(billing_doc, session=session)
+        else:
+            existing_service = billing.get("service_gross_amount", billing.get("service_amount"))
+            if existing_service is None:
+                existing_service = max(
+                    0.0,
+                    float(billing.get("invoice_amount") or 0.0)
+                    - float(billing.get("material_amount") or 0.0),
+                )
+            new_service = float(existing_service) + service_charge
+            new_invoice = material_amount + new_service
+            new_expense = (billing.get("expense") or 0.0) + float(data.expense or 0)
+            new_collected = (billing.get("collected_amount") or 0.0) + float(data.collected_amount or 0)
+            profit, profit_pct = calc_profit(new_invoice, new_collected, new_expense, material_amount)
+            await db.billing.update_one(
+                {"billing_id": billing["billing_id"]},
+                {"$set": {
+                    "invoice_amount": new_invoice,
+                    "service_amount": new_service,
+                    **({"service_gross_amount": new_service, "material_gross_amount": material_amount} if job.get("amc_benefits") else {}),
+                    "expense": new_expense,
+                    "collected_amount": new_collected,
+                    "material_amount": material_amount,
+                    "profit": profit,
+                    "profit_percentage": profit_pct,
+                }},
+                session=session,
+            )
+
+    await sync_bill(db, job, session=session)
+
+
 async def _generate_next_inventory_barcode(db) -> str:
     seq = 1
     while True:
@@ -55,8 +174,8 @@ async def _generate_next_inventory_barcode(db) -> str:
         seq += 1
 
 
-async def _compute_material_amount(db, job_id: str) -> float:
-    usage_docs = await db.job_inventory_usage.find({"job_id": job_id}).to_list(2000)
+async def _compute_material_amount(db, job_id: str, session=None) -> float:
+    usage_docs = await db.job_inventory_usage.find({"job_id": job_id}, session=session).to_list(2000)
     if not usage_docs:
         return 0.0
 
@@ -71,9 +190,9 @@ async def _compute_material_amount(db, job_id: str) -> float:
             inv_item = None
             inv_id = usage.get("inventory_item_id")
             if inv_id:
-                inv_item = await db.inventory.find_one({"_id": inv_id})
+                inv_item = await db.inventory.find_one({"_id": inv_id}, session=session)
             if not inv_item:
-                inv_item = await db.inventory.find_one({"barcode": usage.get("barcode")})
+                inv_item = await db.inventory.find_one({"barcode": usage.get("barcode")}, session=session)
             unit_amount = float((inv_item or {}).get("selling_price", 0) or 0)
         else:
             unit_amount = float(unit_amount or 0)
@@ -330,56 +449,19 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
         "inventory_used": processed_inventory,
         "manual_inventory_items": manual_inventory_items,
     }
-    # Only stock-consuming updates require a transaction; a standalone local MongoDB
-    # can still record ordinary work updates without replica-set support.
-    if reserved_quantities:
+    if get_db_mode() != "mongo":
+        raise HTTPException(status_code=503, detail="Job updates require a transactional MongoDB deployment")
+    try:
         async with await db.client.start_session() as session:
             async with session.start_transaction():
-                for barcode, quantity in reserved_quantities.items():
-                    updated_item = await db.inventory.find_one_and_update(
-                        {"barcode": barcode, "status": "active", "current_quantity": {"$gte": quantity}},
-                        {"$inc": {"current_quantity": -quantity}, "$set": {"updated_at": now_ist_str()}},
-                        session=session,
-                        return_document=True,
-                    )
-                    if updated_item is None:
-                        raise HTTPException(status_code=409, detail="Inventory changed; please retry the update")
-                    balance = updated_item["current_quantity"] + quantity
-                    for record in transaction_records:
-                        if record["barcode"] == barcode:
-                            balance += record["quantity_changed"]
-                            record["balance_after_transaction"] = balance
-                await db.daily_updates.insert_one(update_doc, session=session)
-                await db.inventory_transactions.insert_many(transaction_records, session=session)
-                await db.job_inventory_usage.insert_many(inventory_records, session=session)
-    else:
-        await db.daily_updates.insert_one(update_doc)
-
-    if data.status == "complete":
-        job = await complete_visit(db, job)
-    job_update = {"status": data.status}
-    if data.work_event == "start_work":
-        map_location = _map_location_from_geo(update_doc["location"])
-        job_update.update({
-            "work_started_at": update_doc["update_time"],
-            "work_started_by": staff_name or staff_id,
-            "work_start_location": update_doc["location"],
-        })
-        if map_location:
-            job_update["map_location"] = map_location
-    elif data.work_event == "end_work":
-        job_update.update({
-            "work_ended_at": update_doc["update_time"],
-            "work_ended_by": staff_name or staff_id,
-            "work_end_location": update_doc["location"],
-        })
-
-    await db.jobs.update_one({"job_id": data.job_id}, {"$set": job_update})
-    if data.work_event == "start_work" and job_update.get("map_location") and job.get("customer_id"):
-        await db.customers.update_one(
-            {"customer_id": job["customer_id"]},
-            {"$set": {"map_location": job_update["map_location"]}}
-        )
+                await _persist_job_update(
+                    db, session, data, job, staff_id, staff_name, update_doc,
+                    reserved_quantities, transaction_records, inventory_records,
+                )
+    except OperationFailure as exc:
+        if exc.code == 20:
+            raise HTTPException(status_code=503, detail="Job updates require a MongoDB replica set or sharded cluster") from exc
+        raise
 
     if current_user.get("role") == "technician":
         try:
@@ -392,79 +474,6 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
             )
         except Exception as exc:
             print(f"Unable to send technician update notification: {exc}")
-
-    service_charge = float(data.service_charge or data.service_bill or data.invoice_amount or 0)
-    should_update_billing = (
-        bool(inventory_records)
-        or bool(data.expense and data.expense > 0)
-        or bool(data.collected_amount and data.collected_amount > 0)
-        or service_charge > 0
-        or (data.status == "complete" and bool(job.get("amc_id")))
-    )
-    if should_update_billing:
-        from .billing import calc_profit
-        from ..utils.id_generator import generate_billing_id
-        from ..utils.timezone import today_ist_str
-        material_amount = await _compute_material_amount(db, data.job_id)
-
-        billing = await db.billing.find_one({"job_id": data.job_id})
-        if not billing:
-            service_amount = service_charge
-            invoice_amount = material_amount + service_amount
-            collected = float(data.collected_amount or 0)
-            expense = float(data.expense or 0)
-            profit, profit_pct = calc_profit(invoice_amount, collected, expense, material_amount)
-            billing_doc = {
-                "billing_id": generate_billing_id(),
-                "job_id": data.job_id,
-                "customer_name": job.get("customer_name"),
-                "complete_date": today_ist_str(),
-                "work_type": job.get("work_type"),
-                "invoice_amount": invoice_amount,
-                "service_amount": service_amount,
-                "expense": expense,
-                "material_amount": material_amount,
-                "profit": profit,
-                "profit_percentage": profit_pct,
-                "collected_amount": collected,
-                "payment_mode": "cash",
-                "payment_id": "",
-            }
-            await db.billing.insert_one(billing_doc)
-        else:
-            existing_service = billing.get("service_gross_amount", billing.get("service_amount"))
-            if existing_service is None:
-                existing_service = max(
-                    0.0,
-                    float(billing.get("invoice_amount") or 0.0)
-                    - float(billing.get("material_amount") or 0.0),
-                )
-            new_service = float(existing_service) + service_charge
-            new_invoice = material_amount + new_service
-            new_expense = (billing.get("expense") or 0.0) + float(data.expense or 0)
-            new_collected = (billing.get("collected_amount") or 0.0) + float(data.collected_amount or 0)
-            
-            profit, profit_pct = calc_profit(
-                new_invoice,
-                new_collected,
-                new_expense,
-                material_amount
-            )
-            await db.billing.update_one(
-                {"billing_id": billing["billing_id"]},
-                {"$set": {
-                    "invoice_amount": new_invoice,
-                    "service_amount": new_service,
-                    **({"service_gross_amount": new_service, "material_gross_amount": material_amount} if job.get("amc_benefits") else {}),
-                    "expense": new_expense,
-                    "collected_amount": new_collected,
-                    "material_amount": material_amount,
-                    "profit": profit,
-                    "profit_percentage": profit_pct
-                }}
-            )
-
-    await sync_bill(db, job)
     return _fmt(update_doc)
 
 
