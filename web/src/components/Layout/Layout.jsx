@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../context/useAuth';
 import { notificationsApi } from '../../api';
 import { formatDateTime } from '../../utils/dateFormat';
+import { Avatar } from '@/components/base/avatar/avatar';
 import {
   MdDashboard, MdWork, MdPeople, MdAttachMoney,
   MdLocationOn, MdLogout, MdSupervisorAccount,
@@ -219,13 +220,15 @@ export default function Layout() {
         <div className="app-topbar">
           <div className="topbar-spacer" />
           <div className="topbar-profile">
-            <div className="topbar-avatar">
-              {user?.profile_photo_url ? (
-                <img src={user.profile_photo_url} alt={user?.full_name || user?.username || 'Profile'} />
-              ) : (
-                <span>{user?.full_name?.[0] || user?.username?.[0] || 'U'}</span>
-              )}
-            </div>
+            <Avatar
+              key={user?.profile_photo_url || user?.user_id}
+              border
+              size="md"
+              className="topbar-avatar"
+              alt={user?.full_name || user?.username || 'Profile'}
+              src={user?.profile_photo_url}
+              initials={(user?.full_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
+            />
             <div className="topbar-user-copy">
               <strong>{user?.full_name || user?.username}</strong>
               <span>{user?.role}</span>

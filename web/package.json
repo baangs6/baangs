@@ -14,17 +14,20 @@
     "test:e2e:report": "playwright show-report playwright-report"
   },
   "dependencies": {
+    "@untitledui/icons": "^0.0.23",
     "axios": "^1.14.0",
     "date-fns": "^4.1.0",
     "react": "^19.2.4",
+    "react-aria-components": "^1.22.1",
     "react-dom": "^19.2.4",
     "react-icons": "^5.6.0",
     "react-router-dom": "^7.14.0",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.55.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",

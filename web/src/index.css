@@ -2360,6 +2360,17 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: 800;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.topbar-avatar > div {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: inherit;
 }
 
 .topbar-avatar img {
