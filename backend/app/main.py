@@ -64,7 +64,8 @@ app.add_middleware(
 )
 
 # Register routers
-from .routers import amc
+from .routers import amc, quotations
+app.include_router(quotations.router)
 app.include_router(amc.router)
 app.include_router(auth.router)
 app.include_router(users.router)

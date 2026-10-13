@@ -68,9 +68,29 @@ async def job_reminder_loop(db, interval_seconds: int = 60):
     while True:
         try:
             await send_due_job_reminders(db)
+            await send_quotation_followups(db)
         except Exception as exc:
             print(f"Job reminder loop failed: {exc}")
         await asyncio.sleep(interval_seconds)
+
+
+async def send_quotation_followups(db):
+    rows = await db.quotations.find({'followup_date': {'$lte': now_ist().strftime('%Y-%m-%d'), '$ne': None},
+        'followup_done': False, 'followup_reminded': False}).to_list(None)
+    for row in rows:
+        owner = row.get('followup_owner')
+        if not owner or not row.get('followup_date'):
+            continue
+        scope = {'followup_owner': owner, 'followup_date': row['followup_date'], 'followup_reminded': False}
+        if row.get('customer_id'):
+            scope['customer_id'] = row['customer_id']
+        else:
+            scope.update(customer_name=row['customer_name'], phone_number=row['phone_number'])
+        result = await db.quotations.update_many(scope, {'$set': {'followup_reminded': True}})
+        if result.modified_count:
+            await notify_users(db, [owner], 'Customer follow-up',
+                f"Follow up with {row['customer_name']} ({row['phone_number']}) about their quotation.",
+                {'type': 'quotation_followup', 'quote_id': row['quote_id']})
 
 
 def _normalize_role(role):

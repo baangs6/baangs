@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AmcIndicator from '../../components/AmcIndicator';
 import { jobsApi, staffApi, lookupsApi, customersApi } from '../../api';
 import { MdArrowBack, MdUpload, MdClose, MdExpandMore } from 'react-icons/md';
@@ -143,6 +143,7 @@ function TechnicianPicker({ staff, primaryId, additionalIds, onChangePrimary, on
 
 export default function JobCreate() {
   const navigate = useNavigate();
+  const { state } = useLocation();
   const [staff, setStaff] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [lookups, setLookups] = useState({});
@@ -150,7 +151,7 @@ export default function JobCreate() {
   const [error, setError] = useState('');
   const [photo, setPhoto] = useState(null);
   const [form, setForm] = useState({
-    customer_name: '', customer_nickname: '', phone_number: '', location: '', map_location: '', site_type: '',
+    customer_name: state?.customer?.customer_name || '', customer_nickname: state?.customer?.nickname || '', phone_number: state?.customer?.phone_number || '', location: state?.customer?.location || '', map_location: state?.customer?.map_location || '', site_type: state?.customer?.site_type || '',
     work_type: '', complaint: '', priority: 'medium',
     scheduled_date: '', preferred_time: '', assigned_staff_id: '',
     additional_staff_ids: [],

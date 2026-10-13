@@ -184,6 +184,9 @@ export default function Layout() {
 
           {(isAdmin || isManager) && <>
             <div className="nav-section-title">Finance</div>
+            <NavLink to="/quotations" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <MdListAlt className="nav-icon" /> Quotations
+            </NavLink>
             <NavLink to="/billing" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <MdAttachMoney className="nav-icon" /> Billing
             </NavLink>

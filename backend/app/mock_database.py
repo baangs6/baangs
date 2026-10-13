@@ -229,6 +229,7 @@ def _collection_names():
         "staff",
         "customers",
         "amc_contracts",
+        "quotations",
         "jobs",
         "daily_updates",
         "attendance",
@@ -656,6 +657,8 @@ def _set_path(doc: dict, path: str, value: Any, query: dict):
 
 def _build_upsert_doc(query: dict, update: dict):
     new_doc = {}
+    for key, value in update.get('$setOnInsert', {}).items():
+        _set_path(new_doc, key, value, query)
     for key, value in query.items():
         if isinstance(value, dict) or key.startswith("$"):
             continue

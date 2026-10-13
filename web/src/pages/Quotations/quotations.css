@@ -1,0 +1,70 @@
+.quotations-page { min-width: 0; }
+.quotations-page .page-header { gap: 16px; flex-wrap: wrap; }
+.quotations-page .filter-bar { display: flex; gap: 12px; flex-wrap: wrap; }
+.quotations-page .filter-bar input { flex: 1 1 240px; min-width: 0; }
+.quotations-page .filter-bar select { width: auto; }
+.quote-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.quote-section { padding: 24px 0; border-bottom: 1px solid var(--color-border); }
+.quote-section h3 { font-size: 18px; margin-bottom: 18px; }
+.quote-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.quote-fields .form-group { min-width: 0; margin: 0; }
+.quote-fields input, .quote-fields select, .quote-fields textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.quote-wide { grid-column: span 2; }
+.quote-item { padding: 16px 0 24px; border-top: 1px solid var(--color-border); }
+.quote-item-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.quote-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.quote-actions .btn { min-height: 40px; }
+.quote-footer { padding: 24px 0; }
+.quote-bottom { display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 28px; }
+.quote-totals dl { margin: 0 0 20px; }
+.quote-totals dl > div { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--color-border); }
+.quote-totals dd { margin: 0; overflow-wrap: anywhere; }
+.quote-totals dl > div:last-child { font-size: 20px; font-weight: 700; }
+.quote-message { padding: 12px 16px; margin: 12px 0; border-left: 3px solid var(--color-accent); background: var(--color-surface); overflow-wrap: anywhere; }
+.quote-message.error { border-color: var(--color-danger); }
+.quote-link { border: 0; padding: 0; color: var(--color-accent); background: none; cursor: pointer; text-decoration: underline; overflow-wrap: anywhere; text-align: left; }
+.quotations-page .quote-dashboard-header { padding: 16px 20px; margin-bottom: 12px; border-radius: 0; background: var(--color-surface); box-shadow: none; }
+.quote-dashboard-header h2 { font-size: 20px; margin: 0; }
+.quotations-page .quote-add-estimate { background: #ed174a; border-color: #ed174a; box-shadow: none; border-radius: 6px; }
+.quote-dashboard-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 12px; background: var(--color-surface); border-block: 1px solid var(--color-border); font-size: 14px; }
+.quote-dashboard-filters .form-select { width: auto; max-width: 240px; background: #eaf4ff; min-height: 38px; padding: 8px 32px 8px 12px; }
+.quote-summary-band { padding: 16px 12px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
+.quote-summary { display: inline-flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid #dce4ec; border-radius: 4px; background: #f6f9fc; font-size: 13px; max-width: 100%; box-sizing: border-box; }
+.quote-summary > strong { font-size: 22px; color: var(--color-text); overflow-wrap: anywhere; }
+.quote-summary > div { display: flex; flex-wrap: wrap; gap: 12px; }
+.quote-summary b { font-weight: 500; }
+.quote-transactions-heading { padding: 20px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; background: var(--color-surface); }
+.quote-transactions-heading h3 { margin: 0; font-size: 16px; }
+.quote-transactions-heading small { font-weight: 400; }
+.quote-transactions-heading input { max-width: 280px; min-width: 0; }
+.quote-transactions { border-radius: 0; min-height: 260px; padding-bottom: 100px; background: var(--color-surface); }
+.quote-transactions .table th { font-size: 12px; text-transform: none; }
+.quote-transactions .table td { padding: 14px 12px; font-size: 13px; }
+.quote-transactions .quote-amount { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.quote-row-actions { display: flex; gap: 12px; align-items: center; white-space: nowrap; }
+.quote-status { text-transform: capitalize; color: #596779; }
+.quote-status.draft, .quote-status.sent { color: #995200; }
+.quote-status.accepted { color: #127948; }
+.quote-status.rejected { color: #b52738; }
+.quote-action-menu { position: relative; }
+.quote-action-menu summary { display: flex; align-items: center; justify-content: center; cursor: pointer; width: 32px; height: 36px; list-style: none; font-size: 22px; }
+.quote-action-menu summary::-webkit-details-marker { display: none; }
+.quote-customer-picker { position: relative; min-width: 0; }
+.quote-profile-header { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; padding: 20px 0; }
+.quote-profile-header h3 { font-size: 24px; margin: 0 0 10px; overflow-wrap: anywhere; }
+.quote-profile-header p { color: #596779; margin: 8px 0 0; }
+.quote-profile-metrics { display: flex; gap: 28px; flex-wrap: wrap; }
+.quote-profile-metrics span { display: block; font-size: 13px; color: #596779; margin-bottom: 8px; }
+.quote-profile-metrics strong { font-size: 22px; }
+.quote-followup { margin-top: 24px; border-top: 1px solid var(--color-border, #dbe1e8); padding-top: 18px; }
+.quote-followup .quote-actions { align-items: center; }
+.quote-customer-results { position: absolute; top: 78px; left: 0; right: 0; z-index: 25; max-height: 360px; overflow: auto; background: var(--color-surface, white); border: 1px solid var(--color-border, #dbe1e8); border-radius: 4px; box-shadow: 0 6px 20px #0002; }
+.quote-customer-result { display: flex; flex-direction: column; gap: 5px; width: 100%; padding: 12px 16px; text-align: left; background: transparent; color: inherit; border: 0; border-bottom: 1px solid var(--color-border, #dbe1e8); cursor: pointer; overflow-wrap: anywhere; }
+.quote-customer-result:hover, .quote-customer-result:focus-visible { background: #edf7fa; outline: 2px solid #1689aa; outline-offset: -2px; }
+.quote-customer-result small { font-size: 12px; color: #596779; }
+.quote-customer-results > p { padding: 12px 16px; }
+.quote-customer-history { margin-top: 12px; min-width: 0; }
+.quote-customer-history > strong { display: block; margin-bottom: 8px; }
+.quote-action-menu-content { position: absolute; right: 0; top: 36px; display: flex; gap: 6px; z-index: 20; padding: 8px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 4px; box-shadow: 0 4px 18px #0002; }
+@media (max-width: 900px) { .quote-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .quote-fields, .quote-bottom { grid-template-columns: minmax(0, 1fr); } .quote-wide { grid-column: auto; } .quote-section { padding: 18px 0; } }

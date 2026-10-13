@@ -19,6 +19,22 @@ from ..utils.timezone import now_ist_str
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
 
+@router.get('/{barcode}/price-history')
+async def price_history(barcode: str, _=Depends(require_admin_or_manager)):
+    db = get_db()
+    item = await db.inventory.find_one({'barcode': barcode})
+    if not item:
+        raise HTTPException(404, 'Item not found')
+    sales = await db.job_inventory_usage.find({'barcode': barcode, 'unit_selling_price': {'$ne': None}}).sort('usage_datetime', -1).limit(3).to_list(3)
+    purchases = await db.inventory_transactions.find({'barcode': barcode,
+        'transaction_type': {'$in': ['stock_added', 'opening_stock']},
+        'purchase_price': {'$ne': None}}).sort('transaction_datetime', -1).limit(3).to_list(3)
+    return {'barcode': barcode, 'current_selling_price': item.get('selling_price'),
+        'current_purchase_price': item.get('purchase_price'),
+        'selling': [{'date': r.get('usage_datetime'), 'price': r['unit_selling_price'], 'reference': r.get('job_id')} for r in sales],
+        'purchase': [{'date': r.get('transaction_datetime'), 'price': r['purchase_price'], 'reference': r.get('remarks') or r['transaction_type']} for r in purchases]}
+
+
 @router.get("/", response_model=List[Any])
 async def get_inventory(current_user: dict = Depends(get_current_user)):
     db = get_db()
@@ -225,7 +241,9 @@ async def create_item(data: InventoryItemCreate, current_user: dict = Depends(re
         "balance_after_transaction": data.opening_quantity,
         "done_by_user_id": current_user["user_id"],
         "transaction_datetime": now_ist_str(),
-        "remarks": "Opening stock"
+        "remarks": "Opening stock",
+        "purchase_price": item_doc.get("purchase_price", 0),
+        "selling_price": item_doc.get("selling_price", 0)
     }
     await db.inventory_transactions.insert_one(txn)
     
@@ -263,7 +281,9 @@ async def bulk_upload_items(items: List[InventoryItemCreate], current_user: dict
             "balance_after_transaction": data.opening_quantity,
             "done_by_user_id": current_user["user_id"],
             "transaction_datetime": now_ist_str(),
-            "remarks": "Bulk upload opening stock"
+            "remarks": "Bulk upload opening stock",
+            "purchase_price": item_doc.get("purchase_price", 0),
+            "selling_price": item_doc.get("selling_price", 0)
         }
         await db.inventory_transactions.insert_one(txn)
         success_count += 1
@@ -327,6 +347,8 @@ async def adjust_stock(barcode: str, data: Dict[str, Any], current_user: dict = 
         "barcode": barcode,
         "serial_number": item.get("serial_number"),
         "transaction_type": txn_type,
+        "purchase_price": item.get("purchase_price"),
+        "selling_price": item.get("selling_price"),
         "quantity_changed": quantity_changed,
         "balance_after_transaction": new_quantity,
         "done_by_user_id": current_user["user_id"],

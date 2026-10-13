@@ -30,6 +30,17 @@ api.interceptors.response.use(
 );
 
 // Auth
+export const quotationsApi = {
+  followup: (id, data) => api.put(`/quotations/${id}/customer-followup`, data),
+  customerHistory: id => api.get(`/quotations/customer/${id}/history`),
+  moveToCustomer: id => api.post(`/quotations/${id}/move-to-customer`),
+  list: () => api.get('/quotations/'),
+  create: data => api.post('/quotations/', data),
+  update: (id, data, revision) => api.put(`/quotations/${id}`, data, { params: { revision } }),
+  pdf: id => api.get(`/quotations/${id}/quotation.pdf`, { responseType: 'blob' }),
+  share: id => api.post(`/quotations/${id}/share-link`),
+};
+
 export const authApi = {
   setupStatus: () => api.get('/auth/setup-status'),
   setup: (data) => api.post('/auth/setup', data),
@@ -180,6 +191,7 @@ export const exportApi = {
 
 // Inventory
 export const inventoryApi = {
+  priceHistory: barcode => api.get(`/inventory/${encodeURIComponent(barcode)}/price-history`),
   list: () => api.get('/inventory/'),
   get: (barcode) => api.get(`/inventory/${barcode}`),
   summary: () => api.get('/inventory/summary'),

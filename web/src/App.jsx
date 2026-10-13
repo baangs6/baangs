@@ -16,6 +16,7 @@ import CustomerList from './pages/Customers/CustomerList';
 import CustomerDetail from './pages/Customers/CustomerDetail';
 import AttendanceReport from './pages/Attendance/AttendanceReport';
 import BillingList from './pages/Billing/BillingList';
+import Quotations from './pages/Quotations/Quotations';
 import UserManagement from './pages/Users/UserManagement';
 import LookupManager from './pages/Settings/LookupManager';
 import StaffList from './pages/Staff/StaffList';
@@ -74,6 +75,7 @@ function AppRoutes() {
             <Route path="customers/:customerId" element={<CustomerDetail />} />
             <Route path="attendance" element={<AttendanceReport />} />
             <Route path="billing" element={<BillingList />} />
+            <Route path="quotations" element={<Quotations />} />
             <Route path="inventory" element={<InventoryDashboard />} />
             <Route path="reports" element={<Reports />} />
             <Route path="staff" element={<StaffList />} />
