@@ -6,7 +6,7 @@ from ..auth.utils import require_admin, require_admin_or_manager, require_any, g
 from ..database import get_db
 from ..utils.id_generator import generate_job_id, make_customer_key, generate_customer_id
 from ..utils.timezone import now_ist_str, today_ist_str
-from ..utils.cloudinary_helper import upload_image_bytes
+from ..utils.cloudinary_helper import upload_image_bytes, read_image_upload
 from ..utils.notifications import notify_roles, notify_users
 from ..utils.job_access import is_assigned_to_job, technician_job_filter
 from ..utils.amc import complete_visit, sync_bill, summary, site_key
@@ -554,13 +554,15 @@ async def delete_job(job_id: str, _=Depends(require_admin_or_manager)):
 
 
 @router.post("/{job_id}/photo")
-async def upload_job_photo(job_id: str, file: UploadFile = File(...), _=Depends(require_any)):
+async def upload_job_photo(job_id: str, file: UploadFile = File(...), current_user: dict = Depends(require_any)):
     db = get_db()
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if current_user.get("role") == "technician" and not is_assigned_to_job(job, current_user.get("staff_id")):
+        raise HTTPException(status_code=403, detail="This job is not assigned to you")
 
-    image_bytes = await file.read()
+    image_bytes = await read_image_upload(file)
     url = await upload_image_bytes(image_bytes, folder="baangs/jobs")
     await db.jobs.update_one({"job_id": job_id}, {"$set": {"photo_url": url}})
     return {"photo_url": url}

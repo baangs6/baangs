@@ -1,12 +1,13 @@
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from typing import Optional
+import re
 from pydantic import BaseModel, Field
 from ..database import get_db
 from ..utils.id_generator import generate_job_id, make_customer_key, generate_customer_id
 from ..routers.jobs import get_sequence_for_today
 from ..utils.timezone import now_ist_str, today_ist_str
 from ..utils.notifications import notify_roles
-from ..utils.cloudinary_helper import upload_image_bytes
+from ..utils.cloudinary_helper import upload_image_bytes, read_image_upload
 
 router = APIRouter(prefix="/public", tags=["Public Portal"])
 
@@ -23,48 +24,10 @@ class PublicComplaintCreate(BaseModel):
     photo_url: Optional[str] = None
 
 
-class CustomerLookupRequest(BaseModel):
-    phone_number: str
-
-
 class CustomerFeedbackCreate(BaseModel):
     token: str = Field(..., min_length=16)
     rating: int = Field(..., ge=1, le=5)
     comment: Optional[str] = Field(None, max_length=1000)
-
-
-@router.post("/lookup-customer")
-async def lookup_customer(data: CustomerLookupRequest):
-    phone = (data.phone_number or "").strip()
-    if not phone:
-        raise HTTPException(status_code=400, detail="Phone number is required")
-
-    db = get_db()
-    customer = await db.customers.find_one({"phone_number": phone})
-    if not customer:
-        # Search by key
-        key = make_customer_key(phone, "")
-        customer = await db.customers.find_one({"customer_key": {"$regex": f"^{key[:10]}"}})
-
-    if not customer:
-        return {"found": False}
-
-    # Mask name for privacy
-    raw_name = customer.get("customer_name") or ""
-    parts = raw_name.split()
-    masked_name = parts[0] if parts else raw_name
-    if len(parts) > 1:
-        masked_name += " " + parts[1][0] + "."
-
-    return {
-        "found": True,
-        "customer_id": customer.get("customer_id"),
-        "customer_name": raw_name,
-        "masked_name": masked_name,
-        "location": customer.get("location"),
-        "map_location": customer.get("map_location"),
-        "site_type": customer.get("site_type"),
-    }
 
 
 @router.post("/complaints")
@@ -88,12 +51,6 @@ async def register_public_complaint(data: PublicComplaintCreate):
         customer_id = customer["customer_id"]
         customer_nickname = customer.get("nickname") or None
         customer_updates = {"latest_request_date": today_ist_str()}
-        if data.location:
-            customer_updates["location"] = data.location
-        if data.map_location:
-            customer_updates["map_location"] = data.map_location
-        if data.site_type:
-            customer_updates["site_type"] = data.site_type
         await db.customers.update_one(
             {"_id": customer["_id"]},
             {"$set": customer_updates, "$inc": {"total_jobs": 1}}
@@ -173,27 +130,21 @@ async def register_public_complaint(data: PublicComplaintCreate):
 
 @router.post("/complaints/photo")
 async def upload_complaint_photo(file: UploadFile = File(...)):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image files are allowed")
-    contents = await file.read()
-    url = upload_image_bytes(contents, folder="public_complaints")
+    contents = await read_image_upload(file)
+    url = await upload_image_bytes(contents, folder="public_complaints")
     return {"photo_url": url}
 
 
 @router.get("/track/{job_id}")
-async def track_public_job(job_id: str):
+async def track_public_job(job_id: str, phone_number: str = Query(..., min_length=7)):
     job_id_clean = (job_id or "").strip().upper()
     db = get_db()
     job = await db.jobs.find_one({"job_id": job_id_clean})
 
-    if not job:
-        # Search by phone if user entered phone number instead of job_id
-        latest = await db.jobs.find({"phone_number": job_id_clean}).sort("created_at", -1).to_list(1)
-        if latest:
-            job = latest[0]
-
-    if not job:
-        raise HTTPException(status_code=404, detail=f"No ticket found matching '{job_id}'")
+    submitted_phone = re.sub(r"\D", "", phone_number)
+    stored_phone = re.sub(r"\D", "", str((job or {}).get("phone_number") or ""))
+    if not job or len(submitted_phone) < 7 or submitted_phone != stored_phone:
+        raise HTTPException(status_code=404, detail="Ticket not found")
 
     # Get staff name if assigned
     staff_name = job.get("assigned_staff_name")

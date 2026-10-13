@@ -9,12 +9,12 @@ sys.path.append(os.path.join(os.getcwd(), 'backend'))
 from app.auth.utils import hash_password
 
 async def fix_admin():
-    uri = "mongodb+srv://baangstech_db_user:snb3GBioBO43KMSK@baangs.fejxabn.mongodb.net/baangs_fsm?retryWrites=true&w=majority&appName=baangs"
+    uri = os.environ["MONGODB_URL"]
     client = AsyncIOMotorClient(uri)
     db = client.baangs_fsm
     
     username = "sahil"
-    password = "password123"
+    password = os.environ["RESET_PASSWORD"]
     
     new_hash = hash_password(password)
     print(f"Updating admin {username} password...")

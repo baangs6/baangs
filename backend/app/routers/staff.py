@@ -8,13 +8,13 @@ from ..auth.utils import require_admin, require_admin_or_manager, require_any, h
 from ..database import get_db
 from ..utils.id_generator import generate_staff_id, generate_user_id
 from ..utils.timezone import now_ist_str
-from ..utils.cloudinary_helper import upload_image_bytes
+from ..utils.cloudinary_helper import upload_image_bytes, read_image_upload
 
 router = APIRouter(prefix="/staff", tags=["Staff"])
 
 
-def _format_staff(s: dict) -> dict:
-    return {
+def _format_staff(s: dict, include_private: bool = False) -> dict:
+    result = {
         "staff_id": s.get("staff_id", ""),
         "name": s.get("name") or s.get("full_name") or "Unnamed Staff",
         "phone_number": s.get("phone_number") or s.get("phone") or "",
@@ -26,27 +26,31 @@ def _format_staff(s: dict) -> dict:
         "emergency_contact_name": s.get("emergency_contact_name"),
         "emergency_contact_phone": s.get("emergency_contact_phone"),
         "salary_type": s.get("salary_type", "monthly"),
-        "monthly_salary": float(s.get("monthly_salary", 0.0) or 0.0),
-        "daily_wage": float(s.get("daily_wage", 0.0) or 0.0),
-        "overtime_rate_per_hour": float(s.get("overtime_rate_per_hour", 0.0) or 0.0),
-        "allowance": float(s.get("allowance", 0.0) or 0.0),
-        "deduction": float(s.get("deduction", 0.0) or 0.0),
-        "bank_account_holder": s.get("bank_account_holder"),
-        "bank_account_number": s.get("bank_account_number"),
-        "bank_ifsc": s.get("bank_ifsc"),
-        "pan_number": s.get("pan_number"),
-        "aadhaar_number": s.get("aadhaar_number"),
         "photo_url": s.get("photo_url"),
         "is_active": s.get("is_active", True),
         "created_at": s.get("created_at") or now_ist_str(),
     }
+    if include_private:
+        result.update({
+            "monthly_salary": float(s.get("monthly_salary", 0.0) or 0.0),
+            "daily_wage": float(s.get("daily_wage", 0.0) or 0.0),
+            "overtime_rate_per_hour": float(s.get("overtime_rate_per_hour", 0.0) or 0.0),
+            "allowance": float(s.get("allowance", 0.0) or 0.0),
+            "deduction": float(s.get("deduction", 0.0) or 0.0),
+            "bank_account_holder": s.get("bank_account_holder"),
+            "bank_account_number": s.get("bank_account_number"),
+            "bank_ifsc": s.get("bank_ifsc"),
+            "pan_number": s.get("pan_number"),
+            "aadhaar_number": s.get("aadhaar_number"),
+        })
+    return result
 
 
 @router.get("/", response_model=List[StaffResponse])
-async def list_staff(_=Depends(require_any)):
+async def list_staff(current_user: dict = Depends(require_any)):
     db = get_db()
     staff = await db.staff.find({}).to_list(500)
-    return [_format_staff(s) for s in staff]
+    return [_format_staff(s, current_user.get("role") in ("admin", "manager")) for s in staff]
 
 
 @router.post("/", response_model=StaffResponse)
@@ -107,17 +111,17 @@ async def create_staff(data: StaffCreate, _=Depends(require_admin)):
 
 
 @router.get("/{staff_id}", response_model=StaffResponse)
-async def get_staff(staff_id: str, _=Depends(require_any)):
+async def get_staff(staff_id: str, current_user: dict = Depends(require_any)):
     db = get_db()
     s = await db.staff.find_one({"staff_id": staff_id})
     if not s:
         raise HTTPException(status_code=404, detail="Staff not found")
 
-    res = _format_staff(s)
+    res = _format_staff(s, current_user.get("role") in ("admin", "manager"))
 
     # Check if a user is linked
     user = await db.users.find_one({"staff_id": staff_id})
-    if user:
+    if user and current_user.get("role") in ("admin", "manager"):
         res["has_login"] = True
         res["username"] = user["username"]
         res["user_role"] = user["role"]
@@ -190,7 +194,10 @@ async def update_staff(staff_id: str, data: StaffUpdate, _=Depends(require_admin
             user_updates["staff_id"] = effective_staff_id
 
         if user_updates:
-            await db.users.update_one({"staff_id": staff_id}, {"$set": user_updates})
+            await db.users.update_one(
+                {"staff_id": staff_id},
+                {"$set": user_updates, "$inc": {"token_version": 1}},
+            )
 
     res = _format_staff(result)
     updated_user = await db.users.find_one({"staff_id": effective_staff_id})
@@ -235,7 +242,7 @@ async def upload_staff_photo(
     if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
 
-    image_bytes = await file.read()
+    image_bytes = await read_image_upload(file)
     url = await upload_image_bytes(image_bytes, folder="baangs/staff")
     await db.staff.update_one({"staff_id": staff_id}, {"$set": {"photo_url": url}})
     return {"photo_url": url}

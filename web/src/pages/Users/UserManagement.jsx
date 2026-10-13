@@ -71,7 +71,7 @@ export default function UserManagement() {
   };
 
   const resetPassword = async () => {
-    if (!newPassword || newPassword.length < 6) { setError('Password must be at least 6 characters'); return; }
+    if (!newPassword || newPassword.length < 12) { setError('Password must be at least 12 characters'); return; }
     setSaving(true);
     try {
       await usersApi.resetPassword(showResetModal.user_id, newPassword);

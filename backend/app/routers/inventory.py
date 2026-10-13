@@ -6,6 +6,7 @@ from ..models.inventory import (
     InventoryItemUpdate,
     InventoryItemInDB,
     InventoryItemTechResponse,
+    InventoryItemSalesResponse,
     InventoryTransaction,
     TransactionType,
     InventoryStatus,
@@ -52,6 +53,8 @@ async def get_inventory(current_user: dict = Depends(get_current_user)):
             
             if current_user["role"] == "technician":
                 result.append(InventoryItemTechResponse(**item).dict(by_alias=True))
+            elif current_user["role"] == "sales":
+                result.append(InventoryItemSalesResponse(**item).dict(by_alias=True))
             else:
                 result.append(InventoryItemInDB(**item).dict(by_alias=True))
         except Exception as e:
@@ -167,6 +170,8 @@ async def search_item(
         item.setdefault("category", "General")
         if current_user["role"] == "technician":
             return InventoryItemTechResponse(**item).dict(by_alias=True)
+        if current_user["role"] == "sales":
+            return InventoryItemSalesResponse(**item).dict(by_alias=True)
         return InventoryItemInDB(**item).dict(by_alias=True)
 
     result = [fmt(item) for item in items]
@@ -177,16 +182,19 @@ async def search_item(
 
 @router.get("/{barcode}")
 async def get_item(barcode: str, current_user: dict = Depends(get_current_user)):
+    if len(barcode) > 128:
+        raise HTTPException(status_code=400, detail="Item lookup is too long")
     db = get_db()
     # Primary lookup by exact barcode, then fallback to model/serial/name.
     item = await db.inventory.find_one({"barcode": barcode, "status": InventoryStatus.ACTIVE})
     if not item:
+        literal = re.escape(barcode)
         fallback_query = {
             "status": InventoryStatus.ACTIVE,
             "$or": [
-                {"model_number": {"$regex": f"^{barcode}$", "$options": "i"}},
-                {"serial_number": {"$regex": barcode, "$options": "i"}},
-                {"item_name": {"$regex": f"^{barcode}$", "$options": "i"}},
+                {"model_number": {"$regex": f"^{literal}$", "$options": "i"}},
+                {"serial_number": {"$regex": literal, "$options": "i"}},
+                {"item_name": {"$regex": f"^{literal}$", "$options": "i"}},
             ],
         }
         item = await db.inventory.find_one(fallback_query)
@@ -197,6 +205,8 @@ async def get_item(barcode: str, current_user: dict = Depends(get_current_user))
     
     if current_user["role"] == "technician":
         return InventoryItemTechResponse(**item).dict(by_alias=True)
+    if current_user["role"] == "sales":
+        return InventoryItemSalesResponse(**item).dict(by_alias=True)
     return InventoryItemInDB(**item).dict(by_alias=True)
 
 

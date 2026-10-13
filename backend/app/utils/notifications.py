@@ -24,7 +24,7 @@ async def send_push_to_users(db, user_ids: Iterable[str], title: str, message: s
         return
 
     data = meta or {}
-    channel_id = "baangs-alerts-v2"
+    channel_id = "baangs-alerts-v3"
     sound = "attendance_reminder.wav"
 
     token_rows = await db.push_tokens.find({"user_id": {"$in": clean_user_ids}, "status": "active"}).to_list(None)

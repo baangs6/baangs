@@ -9,15 +9,15 @@ sys.path.append(os.getcwd())
 from app.auth.utils import hash_password
 
 async def fix_login():
-    uri = "mongodb+srv://baangstech_db_user:snb3GBioBO43KMSK@baangs.fejxabn.mongodb.net/baangs_fsm?retryWrites=true&w=majority&appName=baangs"
+    uri = os.environ["MONGODB_URL"]
     client = AsyncIOMotorClient(uri)
     db = client.baangs_fsm
     
     username = "chikku"
-    password = "password123"
+    password = os.environ["RESET_PASSWORD"]
     
     new_hash = hash_password(password)
-    print(f"Generated new hash: {new_hash}")
+    print("Diagnostic completed without logging sensitive values")
     print(f"Hash length: {len(new_hash)}")
     
     if len(new_hash) < 60:

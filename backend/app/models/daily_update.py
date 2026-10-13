@@ -11,7 +11,7 @@ class JobInventoryUsageCreate(BaseModel):
     warranty_years: Optional[int] = Field(default=None, ge=0, le=5)
     barcode: str
     serial_number: Optional[str] = None
-    quantity_used: float
+    quantity_used: float = Field(..., gt=0, allow_inf_nan=False)
 
 class ManualInventoryItemCreate(BaseModel):
     warranty_years: Optional[int] = Field(default=None, ge=0, le=5)
@@ -19,7 +19,7 @@ class ManualInventoryItemCreate(BaseModel):
     item_name: str
     model_number: Optional[str] = None
     serial_number: Optional[str] = None
-    quantity_used: float
+    quantity_used: float = Field(..., gt=0, allow_inf_nan=False)
     category: Optional[str] = "Miscellaneous"
     brand: Optional[str] = None
     unit_type: Optional[str] = "Pcs"
@@ -34,12 +34,12 @@ class DailyUpdateCreate(BaseModel):
     issues_faced: Optional[str] = None
     learning_notes: Optional[str] = None
     learning_category: Optional[str] = None
-    expense: Optional[float] = 0.0
-    service_charge: Optional[float] = 0.0
-    service_bill: Optional[float] = 0.0
-    collected_amount: Optional[float] = 0.0
+    expense: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    service_charge: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    service_bill: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    collected_amount: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     invoice: Optional[str] = None
-    invoice_amount: Optional[float] = 0.0
+    invoice_amount: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     work_type: Optional[str] = None
     inventory_used: Optional[List[JobInventoryUsageCreate]] = Field(default_factory=list)
     manual_inventory_items: Optional[List[ManualInventoryItemCreate]] = Field(default_factory=list)
@@ -83,10 +83,10 @@ class ManualInventoryVerify(BaseModel):
     item_name: Optional[str] = None
     model_number: Optional[str] = None
     serial_number: Optional[str] = None
-    purchase_price: Optional[float] = None
-    selling_price: Optional[float] = None
-    opening_quantity: Optional[float] = None
-    quantity_used: Optional[float] = None
+    purchase_price: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    selling_price: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    opening_quantity: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    quantity_used: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
     category: Optional[str] = None
     brand: Optional[str] = None
     unit_type: Optional[str] = None

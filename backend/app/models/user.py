@@ -23,7 +23,7 @@ class UserStatus(str, Enum):
 
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=12)
     role: UserRole
     full_name: Optional[str] = None
     phone: Optional[str] = None
@@ -64,6 +64,6 @@ class TokenResponse(BaseModel):
 
 class SetupRequest(BaseModel):
     username: str = Field(..., min_length=3)
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=12)
     full_name: str
     phone: Optional[str] = None

@@ -2,6 +2,7 @@ from datetime import timedelta
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from io import BytesIO
+from html import escape
 from typing import List, Optional
 from ..models.billing import BillingCreate, BillingResponse
 from ..auth.utils import create_access_token, decode_token, require_admin, require_admin_or_manager, require_any
@@ -206,7 +207,7 @@ async def job_invoice_link(job_id: str, request: Request, current_user: dict = D
         raise HTTPException(status_code=404, detail="Complete billing before generating the invoice")
 
     token = create_access_token(
-        {"sub": current_user.get("username"), "invoice_job_id": job_id},
+        {"token_use": "invoice", "invoice_job_id": job_id},
         expires_delta=timedelta(hours=24),
     )
     public_url = str(request.url_for("public_job_invoice_pdf", job_id=job_id))
@@ -216,7 +217,7 @@ async def job_invoice_link(job_id: str, request: Request, current_user: dict = D
 @router.get("/job/{job_id}/invoice-public.pdf", name="public_job_invoice_pdf")
 async def public_job_invoice_pdf(job_id: str, token: str = Query(...)):
     payload = decode_token(token)
-    if payload.get("invoice_job_id") != job_id:
+    if payload.get("token_use") != "invoice" or payload.get("invoice_job_id") != job_id:
         raise HTTPException(status_code=403, detail="Invalid invoice link")
     return await job_invoice_pdf(job_id, {"role": "admin"})
 
@@ -286,7 +287,7 @@ async def job_invoice_pdf(job_id: str, current_user: dict = Depends(require_any)
     bill_date = f"{date_parts[2][:2]}-{month_names[int(date_parts[1]) - 1]}-{date_parts[0]}" if len(date_parts) == 3 else raw_bill_date
     meta = Table([
         [Paragraph(f'<b>BILL NO : {bill_no}</b>', small), Paragraph(f'<b>Date : {bill_date}</b>', right)],
-        [Paragraph(f'<b>Prepared For:</b><br/><font color="blue"><b>{job.get("customer_name", "")}</b></font><br/>{job.get("phone_number", "")}<br/>{job.get("location", "") or ""}', small), ''],
+        [Paragraph(f'<b>Prepared For:</b><br/><font color="blue"><b>{escape(str(job.get("customer_name") or ""))}</b></font><br/>{escape(str(job.get("phone_number") or ""))}<br/>{escape(str(job.get("location") or ""))}', small), ''],
     ], colWidths=[100 * mm, 60 * mm])
     story.extend([meta, Spacer(1, 14 * mm)])
 
@@ -316,7 +317,7 @@ async def job_invoice_pdf(job_id: str, current_user: dict = Depends(require_any)
         Spacer(1, 3 * mm),
         Paragraph(f'<font color="#244d1b"><b>Rupees {_number_words(total)} only</b></font>', right),
         Spacer(1, 3 * mm),
-        Paragraph(f'<b>Payment:</b> {(billing.get("payment_mode") or "-").replace("_", " ").title()} &nbsp;&nbsp; <b>Reference:</b> {billing.get("payment_id") or "-"}', right),
+        Paragraph(f'<b>Payment:</b> {escape(str(billing.get("payment_mode") or "-").replace("_", " ").title())} &nbsp;&nbsp; <b>Reference:</b> {escape(str(billing.get("payment_id") or "-"))}', right),
         PageBreak(),
     ])
 

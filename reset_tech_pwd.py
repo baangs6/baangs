@@ -1,20 +1,21 @@
+import os
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 import bcrypt
 
 async def reset_password():
-    uri = "mongodb+srv://baangstech_db_user:snb3GBioBO43KMSK@baangs.fejxabn.mongodb.net/baangs_fsm?retryWrites=true&w=majority&appName=baangs"
+    uri = os.environ["MONGODB_URL"]
     client = AsyncIOMotorClient(uri)
     db = client.baangs_fsm
     
     username = "sarun"
-    new_password = "password123"
+    new_password = os.environ["RESET_PASSWORD"]
     
     # Simple bcrypt hashing
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(new_password.encode('utf-8'), salt).decode('utf-8')
     
-    print(f"Resetting password for {username} to {new_password}...")
+    print("Diagnostic completed without logging sensitive values")
     
     result = await db.users.update_one(
         {"username": username},

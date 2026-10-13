@@ -6,7 +6,7 @@ import { notificationsApi } from '../api';
 import { publish } from './appEvents';
 import { rememberNotifications, unseenNotifications } from './notificationState';
 
-export const PHONE_CHANNEL = 'baangs-alerts-v2';
+export const PHONE_CHANNEL = 'baangs-alerts-v3';
 export const PHONE_SOUND = 'attendance_reminder.wav';
 export const NOTIFICATION_STATUS_KEY = 'phoneNotificationStatus';
 
@@ -21,7 +21,7 @@ export async function configurePhoneNotifications() {
     await Notifications.setNotificationChannelAsync(PHONE_CHANNEL, {
       name: 'Baangs alerts', importance: Notifications.AndroidImportance.HIGH,
       sound: PHONE_SOUND, vibrationPattern: [0, 250, 250, 250],
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
     });
   }
   const permission = await Notifications.getPermissionsAsync();

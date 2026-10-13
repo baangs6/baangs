@@ -68,11 +68,14 @@ async def update_user(user_id: str, data: UserUpdate, _=Depends(require_admin)):
         raise HTTPException(status_code=400, detail="No data to update")
     result = await db.users.find_one_and_update(
         {"user_id": user_id},
-        {"$set": update_data},
+        {"$set": update_data, "$inc": {"token_version": 1}},
         return_document=True
     )
     if not result:
         raise HTTPException(status_code=404, detail="User not found")
+    await db.push_tokens.update_many(
+        {"user_id": user_id}, {"$set": {"status": "inactive", "updated_at": now_ist_str()}}
+    )
     return _format_user(result)
 
 
@@ -81,11 +84,14 @@ async def deactivate_user(user_id: str, _=Depends(require_admin)):
     db = get_db()
     result = await db.users.find_one_and_update(
         {"user_id": user_id},
-        {"$set": {"status": "inactive"}},
+        {"$set": {"status": "inactive"}, "$inc": {"token_version": 1}},
         return_document=True
     )
     if not result:
         raise HTTPException(status_code=404, detail="User not found")
+    await db.push_tokens.update_many(
+        {"user_id": user_id}, {"$set": {"status": "inactive", "updated_at": now_ist_str()}}
+    )
     return {"message": "User deactivated", "user_id": user_id}
 
 
@@ -94,7 +100,7 @@ async def activate_user(user_id: str, _=Depends(require_admin)):
     db = get_db()
     result = await db.users.find_one_and_update(
         {"user_id": user_id},
-        {"$set": {"status": "active"}},
+        {"$set": {"status": "active"}, "$inc": {"token_version": 1}},
         return_document=True
     )
     if not result:
@@ -105,16 +111,19 @@ async def activate_user(user_id: str, _=Depends(require_admin)):
 @router.put("/{user_id}/reset-password")
 async def reset_password(user_id: str, body: dict, _=Depends(require_admin)):
     new_password = body.get("new_password")
-    if not new_password or len(new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if not new_password or len(new_password) < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
     db = get_db()
     result = await db.users.find_one_and_update(
         {"user_id": user_id},
-        {"$set": {"password_hash": hash_password(new_password)}},
+        {"$set": {"password_hash": hash_password(new_password)}, "$inc": {"token_version": 1}},
         return_document=True
     )
     if not result:
         raise HTTPException(status_code=404, detail="User not found")
+    await db.push_tokens.update_many(
+        {"user_id": user_id}, {"$set": {"status": "inactive", "updated_at": now_ist_str()}}
+    )
     return {"message": "Password reset successfully"}
 
 

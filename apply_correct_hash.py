@@ -1,14 +1,15 @@
+import os
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 
 async def update_hash():
-    uri = "mongodb+srv://baangstech_db_user:snb3GBioBO43KMSK@baangs.fejxabn.mongodb.net/baangs_fsm?retryWrites=true&w=majority&appName=baangs"
+    uri = os.environ["MONGODB_URL"]
     client = AsyncIOMotorClient(uri)
     db = client.baangs_fsm
     
     username = "chikku"
     # This is the hash generated using the backend's own passlib logic
-    correct_hash = "$2b$12$p9AooD/U3WDjFO4lvly12IknsrOGHNLUuDIZUE.nIQYxNv72"
+    correct_hash = os.environ["RESET_PASSWORD_HASH"]
     
     print(f"Updating hash for {username}...")
     result = await db.users.update_one(

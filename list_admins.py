@@ -1,8 +1,9 @@
+import os
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 
 async def get_admins():
-    uri = "mongodb+srv://baangstech_db_user:snb3GBioBO43KMSK@baangs.fejxabn.mongodb.net/baangs_fsm?retryWrites=true&w=majority&appName=baangs"
+    uri = os.environ["MONGODB_URL"]
     client = AsyncIOMotorClient(uri)
     db = client.baangs_fsm
     print("Finding admins...")

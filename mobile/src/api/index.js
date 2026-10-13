@@ -118,6 +118,7 @@ export const authApi = {
   setupStatus: () => api.get('/auth/setup-status'),
   login: (data) => api.post('/auth/login', data),
   me: () => api.get('/auth/me'),
+  logout: () => api.post('/auth/logout'),
 };
 
 export const jobsApi = {

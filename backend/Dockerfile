@@ -5,7 +5,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY app ./app
+
+RUN useradd --create-home --uid 10001 appuser
+USER appuser
 
 EXPOSE 10000
 

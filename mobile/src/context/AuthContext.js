@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AppState } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import storage from '../utils/storage';
 import { authApi, notificationsApi } from '../api';
 import { subscribe } from '../utils/appEvents';
@@ -20,7 +21,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const isSetup = true;
 
-  useEffect(() => subscribe('sessionExpired', () => { setToken(null); setUser(null); }), []);
+  useEffect(() => subscribe('sessionExpired', () => {
+    Notifications.dismissAllNotificationsAsync().catch(() => {});
+    Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
+    setToken(null);
+    setUser(null);
+  }), []);
 
   useEffect(() => {
     const init = async () => {
@@ -60,7 +66,12 @@ export function AuthProvider({ children }) {
       if (lastAutoLogoutDate === today) return;
 
       await storage.setItem('lastAutoLogoutDate', today);
-      await storage.multiRemove(['token', 'user']);
+      const pushToken = await storage.getItem('expoPushToken');
+      if (pushToken) await notificationsApi.unregisterPushToken(pushToken).catch(() => {});
+      await authApi.logout().catch(() => {});
+      await storage.multiRemove(['token', 'user', 'expoPushToken']);
+      await Notifications.dismissAllNotificationsAsync().catch(() => {});
+      await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
       setToken(null);
       setUser(null);
     };
@@ -92,7 +103,10 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     const pushToken = await storage.getItem('expoPushToken');
     if (pushToken) await notificationsApi.unregisterPushToken(pushToken).catch(() => {});
-    await storage.multiRemove(['token', 'user']);
+    await authApi.logout().catch(() => {});
+    await storage.multiRemove(['token', 'user', 'expoPushToken']);
+    await Notifications.dismissAllNotificationsAsync().catch(() => {});
+    await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
     setToken(null);
     setUser(null);
   };

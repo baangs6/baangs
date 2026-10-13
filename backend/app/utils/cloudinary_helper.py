@@ -2,6 +2,8 @@ import cloudinary
 import cloudinary.uploader
 import base64
 import io
+import asyncio
+from fastapi import HTTPException, UploadFile
 from ..config import settings
 
 
@@ -28,12 +30,22 @@ async def upload_image_base64(base64_data: str, folder: str = "baangs") -> str:
     if "," in base64_data:
         base64_data = base64_data.split(",")[1]
 
-    result = cloudinary.uploader.upload(
+    result = await asyncio.to_thread(
+        cloudinary.uploader.upload,
         f"data:image/jpeg;base64,{base64_data}",
         folder=folder,
-        resource_type="image"
+        resource_type="image",
     )
     return result["secure_url"]
+
+
+async def read_image_upload(file: UploadFile) -> bytes:
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
+    contents = await file.read(5 * 1024 * 1024 + 1)
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image must be 5 MB or smaller")
+    return contents
 
 
 async def upload_image_bytes(image_bytes: bytes, folder: str = "baangs") -> str:
@@ -42,9 +54,10 @@ async def upload_image_bytes(image_bytes: bytes, folder: str = "baangs") -> str:
         encoded = base64.b64encode(image_bytes).decode()
         return f"data:image/jpeg;base64,{encoded}"
     configure_cloudinary()
-    result = cloudinary.uploader.upload(
+    result = await asyncio.to_thread(
+        cloudinary.uploader.upload,
         image_bytes,
         folder=folder,
-        resource_type="image"
+        resource_type="image",
     )
     return result["secure_url"]

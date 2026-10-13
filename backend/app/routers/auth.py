@@ -88,6 +88,8 @@ async def _auto_check_out(db, user: dict):
 async def setup_status():
     """Check if the app has been set up (first admin exists)."""
     db = get_db()
+    if await db.setup_state.find_one({"_id": "initial_admin"}):
+        return {"is_setup": True}
     admin_count = await db.users.count_documents({"role": "admin"})
     return {"is_setup": admin_count > 0}
 
@@ -99,10 +101,17 @@ async def first_time_setup(data: SetupRequest):
     admin_count = await db.users.count_documents({"role": "admin"})
     if admin_count > 0:
         raise HTTPException(status_code=400, detail="App is already set up")
+    if await db.setup_state.find_one({"_id": "initial_admin"}):
+        raise HTTPException(status_code=400, detail="App is already set up")
 
     existing = await db.users.find_one({"username": data.username})
     if existing:
         raise HTTPException(status_code=400, detail="Username already taken")
+
+    try:
+        await db.setup_state.insert_one({"_id": "initial_admin", "completed": True})
+    except Exception:
+        raise HTTPException(status_code=400, detail="App is already set up")
 
     user_doc = {
         "user_id": generate_user_id(),
@@ -126,7 +135,7 @@ async def first_time_setup(data: SetupRequest):
             upsert=True
         )
 
-    token = create_access_token({"sub": data.username})
+    token = create_access_token({"sub": user_doc["user_id"], "token_use": "access", "token_version": 0})
     await _auto_check_in(db, user_doc)
     user_payload = await _user_response(db, user_doc)
     return {
@@ -163,7 +172,7 @@ async def login(data: LoginRequest):
 
     if data.platform != "mobile":
         await _auto_check_in(db, user)
-    token = create_access_token({"sub": data.username})
+    token = create_access_token({"sub": user["user_id"], "token_use": "access", "token_version": user.get("token_version", 0)})
     user_payload = await _user_response(db, user)
     return {
         "access_token": token,
@@ -182,4 +191,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 async def logout(current_user: dict = Depends(get_current_user)):
     db = get_db()
     await _auto_check_out(db, current_user)
+    await db.users.update_one({"user_id": current_user["user_id"]}, {"$inc": {"token_version": 1}})
+    await db.push_tokens.update_many(
+        {"user_id": current_user["user_id"]},
+        {"$set": {"status": "inactive", "updated_at": now_ist_str()}},
+    )
     return {"message": "Logged out"}

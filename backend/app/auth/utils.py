@@ -35,13 +35,15 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ):
     payload = decode_token(credentials.credentials)
-    username = payload.get("sub")
-    if not username:
+    user_id = payload.get("sub")
+    if payload.get("token_use") != "access" or not user_id:
         raise HTTPException(status_code=401, detail="Invalid token payload")
     db = get_db()
-    user = await db.users.find_one({"username": username})
+    user = await db.users.find_one({"user_id": user_id})
     if not user or user.get("status") != "active":
         raise HTTPException(status_code=401, detail="User not found or inactive")
+    if payload.get("token_version") != user.get("token_version", 0):
+        raise HTTPException(status_code=401, detail="Session has expired")
     return user
 
 

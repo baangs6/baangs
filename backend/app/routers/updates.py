@@ -188,6 +188,8 @@ async def review_doubt(update_id: str, data: DoubtReview, current_user: dict = D
 
 @router.post("/", response_model=DailyUpdateResponse)
 async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ("admin", "manager", "technician"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     db = get_db()
     job = await db.jobs.find_one({"job_id": data.job_id})
     if not job:
@@ -208,7 +210,7 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
     # Validate and process inventory usage
     inventory_records = []
     transaction_records = []
-    inventory_updates = []
+    reserved_quantities = {}
     processed_inventory = []
 
     update_id = generate_update_id()
@@ -236,13 +238,14 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
                     raise HTTPException(status_code=400, detail=f"Duplicate hardware entry: model '{model_number}' and serial '{serial_number}' already added")
                 duplicate_key_set.add(key)
             
-            if inv_item["current_quantity"] < item_usage.quantity_used:
+            reserved = reserved_quantities.get(item_usage.barcode, 0)
+            if inv_item["current_quantity"] < reserved + item_usage.quantity_used:
                 raise HTTPException(status_code=400, detail=f"Insufficient stock for {inv_item['item_name']}. Available: {inv_item['current_quantity']}")
                 
-            new_quantity = inv_item["current_quantity"] - item_usage.quantity_used
+            reserved_quantities[item_usage.barcode] = reserved + item_usage.quantity_used
+            new_quantity = inv_item["current_quantity"] - reserved_quantities[item_usage.barcode]
             
             # Prepare db operations
-            inventory_updates.append((inv_item["barcode"], new_quantity))
             
             item_doc_id = str(inv_item["_id"])
             
@@ -327,14 +330,29 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
         "inventory_used": processed_inventory,
         "manual_inventory_items": manual_inventory_items,
     }
-    await db.daily_updates.insert_one(update_doc)
-
-    # Execute inventory updates
-    for barcode, new_qty in inventory_updates:
-        await db.inventory.update_one(
-            {"barcode": barcode},
-            {"$set": {"current_quantity": new_qty, "updated_at": now_ist_str()}}
+    # Consume each barcode once, conditioned on the current stock at write time.
+    consumed = []
+    for barcode, quantity in reserved_quantities.items():
+        result = await db.inventory.update_one(
+            {"barcode": barcode, "status": "active", "current_quantity": {"$gte": quantity}},
+            {"$inc": {"current_quantity": -quantity}, "$set": {"updated_at": now_ist_str()}}
         )
+        if result.modified_count != 1:
+            for prior_barcode, prior_quantity in consumed:
+                await db.inventory.update_one(
+                    {"barcode": prior_barcode}, {"$inc": {"current_quantity": prior_quantity}}
+                )
+            raise HTTPException(status_code=409, detail="Inventory changed; please retry the update")
+        consumed.append((barcode, quantity))
+
+    try:
+        await db.daily_updates.insert_one(update_doc)
+    except Exception:
+        for barcode, quantity in consumed:
+            await db.inventory.update_one(
+                {"barcode": barcode}, {"$inc": {"current_quantity": quantity}}
+            )
+        raise
         
     if transaction_records:
         await db.inventory_transactions.insert_many(transaction_records)

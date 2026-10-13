@@ -232,7 +232,7 @@ async def update_quote(quote_id: str, data: Quote, revision: int = Query(..., ge
 @router.post('/{quote_id}/share-link')
 async def share_link(quote_id: str, request: Request, _=Depends(require_admin_or_manager)):
     row = await find_quote(quote_id)
-    token = create_access_token({'quotation_id': quote_id, 'revision': row['revision']}, expires_delta=timedelta(days=7))
+    token = create_access_token({'token_use': 'quotation', 'quotation_id': quote_id, 'revision': row['revision']}, expires_delta=timedelta(days=7))
     url = str(request.url_for('public_quotation_pdf', quote_id=quote_id))
     return {'url': f'{url}?token={token}', 'expires_in_days': 7}
 
@@ -241,7 +241,7 @@ async def share_link(quote_id: str, request: Request, _=Depends(require_admin_or
 async def public_pdf(quote_id: str, token: str):
     payload = decode_token(token)
     row = await find_quote(quote_id)
-    if payload.get('quotation_id') != quote_id or payload.get('revision') != row['revision']:
+    if payload.get('token_use') != 'quotation' or payload.get('quotation_id') != quote_id or payload.get('revision') != row['revision']:
         raise HTTPException(403, 'Quotation link is invalid or has been replaced')
     return pdf_response(row)
 

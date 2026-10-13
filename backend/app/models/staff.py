@@ -26,7 +26,7 @@ class StaffCreate(BaseModel):
     photo_url: Optional[str] = None
     create_login: bool = False
     username: Optional[str] = None
-    password: Optional[str] = None
+    password: Optional[str] = Field(default=None, min_length=12)
     user_role: Optional[str] = "technician"
 
 
@@ -56,7 +56,7 @@ class StaffUpdate(BaseModel):
     is_active: Optional[bool] = None
     create_login: Optional[bool] = None
     username: Optional[str] = None
-    password: Optional[str] = None
+    password: Optional[str] = Field(default=None, min_length=12)
     user_role: Optional[str] = None
 
 

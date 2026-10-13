@@ -7,10 +7,10 @@ sys.path.append(os.path.join(os.getcwd(), 'backend'))
 from app.auth.utils import hash_password
 
 async def reset():
-    uri = 'mongodb+srv://baangstech_db_user:snb3GBioBO43KMSK@baangs.fejxabn.mongodb.net/baangs_fsm?retryWrites=true&w=majority&appName=baangs'
+    uri = os.environ["MONGODB_URL"]
     client = AsyncIOMotorClient(uri)
     db = client.baangs_fsm
-    hashed = hash_password('password123')
+    hashed = hash_password(os.environ["RESET_PASSWORD"])
     result = await db.users.update_one(
         {'username': 'sarun'},
         {'$set': {

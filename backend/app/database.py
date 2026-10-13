@@ -26,6 +26,10 @@ async def connect_db():
         print(f"[OK] Connected to MongoDB: {settings.DATABASE_NAME}")
     except Exception as exc:
         client = None
+        if not settings.ALLOW_MOCK_DATABASE:
+            db = None
+            db_mode = "disconnected"
+            raise
         db = create_mock_database()
         db_mode = "mock"
         print(f"[WARN] MongoDB unavailable, using local mock database instead: {exc}")
@@ -41,6 +45,13 @@ async def close_db():
 async def create_indexes():
     # Users
     await db.users.create_index("username", unique=True)
+    await db.users.create_index("user_id", unique=True)
+    if await db.users.count_documents({"role": "admin"}) > 0:
+        await db.setup_state.update_one(
+            {"_id": "initial_admin"},
+            {"$setOnInsert": {"completed": True}},
+            upsert=True,
+        )
     # Staff
     await db.staff.create_index("phone_number")
     # Customers

@@ -228,14 +228,13 @@ export const tasksApi = {
 };
 
 export const publicApi = {
-  lookupCustomer: (phoneNumber) => api.post('/public/lookup-customer', { phone_number: phoneNumber }),
   registerComplaint: (data) => api.post('/public/complaints', data),
   uploadPhoto: (file) => {
     const form = new FormData();
     form.append('file', file);
     return api.post('/public/complaints/photo', form, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
-  track: (jobId) => api.get(`/public/track/${encodeURIComponent(jobId)}`),
+  track: (jobId, phoneNumber) => api.get(`/public/track/${encodeURIComponent(jobId)}`, { params: { phone_number: phoneNumber } }),
   feedback: (jobId, token) => api.get(`/public/feedback/${encodeURIComponent(jobId)}`, { params: { token } }),
   submitFeedback: (jobId, data) => api.post(`/public/feedback/${encodeURIComponent(jobId)}`, data),
 };

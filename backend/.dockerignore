@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+mock_db.json
+*.zip
+*.apk
+*.jks
+*.keystore
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+tests/

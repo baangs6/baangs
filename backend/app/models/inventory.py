@@ -100,3 +100,7 @@ class InventoryItemTechResponse(BaseModel):
     item_photo: Optional[str] = None
     remarks: Optional[str] = None
     status: InventoryStatus
+
+
+class InventoryItemSalesResponse(InventoryItemTechResponse):
+    selling_price: float = 0.0

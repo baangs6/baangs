@@ -51,7 +51,7 @@ export default function Setup() {
             <div className="form-group">
               <label className="form-label">Password</label>
               <input className="form-input" type="password" placeholder="Min 6 characters" value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })} required minLength={6} />
+                onChange={e => setForm({ ...form, password: e.target.value })} required minLength={12} />
             </div>
             <button className="btn btn-primary btn-lg" type="submit" disabled={loading} style={{ marginTop: 8 }}>
               {loading ? <><div className="spinner" style={{ width: 16, height: 16 }} /> Setting up...</> : '🚀 Create Admin Account'}

@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { publicApi } from '../api';
-import { MdPhone, MdPerson, MdLocationOn, MdBuild, MdDescription, MdCheckCircle, MdSearch, MdCloudUpload } from 'react-icons/md';
+import { MdPhone, MdPerson, MdLocationOn, MdBuild, MdDescription, MdCloudUpload } from 'react-icons/md';
 
 export default function PublicComplaintPage() {
   const navigate = useNavigate();
   const [phone, setPhone] = useState('');
-  const [lookupDone, setLookupDone] = useState(false);
-  const [existingCustomer, setExistingCustomer] = useState(null);
   const [form, setForm] = useState({
     customer_name: '',
     location: '',
@@ -23,38 +21,6 @@ export default function PublicComplaintPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [createdResult, setCreatedResult] = useState(null);
-
-  const handlePhoneLookup = async (phoneNumber) => {
-    const cleanPhone = phoneNumber.trim();
-    if (!cleanPhone || cleanPhone.length < 10) return;
-    try {
-      const res = await publicApi.lookupCustomer(cleanPhone);
-      if (res.data?.found) {
-        setExistingCustomer(res.data);
-        setForm((prev) => ({
-          ...prev,
-          customer_name: res.data.customer_name || prev.customer_name,
-          location: res.data.location || prev.location,
-          site_type: res.data.site_type || prev.site_type,
-        }));
-      } else {
-        setExistingCustomer(null);
-      }
-    } catch (err) {
-      console.error('Lookup failed', err);
-    } finally {
-      setLookupDone(true);
-    }
-  };
-
-  const handlePhoneChange = (e) => {
-    const val = e.target.value;
-    setPhone(val);
-    setLookupDone(false);
-    if (val.length === 10) {
-      handlePhoneLookup(val);
-    }
-  };
 
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0];
@@ -225,23 +191,11 @@ export default function PublicComplaintPage() {
                       type="tel"
                       placeholder="e.g. 9876543210"
                       value={phone}
-                      onChange={handlePhoneChange}
+                      onChange={(e) => setPhone(e.target.value)}
                       required
                       maxLength={12}
                     />
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => handlePhoneLookup(phone)}
-                    >
-                      <MdSearch /> Lookup
-                    </button>
                   </div>
-                  {existingCustomer && (
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-success)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <MdCheckCircle /> Existing customer found! Details auto-filled below.
-                    </div>
-                  )}
                 </div>
 
                 {/* Customer Name */}

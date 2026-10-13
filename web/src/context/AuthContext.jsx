@@ -21,9 +21,45 @@ export function AuthProvider({ children }) {
   const [isSetup, setIsSetup] = useState(true);
 
   useEffect(() => {
-    authApi.setupStatus().then(res => {
-      setIsSetup(res.data.is_setup);
-    }).catch(() => {}).finally(() => setLoading(false));
+    let active = true;
+    const initialize = async () => {
+      try {
+        const res = await authApi.setupStatus();
+        if (active) setIsSetup(res.data.is_setup);
+      } catch {
+        // A temporary setup-status failure does not establish a session.
+      }
+      if (localStorage.getItem('token')) {
+        try {
+          const res = await authApi.me();
+          if (active) {
+            localStorage.setItem('user', JSON.stringify(res.data));
+            setUser(res.data);
+          }
+        } catch {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          if (active) {
+            setToken(null);
+            setUser(null);
+          }
+        }
+      }
+      if (active) setLoading(false);
+    };
+    initialize();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const syncSession = (event) => {
+      if (event.key !== 'token' && event.key !== 'user' && event.key !== null) return;
+      const nextToken = localStorage.getItem('token');
+      setToken(nextToken);
+      setUser(nextToken ? getStoredUser() : null);
+    };
+    window.addEventListener('storage', syncSession);
+    return () => window.removeEventListener('storage', syncSession);
   }, []);
 
   const login = async (username, password) => {

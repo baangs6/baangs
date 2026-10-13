@@ -182,6 +182,11 @@ export default function InventoryDashboard() {
   };
 
   const handleExport = () => {
+    const csvCell = (value) => {
+      let text = String(value ?? '');
+      if (/^[\s]*[=+\-@]/.test(text)) text = "'" + text;
+      return `"${text.replaceAll('"', '""')}"`;
+    };
     const headers = ['Item Name', 'Model Number', 'Serial Numbers', 'Purchase Price', 'Selling Price', 'Tax %', 'Min Stock'];
     const rows = items.map(i => [
       i.item_name,
@@ -193,7 +198,7 @@ export default function InventoryDashboard() {
       i.minimum_stock_level
     ]);
 
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const csvContent = [headers, ...rows].map(row => row.map(csvCell).join(",")).join("\r\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);

@@ -12,9 +12,16 @@ from ..auth.utils import require_admin, require_admin_or_manager, require_any, g
 from ..database import get_db
 from ..utils.id_generator import generate_attendance_id, generate_allowance_id
 from ..utils.timezone import now_ist_str, today_ist_str
-from ..utils.cloudinary_helper import upload_image_bytes
+from ..utils.cloudinary_helper import upload_image_bytes, read_image_upload
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
+
+
+def _require_staff_access(current_user: dict, staff_id: str):
+    if current_user.get("role") in ("admin", "manager"):
+        return
+    if current_user.get("role") != "technician" or not current_user.get("staff_id") or current_user["staff_id"] != staff_id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
 
 def _calc_payment_status(amount: float, paid_amount: float) -> tuple[str, float, float]:
@@ -76,6 +83,7 @@ def _fmt(a: dict, staff_name: str = None) -> dict:
 
 @router.post("/checkin", response_model=AttendanceResponse)
 async def check_in(data: CheckInCreate, current_user: dict = Depends(get_current_user)):
+    _require_staff_access(current_user, data.staff_id)
     db = get_db()
     today = today_ist_str()
 
@@ -114,6 +122,7 @@ async def check_out(data: CheckOutCreate, current_user: dict = Depends(get_curre
     att = await db.attendance.find_one({"attendance_id": data.attendance_id})
     if not att:
         raise HTTPException(status_code=404, detail="Attendance record not found")
+    _require_staff_access(current_user, att["staff_id"])
     if att.get("is_checked_out"):
         raise HTTPException(status_code=400, detail="Already checked out")
 
@@ -134,7 +143,8 @@ async def check_out(data: CheckOutCreate, current_user: dict = Depends(get_curre
 
 
 @router.get("/today/{staff_id}")
-async def get_today_attendance(staff_id: str, _=Depends(require_any)):
+async def get_today_attendance(staff_id: str, current_user: dict = Depends(require_any)):
+    _require_staff_access(current_user, staff_id)
     db = get_db()
     today = today_ist_str()
     att = await db.attendance.find_one({"staff_id": staff_id, "date": today})
@@ -325,7 +335,7 @@ async def upload_allowance_bill(
     if row.get("staff_id") != current_user.get("staff_id"):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    image_bytes = await file.read()
+    image_bytes = await read_image_upload(file)
     url = await upload_image_bytes(image_bytes, folder="baangs/allowances")
     await db.attendance_allowances.update_one(
         {"allowance_id": allowance_id},
@@ -338,10 +348,14 @@ async def upload_allowance_bill(
 async def upload_checkin_photo(
     attendance_id: str,
     file: UploadFile = File(...),
-    _=Depends(require_any)
+    current_user: dict = Depends(require_any)
 ):
     db = get_db()
-    image_bytes = await file.read()
+    att = await db.attendance.find_one({"attendance_id": attendance_id})
+    if not att:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+    _require_staff_access(current_user, att["staff_id"])
+    image_bytes = await read_image_upload(file)
     url = await upload_image_bytes(image_bytes, folder="baangs/attendance")
     await db.attendance.update_one(
         {"attendance_id": attendance_id},
@@ -354,10 +368,14 @@ async def upload_checkin_photo(
 async def upload_checkout_photo(
     attendance_id: str,
     file: UploadFile = File(...),
-    _=Depends(require_any)
+    current_user: dict = Depends(require_any)
 ):
     db = get_db()
-    image_bytes = await file.read()
+    att = await db.attendance.find_one({"attendance_id": attendance_id})
+    if not att:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+    _require_staff_access(current_user, att["staff_id"])
+    image_bytes = await read_image_upload(file)
     url = await upload_image_bytes(image_bytes, folder="baangs/attendance")
     await db.attendance.update_one(
         {"attendance_id": attendance_id},

@@ -9,6 +9,15 @@ from ..database import get_db
 router = APIRouter(prefix="/export", tags=["Export"])
 
 
+def _csv_row(row: dict) -> dict:
+    clean = {}
+    for key, value in row.items():
+        if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
+            value = "'" + value
+        clean[key] = value
+    return clean
+
+
 @router.get("/jobs.csv")
 async def export_jobs_csv(_=Depends(require_admin)):
     db = get_db()
@@ -18,7 +27,7 @@ async def export_jobs_csv(_=Depends(require_admin)):
     if jobs:
         writer = csv.DictWriter(output, fieldnames=jobs[0].keys())
         writer.writeheader()
-        writer.writerows(jobs)
+        writer.writerows(_csv_row(row) for row in jobs)
 
     output.seek(0)
     return StreamingResponse(
@@ -37,7 +46,7 @@ async def export_customers_csv(_=Depends(require_admin)):
     if customers:
         writer = csv.DictWriter(output, fieldnames=customers[0].keys())
         writer.writeheader()
-        writer.writerows(customers)
+        writer.writerows(_csv_row(row) for row in customers)
 
     output.seek(0)
     return StreamingResponse(
@@ -56,7 +65,7 @@ async def export_billing_csv(_=Depends(require_admin)):
     if billing:
         writer = csv.DictWriter(output, fieldnames=billing[0].keys())
         writer.writeheader()
-        writer.writerows(billing)
+        writer.writerows(_csv_row(row) for row in billing)
 
     output.seek(0)
     return StreamingResponse(
@@ -75,7 +84,7 @@ async def export_attendance_csv(_=Depends(require_admin)):
     if records:
         writer = csv.DictWriter(output, fieldnames=records[0].keys())
         writer.writeheader()
-        writer.writerows(records)
+        writer.writerows(_csv_row(row) for row in records)
 
     output.seek(0)
     return StreamingResponse(

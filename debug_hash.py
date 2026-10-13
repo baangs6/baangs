@@ -1,14 +1,15 @@
+import os
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 
 async def check():
-    uri = "mongodb+srv://baangstech_db_user:snb3GBioBO43KMSK@baangs.fejxabn.mongodb.net/baangs_fsm?retryWrites=true&w=majority&appName=baangs"
+    uri = os.environ["MONGODB_URL"]
     client = AsyncIOMotorClient(uri)
     db = client.baangs_fsm
     user = await db.users.find_one({"username": "chikku"})
     if user:
         h = user["password_hash"]
-        print(f"Hash: |{h}|")
+        print("Diagnostic completed without logging sensitive values")
         print(f"Length: {len(h)}")
     else:
         print("User not found")

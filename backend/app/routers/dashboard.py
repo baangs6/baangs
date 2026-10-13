@@ -323,6 +323,8 @@ async def technician_performance(
     technician_name: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user)
 ):
+    if current_user.get("role") == "sales":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     db = get_db()
     jobs_date_query = _date_range_filter(date_from, date_to, "scheduled_date")
 

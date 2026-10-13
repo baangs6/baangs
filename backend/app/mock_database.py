@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from copy import deepcopy
 from dataclasses import dataclass
@@ -226,6 +227,7 @@ def create_mock_database():
 def _collection_names():
     return [
         "users",
+        "setup_state",
         "staff",
         "customers",
         "amc_contracts",
@@ -306,7 +308,7 @@ def _seed_data():
             {
                 "user_id": user_id_sahil,
                 "username": "sahil",
-                "password_hash": make_hash("password123"),
+                "password_hash": make_hash(os.environ["MOCK_SEED_PASSWORD"]),
                 "role": "admin",
                 "status": "active",
                 "full_name": "Sahil Satheesh",
@@ -317,7 +319,7 @@ def _seed_data():
             {
                 "user_id": user_id_sarun,
                 "username": "sarun",
-                "password_hash": make_hash("password123"),
+                "password_hash": make_hash(os.environ["MOCK_SEED_PASSWORD"]),
                 "role": "technician",
                 "status": "active",
                 "full_name": "Sarun",
@@ -328,7 +330,7 @@ def _seed_data():
             {
                 "user_id": user_id_chikku,
                 "username": "chikku",
-                "password_hash": make_hash("password123"),
+                "password_hash": make_hash(os.environ["MOCK_SEED_PASSWORD"]),
                 "role": "technician",
                 "status": "active",
                 "full_name": "Chikku",

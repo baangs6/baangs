@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { publicApi } from '../api';
 import { MdSearch, MdCheckCircle, MdSchedule, MdBuild, MdPerson, MdLocationOn, MdHome } from 'react-icons/md';
@@ -9,18 +9,19 @@ export default function PublicTrackPage() {
   const { job_id } = useParams();
   const navigate = useNavigate();
   const [query, setQuery] = useState(job_id || '');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const fetchJobStatus = async (idToSearch) => {
     const q = (idToSearch || query).trim();
-    if (!q) return;
+    if (!q || !phoneNumber.trim()) return;
     setLoading(true);
     setError('');
     setJob(null);
     try {
-      const res = await publicApi.track(q);
+      const res = await publicApi.track(q, phoneNumber.trim());
       setJob(res.data);
     } catch (err) {
       setError(err.response?.data?.detail || `No service ticket found for '${q}'`);
@@ -28,12 +29,6 @@ export default function PublicTrackPage() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (job_id) {
-      fetchJobStatus(job_id);
-    }
-  }, [job_id]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -61,12 +56,20 @@ export default function PublicTrackPage() {
 
         {/* Search Bar */}
         <div className="card" style={{ padding: 20, marginBottom: 24, boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
-          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 12 }}>
+          <form onSubmit={handleSearchSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 12 }}>
             <input
               className="form-input"
-              placeholder="Enter Ticket ID (e.g. JOB-20260725-001) or Phone Number"
+              placeholder="Enter Ticket ID (e.g. JOB-20260725-001)"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              required
+            />
+            <input
+              className="form-input"
+              type="tel"
+              placeholder="Phone used for request"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
               required
             />
             <button type="submit" className="btn btn-primary" disabled={loading} style={{ px: 20 }}>
