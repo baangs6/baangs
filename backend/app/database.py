@@ -46,6 +46,7 @@ async def create_indexes():
     # Users
     await db.users.create_index("username", unique=True)
     await db.users.create_index("user_id", unique=True)
+    await db.rate_limits.create_index("expires_at", expireAfterSeconds=0)
     if await db.users.count_documents({"role": "admin"}) > 0:
         await db.setup_state.update_one(
             {"_id": "initial_admin"},

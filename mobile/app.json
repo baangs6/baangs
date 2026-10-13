@@ -7,7 +7,7 @@
         "projectId": "1c209de7-c973-48ed-8833-32c36cc48b5d"
       }
     },
-    "version": "1.0.12",
+    "version": "1.0.13",
     "platforms": [
       "ios",
       "android",
@@ -41,7 +41,7 @@
         "VIBRATE"
       ],
       "package": "com.anonymous.mobile",
-      "versionCode": 13
+      "versionCode": 14
     },
     "notification": {
       "icon": "./assets/adaptive-icon.png",
@@ -73,6 +73,7 @@
         }
       ],
       "expo-font",
+      "expo-secure-store",
       "@react-native-community/datetimepicker"
     ]
   }

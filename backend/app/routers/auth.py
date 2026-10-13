@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from ..models.user import LoginRequest, TokenResponse, SetupRequest, UserResponse, UserRole, UserStatus
 from ..auth.utils import hash_password, verify_password, create_access_token, get_current_user
 from ..database import get_db
 from ..utils.id_generator import generate_attendance_id, generate_user_id
 from ..utils.timezone import now_ist_str, today_ist_str
+from ..utils.rate_limit import enforce_rate_limit
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -95,9 +96,10 @@ async def setup_status():
 
 
 @router.post("/setup")
-async def first_time_setup(data: SetupRequest):
+async def first_time_setup(data: SetupRequest, request: Request):
     """Create the first admin account. Only works if no admin exists yet."""
     db = get_db()
+    await enforce_rate_limit(db, request, "setup", 5, 3600)
     admin_count = await db.users.count_documents({"role": "admin"})
     if admin_count > 0:
         raise HTTPException(status_code=400, detail="App is already set up")
@@ -107,11 +109,6 @@ async def first_time_setup(data: SetupRequest):
     existing = await db.users.find_one({"username": data.username})
     if existing:
         raise HTTPException(status_code=400, detail="Username already taken")
-
-    try:
-        await db.setup_state.insert_one({"_id": "initial_admin", "completed": True})
-    except Exception:
-        raise HTTPException(status_code=400, detail="App is already set up")
 
     user_doc = {
         "user_id": generate_user_id(),
@@ -124,7 +121,17 @@ async def first_time_setup(data: SetupRequest):
         "staff_id": None,
         "created_at": now_ist_str(),
     }
-    await db.users.insert_one(user_doc)
+    try:
+        async with await db.client.start_session() as session:
+            async with session.start_transaction():
+                await db.setup_state.insert_one(
+                    {"_id": "initial_admin", "completed": True}, session=session
+                )
+                await db.users.insert_one(user_doc, session=session)
+    except Exception:
+        if await db.setup_state.find_one({"_id": "initial_admin"}):
+            raise HTTPException(status_code=400, detail="App is already set up")
+        raise
 
     # Seed default lookup lists
     from ..models.lookup import DEFAULT_LOOKUPS
@@ -146,8 +153,10 @@ async def first_time_setup(data: SetupRequest):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest):
+async def login(data: LoginRequest, request: Request):
     db = get_db()
+    await enforce_rate_limit(db, request, "login", 60, 900)
+    await enforce_rate_limit(db, request, "login-user", 10, 900, data.username.lower())
     user = await db.users.find_one({"username": data.username})
     if not user or not verify_password(data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid username or password")

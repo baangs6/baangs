@@ -330,35 +330,30 @@ async def create_update(data: DailyUpdateCreate, current_user: dict = Depends(ge
         "inventory_used": processed_inventory,
         "manual_inventory_items": manual_inventory_items,
     }
-    # Consume each barcode once, conditioned on the current stock at write time.
-    consumed = []
-    for barcode, quantity in reserved_quantities.items():
-        result = await db.inventory.update_one(
-            {"barcode": barcode, "status": "active", "current_quantity": {"$gte": quantity}},
-            {"$inc": {"current_quantity": -quantity}, "$set": {"updated_at": now_ist_str()}}
-        )
-        if result.modified_count != 1:
-            for prior_barcode, prior_quantity in consumed:
-                await db.inventory.update_one(
-                    {"barcode": prior_barcode}, {"$inc": {"current_quantity": prior_quantity}}
-                )
-            raise HTTPException(status_code=409, detail="Inventory changed; please retry the update")
-        consumed.append((barcode, quantity))
-
-    try:
+    # Only stock-consuming updates require a transaction; a standalone local MongoDB
+    # can still record ordinary work updates without replica-set support.
+    if reserved_quantities:
+        async with await db.client.start_session() as session:
+            async with session.start_transaction():
+                for barcode, quantity in reserved_quantities.items():
+                    updated_item = await db.inventory.find_one_and_update(
+                        {"barcode": barcode, "status": "active", "current_quantity": {"$gte": quantity}},
+                        {"$inc": {"current_quantity": -quantity}, "$set": {"updated_at": now_ist_str()}},
+                        session=session,
+                        return_document=True,
+                    )
+                    if updated_item is None:
+                        raise HTTPException(status_code=409, detail="Inventory changed; please retry the update")
+                    balance = updated_item["current_quantity"] + quantity
+                    for record in transaction_records:
+                        if record["barcode"] == barcode:
+                            balance += record["quantity_changed"]
+                            record["balance_after_transaction"] = balance
+                await db.daily_updates.insert_one(update_doc, session=session)
+                await db.inventory_transactions.insert_many(transaction_records, session=session)
+                await db.job_inventory_usage.insert_many(inventory_records, session=session)
+    else:
         await db.daily_updates.insert_one(update_doc)
-    except Exception:
-        for barcode, quantity in consumed:
-            await db.inventory.update_one(
-                {"barcode": barcode}, {"$inc": {"current_quantity": quantity}}
-            )
-        raise
-        
-    if transaction_records:
-        await db.inventory_transactions.insert_many(transaction_records)
-        
-    if inventory_records:
-        await db.job_inventory_usage.insert_many(inventory_records)
 
     if data.status == "complete":
         job = await complete_visit(db, job)

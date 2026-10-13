@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Request
 from typing import Optional
 import re
 from pydantic import BaseModel, Field
@@ -8,6 +8,7 @@ from ..routers.jobs import get_sequence_for_today
 from ..utils.timezone import now_ist_str, today_ist_str
 from ..utils.notifications import notify_roles
 from ..utils.cloudinary_helper import upload_image_bytes, read_image_upload
+from ..utils.rate_limit import enforce_rate_limit
 
 router = APIRouter(prefix="/public", tags=["Public Portal"])
 
@@ -31,7 +32,9 @@ class CustomerFeedbackCreate(BaseModel):
 
 
 @router.post("/complaints")
-async def register_public_complaint(data: PublicComplaintCreate):
+async def register_public_complaint(data: PublicComplaintCreate, request: Request):
+    db = get_db()
+    await enforce_rate_limit(db, request, "complaint", 20, 3600)
     phone = (data.phone_number or "").strip()
     name = (data.customer_name or "").strip()
     complaint_text = (data.complaint or "").strip()
@@ -129,14 +132,16 @@ async def register_public_complaint(data: PublicComplaintCreate):
 
 
 @router.post("/complaints/photo")
-async def upload_complaint_photo(file: UploadFile = File(...)):
+async def upload_complaint_photo(request: Request, file: UploadFile = File(...)):
+    await enforce_rate_limit(get_db(), request, "complaint-photo", 20, 3600)
     contents = await read_image_upload(file)
     url = await upload_image_bytes(contents, folder="public_complaints")
     return {"photo_url": url}
 
 
 @router.get("/track/{job_id}")
-async def track_public_job(job_id: str, phone_number: str = Query(..., min_length=7)):
+async def track_public_job(request: Request, job_id: str, phone_number: str = Query(..., min_length=7)):
+    await enforce_rate_limit(get_db(), request, "track", 60, 900)
     job_id_clean = (job_id or "").strip().upper()
     db = get_db()
     job = await db.jobs.find_one({"job_id": job_id_clean})
