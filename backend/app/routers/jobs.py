@@ -368,7 +368,7 @@ async def get_job(job_id: str, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Access denied")
 
     usage_cursor = db.job_inventory_usage.find({"job_id": job_id})
-    usage = await usage_cursor.to_list(100)
+    usage = await usage_cursor.to_list(None)
     for u in usage:
         u["_id"] = str(u["_id"])
 

@@ -53,7 +53,7 @@ def calc_profit(invoice: float, collected: float, expense: float, material: floa
 
 async def _compute_material_amount(db, job_id: str, usage_docs=None) -> float:
     if usage_docs is None:
-        usage_docs = await db.job_inventory_usage.find({"job_id": job_id}).to_list(2000)
+        usage_docs = await db.job_inventory_usage.find({"job_id": job_id}).to_list(None)
     if not usage_docs:
         return 0.0
 
@@ -74,7 +74,7 @@ async def _compute_material_amount(db, job_id: str, usage_docs=None) -> float:
 
 async def reconcile_materials(db, billing: dict) -> dict:
     # Preserve the service charge while incorporating subsequently verified items.
-    usage = await db.job_inventory_usage.find({"job_id": billing["job_id"]}).to_list(2000)
+    usage = await db.job_inventory_usage.find({"job_id": billing["job_id"]}).to_list(None)
     if not usage:
         return billing
     material = await _compute_material_amount(db, billing["job_id"], usage)
@@ -242,7 +242,7 @@ async def job_invoice_pdf(job_id: str, current_user: dict = Depends(require_any)
 
     billing = await reconcile_materials(db, billing)
 
-    usage = await db.job_inventory_usage.find({"job_id": job_id}).to_list(500)
+    usage = await db.job_inventory_usage.find({"job_id": job_id}).to_list(None)
     line_items = []
     for item in usage:
         qty = float(item.get("quantity_used", 0) or 0)

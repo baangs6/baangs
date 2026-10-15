@@ -5,6 +5,7 @@ import { formatDate } from '../../utils/dateFormat';
 import { createInvoicePdf } from '../../utils/invoicePdf';
 import { calculateBillingProfit } from '../../utils/billingMath';
 import AmcPanel from '../../components/AmcPanel';
+import JobItemsEditor from '../../components/JobItemsEditor';
 import { MdArrowBack, MdEdit, MdAttachMoney, MdVerified, MdClose, MdExpandMore, MdPerson, MdLocationOn, MdEngineering, MdSchedule, MdStar } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { MdDownload } from 'react-icons/md';
@@ -586,6 +587,8 @@ export default function JobDetail() {
           </p>
         ) : null}
       </div>
+
+      <JobItemsEditor job={job} onSaved={load} />
 
       {billing && (
         <div className="job-detail-panel" style={{ marginBottom: 16, borderColor: 'rgba(16,185,129,0.3)' }}>

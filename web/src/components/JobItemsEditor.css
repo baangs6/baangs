@@ -1,0 +1,14 @@
+.job-items-section { margin-bottom: 16px; }
+.job-items-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.job-item-model { display: block; color: var(--color-text-muted); }
+.job-items-dialog { width: min(1100px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; margin: auto; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); overflow: auto; }
+.job-items-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.job-items-dialog fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.job-items-add { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.job-items-add input { flex: 1; min-width: 180px; }
+.job-items-edit-table { min-width: 900px; }
+.job-items-edit-table input[type=number] { min-width: 100px; }
+.job-items-edit-table input:not([type=number]) { min-width: 150px; }
+.job-items-edit-table select { min-width: 140px; }
+.job-items-total { margin-top: 16px; text-align: right; font-weight: 700; }
+.job-items-error { color: var(--color-danger); margin-bottom: 12px; }

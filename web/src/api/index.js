@@ -105,6 +105,8 @@ export const customersApi = {
 
 // Jobs
 export const jobsApi = {
+  items: (id) => api.get(`/jobs/${id}/items`),
+  editItems: (id, data) => api.put(`/jobs/${id}/items`, data),
   list: (params) => api.get('/jobs/', { params }),
   get: (id) => api.get(`/jobs/${id}`),
   customerHistory: (id) => api.get(`/jobs/${id}/customer-history`),
