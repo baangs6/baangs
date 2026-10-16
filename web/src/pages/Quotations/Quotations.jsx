@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { MdAdd, MdArrowBack, MdDeleteOutline, MdDownload, MdEdit, MdSave, MdContentCopy, MdMoreVert } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { quotationsApi, customersApi, inventoryApi } from '../../api';
@@ -33,6 +33,7 @@ function totals(items, roundOff) {
 
 export default function Quotations() {
   const navigate = useNavigate();
+  const { state } = useLocation();
   const [params] = useSearchParams();
   const quoteParam = params.get('quote');
   const { user } = useAuth();
@@ -40,9 +41,9 @@ export default function Quotations() {
   const [rows, setRows] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [inventory, setInventory] = useState([]);
-  const [form, setForm] = useState(null);
+  const [form, setForm] = useState(() => allowed && state?.customer ? { ...newQuote(), customer_id: state.customer.customer_id, customer_name: state.customer.customer_name || '', billing_name: state.customer.customer_name || '', phone_number: state.customer.phone_number || '', address: state.customer.location || '' } : null);
   const [saved, setSaved] = useState(null);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(() => !!(allowed && state?.customer));
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [period, setPeriod] = useState('all');

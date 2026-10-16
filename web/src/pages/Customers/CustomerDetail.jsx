@@ -1,15 +1,24 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Phone, MapPin, Plus, FileText, ShieldCheck, History, Package, Briefcase } from 'lucide-react';
+import { useAuth } from '../../context/useAuth';
 import { customersApi } from '../../api';
 import { MdArrowBack, MdWork } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { formatDate } from '../../utils/dateFormat';
 import AmcPanel from '../../components/AmcPanel';
 import CustomerQuotations from '../../components/CustomerQuotations';
+import './CustomerDetail.css';
 
 export default function CustomerDetail() {
   const { customerId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('jobs');
+  const [loadError, setLoadError] = useState('');
+  const [jobsError, setJobsError] = useState('');
+  const [jobsLoading, setJobsLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
   const [customer, setCustomer] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [products, setProducts] = useState([]);
@@ -17,19 +26,33 @@ export default function CustomerDetail() {
   const [warrantyError, setWarrantyError] = useState('');
 
   useEffect(() => {
-    customersApi.get(customerId).then((r) => setCustomer(r.data)).catch(console.error);
-    customersApi.getJobs(customerId).then((r) => setJobs(r.data)).catch(console.error);
     let active = true;
-    Promise.resolve().then(() => {
-      if (!active) return null;
+    async function load() {
+      setCustomer(null);
+      setLoadError('');
+      setJobs([]);
+      setProducts([]);
+      setJobsLoading(true);
       setWarrantyLoading(true);
+      setJobsError('');
       setWarrantyError('');
-      return customersApi.getWarranty(customerId);
-    }).then(r => { if (active && r) setProducts(r.data); })
-      .catch(() => { if (active) setWarrantyError('Unable to load product warranties.'); })
-      .finally(() => { if (active) setWarrantyLoading(false); });
+      setActiveTab('jobs');
+      const [profile, history, warranty] = await Promise.allSettled([customersApi.get(customerId), customersApi.getJobs(customerId), customersApi.getWarranty(customerId)]);
+      if (!active) return;
+      if (profile.status === 'fulfilled') setCustomer(profile.value.data);
+      else setLoadError('Unable to load customer profile.');
+      if (history.status === 'fulfilled') setJobs(history.value.data);
+      else setJobsError('Unable to load job history.');
+      if (warranty.status === 'fulfilled') setProducts(warranty.value.data);
+      else setWarrantyError('Unable to load product warranties.');
+      setJobsLoading(false);
+      setWarrantyLoading(false);
+    }
+    load();
     return () => { active = false; };
-  }, [customerId]);
+  }, [customerId, retry]);
+
+  if (loadError) return <div className="profile-load-error" role="alert"><p>{loadError}</p><button className="btn btn-secondary" onClick={() => setRetry(value => value + 1)}>Retry</button><Link className="btn btn-secondary" to="/customers">Back to Customers</Link></div>;
 
   if (!customer) {
     return (
@@ -50,24 +73,32 @@ export default function CustomerDetail() {
     if (!phone) return null;
     const clean = String(phone).replace(/\D/g, '');
     if (!clean) return null;
-    return `https://wa.me/${clean}`;
+    return `https://wa.me/${clean.length === 10 ? `91${clean}` : clean}`;
   };
 
   return (
-    <div className="animate-fade" style={{ maxWidth: 800 }}>
-      <button className="btn btn-secondary btn-sm" onClick={() => navigate('/customers')} style={{ marginBottom: 16 }}>
-        <MdArrowBack /> Back
+    <div className="animate-fade customer-profile">
+      <button className="btn btn-secondary btn-sm profile-back" onClick={() => navigate('/customers')}>
+        <MdArrowBack /> Back to Customers
       </button>
       <div className="page-header">
+        <span className="profile-avatar" aria-hidden="true">{(customer.customer_name || 'C').slice(0, 1).toUpperCase()}</span>
         <div className="page-header-left">
           <h2>{customer.customer_name}</h2>
-          <p>{customer.nickname ? `${customer.nickname} · ` : ''}{customer.customer_id} · {customer.phone_number}</p>
+          {customer.nickname && <span className="profile-nickname">{customer.nickname}</span>}
+          <p><span><Phone size={14} /> {customer.phone_number || '-'}</span><span><MapPin size={14} /> {customer.location || '-'}</span>{customer.site_type && <span className="profile-site">{customer.site_type}</span>}</p>
+        </div>
+        <div className="profile-actions">
+          {getWhatsAppLink(customer.phone_number) && <a className="btn btn-secondary profile-whatsapp" href={getWhatsAppLink(customer.phone_number)} target="_blank" rel="noreferrer"><FaWhatsapp /> WhatsApp</a>}
+          {customer.phone_number && <a className="btn btn-secondary" href={`tel:${String(customer.phone_number).replace(/[^\d+]/g, '')}`}><Phone size={15} /> Call</a>}
+          {['admin', 'manager'].includes(user?.role) && <button className="btn btn-secondary" onClick={() => navigate('/quotations', { state: { customer } })}><FileText size={15} /> Add Quotation</button>}
+          {['admin', 'manager'].includes(user?.role) && <button className="btn btn-primary" onClick={() => navigate('/jobs/create', { state: { customer } })}><Plus size={15} /> New Job</button>}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card">
-          <h3 className="card-title" style={{ marginBottom: 12 }}>Contact Details</h3>
+      <div className="profile-overview">
+        <section className="profile-contact">
+          <h3 className="card-title"><Phone size={18} /> Contact & Site</h3>
           <div className="detail-grid">
             {[
               [
@@ -141,9 +172,10 @@ export default function CustomerDetail() {
               </div>
             ))}
           </div>
-        </div>
-        <div className="card">
-          <h3 className="card-title" style={{ marginBottom: 12 }}>History</h3>
+        </section>
+        <section className="profile-engagement">
+          <h3 className="card-title"><History size={18} /> Engagement</h3>
+          <div className="profile-job-total"><strong>{customer.total_jobs ?? jobs.length}</strong><span>Total Jobs</span></div>
           <div className="detail-grid">
             {[
               ['First Request', formatDate(customer.first_request_date)],
@@ -155,12 +187,26 @@ export default function CustomerDetail() {
               </div>
             ))}
           </div>
-        </div>
+        </section>
+        <div className="profile-amc"><div className="profile-amc-label"><ShieldCheck size={18} /> AMC Coverage</div><AmcPanel key={customerId} customer={customer} /></div>
       </div>
 
-      <AmcPanel key={customerId} customer={customer} />
-      <CustomerQuotations key={`quotes-${customerId}`} customerId={customerId} />
-      <section style={{ marginBottom: 24 }}>
+      <div className="profile-tabs" role="tablist" aria-label="Customer records" onKeyDown={event => {
+        const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')];
+        const index = tabs.indexOf(document.activeElement);
+        let target;
+        if (event.key === 'ArrowRight') target = (index + 1) % tabs.length;
+        if (event.key === 'ArrowLeft') target = (index - 1 + tabs.length) % tabs.length;
+        if (event.key === 'Home') target = 0;
+        if (event.key === 'End') target = tabs.length - 1;
+        if (target !== undefined) { event.preventDefault(); tabs[target].focus(); tabs[target].click(); }
+      }}>
+        <button id="profile-tab-jobs" role="tab" tabIndex={activeTab === 'jobs' ? 0 : -1} aria-selected={activeTab === 'jobs'} aria-controls="profile-panel-jobs" onClick={() => setActiveTab('jobs')}><Briefcase size={16} /> Job History ({jobs.length})</button>
+        <button id="profile-tab-products" role="tab" tabIndex={activeTab === 'products' ? 0 : -1} aria-selected={activeTab === 'products'} aria-controls="profile-panel-products" onClick={() => setActiveTab('products')}><Package size={16} /> Products & Warranty ({products.length})</button>
+        <button id="profile-tab-quotes" role="tab" tabIndex={activeTab === 'quotes' ? 0 : -1} aria-selected={activeTab === 'quotes'} aria-controls="profile-panel-quotes" onClick={() => setActiveTab('quotes')}><FileText size={16} /> Quotations Given</button>
+      </div>
+      <div id="profile-panel-quotes" role="tabpanel" aria-labelledby="profile-tab-quotes" hidden={activeTab !== 'quotes'}><CustomerQuotations key={`quotes-${customerId}`} customerId={customerId} /></div>
+      <section id="profile-panel-products" role="tabpanel" aria-labelledby="profile-tab-products" hidden={activeTab !== 'products'}>
         <h3 className="card-title" style={{ marginBottom: 12 }}>Products & Warranty</h3>
         {warrantyLoading ? <p>Loading warranties...</p> : warrantyError ? <p role="alert">{warrantyError}</p> : products.length === 0 ? <p>No recorded products used.</p> : (
           <div className="table-wrapper">
@@ -182,11 +228,11 @@ export default function CustomerDetail() {
         )}
       </section>
 
-      <div className="card">
+      <section id="profile-panel-jobs" role="tabpanel" aria-labelledby="profile-tab-jobs" hidden={activeTab !== 'jobs'}>
         <div className="card-header">
           <h3 className="card-title"><MdWork style={{ marginRight: 8 }} />Job History ({jobs.length})</h3>
         </div>
-        {jobs.length === 0 ? (
+        {jobsLoading ? <p>Loading job history...</p> : jobsError ? <p role="alert">{jobsError}</p> : jobs.length === 0 ? (
           <div className="empty-state" style={{ padding: 24 }}><p>No jobs yet</p></div>
         ) : (
           <div className="table-wrapper" style={{ border: 'none' }}>
@@ -203,7 +249,7 @@ export default function CustomerDetail() {
               <tbody>
                 {jobs.map((j) => (
                   <tr key={j.job_id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/jobs/${j.job_id}`)}>
-                    <td style={{ fontFamily: 'monospace', color: 'var(--color-accent)', fontSize: '0.8rem' }}>{j.job_id}</td>
+                    <td><Link className="profile-job-link" to={`/jobs/${j.job_id}`}>{j.job_id}</Link></td>
                     <td>{j.work_type}</td>
                     <td><span className={`badge badge-${j.priority}`}>{j.priority}</span></td>
                     <td><span className={`badge badge-${j.status}`}>{STATUS_LABELS[j.status]}</span></td>
@@ -214,7 +260,7 @@ export default function CustomerDetail() {
             </table>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

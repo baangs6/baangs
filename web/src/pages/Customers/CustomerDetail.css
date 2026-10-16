@@ -1,0 +1,70 @@
+.customer-profile { display: flex; flex-direction: column; gap: 22px; color: #243a3a; }
+.customer-profile > [hidden] { display: none; }
+.customer-profile .profile-back { align-self: flex-start; }
+.customer-profile .btn { border-radius: 6px; box-shadow: none; font-size: 12px; }
+.customer-profile .btn-primary { background: #0f766e; border-color: #0f766e; }
+.customer-profile .btn-primary:hover { background: #095e58; }
+.customer-profile .page-header { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; padding: 22px 0; margin: 0; border: 0; border-bottom: 1px solid #dee7e5; background: transparent; border-radius: 0; box-shadow: none; }
+.profile-avatar { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 58px; height: 58px; border-radius: 8px; background: #0f766e; color: #fff; font-size: 26px; font-weight: 600; }
+.customer-profile .page-header-left { flex: 1 1 250px; min-width: 0; }
+.customer-profile .page-header h2 { font-size: 28px; overflow-wrap: anywhere; color: #203434; }
+.profile-nickname { display: block; font-size: 13px; color: #577873; margin: 3px 0; }
+.customer-profile .page-header p { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: #708481; }
+.customer-profile .page-header p > span { display: inline-flex; align-items: center; gap: 5px; overflow-wrap: anywhere; }
+.profile-site { padding: 3px 8px; border-radius: 4px; background: #e6eff9; color: #475d7b; }
+.profile-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.profile-actions .profile-whatsapp { background: #e8f7ef; color: #13815a; border-color: #d0e9dc; }
+.profile-overview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) minmax(0, 1.35fr); background: #fff; border-top: 1px solid #e1e8e6; border-bottom: 1px solid #e1e8e6; }
+.profile-contact, .profile-engagement { padding: 22px; min-width: 0; border-right: 1px solid #e5ece9; }
+.customer-profile .card-title { display: flex; align-items: center; gap: 8px; font-size: 16px; color: #29413d; margin-bottom: 20px; }
+.profile-overview .detail-grid { display: flex; flex-direction: column; gap: 16px; }
+.profile-overview .detail-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px 12px; }
+.profile-contact .detail-item { flex-direction: row; text-align: left; }
+.profile-overview .detail-label { font-size: 11px; color: #7b8c89; }
+.profile-overview .detail-value { font-size: 12px; overflow-wrap: anywhere; min-width: 0; }
+.profile-overview .detail-value > span { flex-wrap: wrap; }
+.profile-engagement .detail-item { flex-direction: column; align-items: flex-start; }
+.profile-job-total { display: flex; align-items: baseline; gap: 8px; padding: 0 0 20px; }
+.profile-job-total strong { font-size: 32px; font-weight: 600; color: #0f766e; }
+.profile-job-total span { font-size: 12px; color: #7a8a86; }
+.profile-amc { padding: 22px; background: #124c46; color: #edf9f6; min-width: 0; overflow-wrap: anywhere; }
+.profile-amc-label { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; color: #99dfc8; margin-bottom: 12px; }
+.profile-amc > section { padding: 0 !important; margin: 0 !important; border-top: 0 !important; }
+.profile-amc h3 { color: #fff; font-size: 17px; margin-bottom: 12px; }
+.profile-amc p, .profile-amc li { font-size: 12px; color: #d0e7e2; line-height: 1.8; }
+.profile-amc strong { font-size: 13px; }
+.profile-amc a { color: #a9e8d7; }
+.profile-amc article { border-color: #3d6b63 !important; }
+.profile-amc .btn-primary { background: #dcf6eb; color: #145d4d; border-color: #dcf6eb; }
+.profile-amc .btn-secondary { background: #fff; color: #19554b; }
+.profile-amc .form-label, .profile-amc label { color: #daeee8; font-size: 12px; }
+.profile-amc .form-grid { grid-template-columns: minmax(0, 1fr); }
+.profile-amc .form-input { color: #263b39; background: #fff; font-size: 12px; }
+.profile-tabs { display: flex; flex-wrap: wrap; gap: 5px; border-bottom: 1px solid #dae5e1; }
+.profile-tabs button { display: inline-flex; align-items: center; gap: 7px; padding: 12px 16px; font-size: 13px; font-weight: 500; color: #758680; border: 0; border-bottom: 2px solid transparent; background: transparent; cursor: pointer; }
+.profile-tabs button[aria-selected='true'] { color: #0f766e; border-bottom-color: #0f766e; background: #edf6f3; }
+.customer-profile [role='tabpanel'] { min-width: 0; }
+.customer-profile [role='tabpanel'] > section { margin: 0 !important; }
+.customer-profile [role='tabpanel'] h3 { font-size: 17px; margin-bottom: 16px; color: #29413d; }
+.customer-profile .table-wrapper { box-shadow: none; border: 1px solid #dee7e3; border-radius: 6px; background: #fff; overflow-x: auto; }
+.customer-profile .table { min-width: 660px; }
+.customer-profile .table th { font-size: 10px; background: #f0f5f3; color: #7b8c85; padding: 13px 16px; }
+.customer-profile .table td { font-size: 12px; padding: 16px; border-color: #eaf0ed; }
+.customer-profile .table tr:hover td { background: #f6faf8; }
+.profile-job-link { color: #0f766e; font-size: 11px; font-family: monospace; }
+.customer-profile .badge { border-radius: 4px; font-size: 10px; }
+.customer-profile button:focus-visible, .customer-profile a:focus-visible { outline: 2px solid #168b75; outline-offset: 3px; }
+.profile-load-error { padding: 24px; color: #a5364b; }
+.profile-load-error .btn { margin: 12px 8px 0 0; }
+@media (max-width: 1200px) { .profile-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); } .profile-amc { grid-column: 1 / -1; } }
+@media (max-width: 650px) {
+  .customer-profile { gap: 18px; }
+  .customer-profile .page-header { padding: 14px 0; gap: 12px; }
+  .profile-avatar { width: 46px; height: 46px; font-size: 22px; }
+  .customer-profile .page-header-left { flex-basis: 180px; }
+  .customer-profile .page-header h2 { font-size: 24px; }
+  .profile-overview { grid-template-columns: minmax(0, 1fr); }
+  .profile-contact, .profile-engagement { border: 0; border-bottom: 1px solid #e1e8e6; padding: 18px; }
+  .profile-amc { padding: 18px; }
+  .profile-tabs button { font-size: 11px; padding: 10px; }
+}

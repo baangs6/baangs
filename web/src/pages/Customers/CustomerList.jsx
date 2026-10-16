@@ -1,14 +1,31 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Users, House, Building2, MapPin, Download, RefreshCw, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import { customersApi } from '../../api';
 import { MdSearch, MdPeople, MdAdd, MdEdit, MdDelete } from 'react-icons/md';
 import { formatDate } from '../../utils/dateFormat';
+import './CustomerList.css';
+
+function siteGroup(customer) {
+  const site = (customer.site_type || '').toLowerCase();
+  if (['residential', 'home', 'villa', 'house'].includes(site)) return 'home';
+  if (['commercial', 'office', 'shop'].includes(site)) return 'office';
+  return 'other';
+}
 
 export default function CustomerList() {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [siteType, setSiteType] = useState('');
+  const [area, setArea] = useState('');
+  const [volume, setVolume] = useState('');
+  const [segment, setSegment] = useState('');
+  const [sort, setSort] = useState('recent');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -22,11 +39,14 @@ export default function CustomerList() {
     site_type: ''
   });
 
-  const fetchCustomers = async (q = '') => {
+  const fetchCustomers = async () => {
     setLoading(true);
+    setLoadError('');
     try {
-      const res = await customersApi.listAll(q ? { search: q } : {});
+      const res = await customersApi.listAll();
       setCustomers(res.data);
+    } catch {
+      setLoadError('Unable to load customers. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -36,10 +56,28 @@ export default function CustomerList() {
     fetchCustomers();
   }, []);
 
-  useEffect(() => {
-    const timer = setTimeout(() => fetchCustomers(search), 400);
-    return () => clearTimeout(timer);
-  }, [search]);
+  const filteredCustomers = customers.filter(customer => {
+    const query = search.trim().toLowerCase();
+    const matchesSearch = [customer.customer_id, customer.customer_name, customer.nickname, customer.phone_number, customer.alternative_phone_number, customer.location].some(value => String(value || '').toLowerCase().includes(query));
+    const jobs = Number(customer.total_jobs || 0);
+    return matchesSearch && (!siteType || customer.site_type === siteType) && (!area || customer.location === area) && (!segment || siteGroup(customer) === segment)
+      && (!volume || (volume === 'high' ? jobs > 5 : volume === 'regular' ? jobs >= 2 && jobs <= 5 : volume === 'single' ? jobs === 1 : jobs === 0));
+  }).sort((a, b) => sort === 'name' ? (a.customer_name || '').localeCompare(b.customer_name || '') : sort === 'jobs' ? Number(b.total_jobs || 0) - Number(a.total_jobs || 0) : (b.latest_request_date || '').localeCompare(a.latest_request_date || ''));
+  const pageCount = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageNumbers = [...new Set([1, currentPage - 1, currentPage, currentPage + 1, pageCount])].filter(number => number >= 1 && number <= pageCount).sort((a, b) => a - b);
+  const updateFilter = (setter, value) => { setter(value); setPage(1); };
+  const exportCustomers = () => {
+    const cell = value => `"${String(value ?? '').replace(/^\s*[=+@-]/, "'$&").replaceAll('"', '""')}"`;
+    const rows = [['Customer ID', 'Name', 'Nickname', 'Phone', 'Alternative Phone', 'Location', 'Site Type', 'Total Jobs', 'Last Request', 'First Request'], ...filteredCustomers.map(c => [c.customer_id, c.customer_name, c.nickname, c.phone_number, c.alternative_phone_number, c.location, c.site_type, c.total_jobs, c.latest_request_date, c.first_request_date])];
+    const url = URL.createObjectURL(new Blob(['\uFEFF', rows.map(row => row.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'customers.csv';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   const handleAddCustomer = async (e) => {
     e.preventDefault();
@@ -60,7 +98,7 @@ export default function CustomerList() {
         map_location: '',
         site_type: ''
       });
-      await fetchCustomers(search);
+      await fetchCustomers();
     } catch {
       alert('Failed to add customer');
     } finally {
@@ -74,7 +112,7 @@ export default function CustomerList() {
     }
     try {
       await customersApi.delete(customer.customer_id);
-      await fetchCustomers(search);
+      await fetchCustomers();
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to delete customer');
     }
@@ -98,7 +136,7 @@ export default function CustomerList() {
         site_type: showEditModal.site_type || ''
       });
       setShowEditModal(null);
-      await fetchCustomers(search);
+      await fetchCustomers();
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to update customer');
     } finally {
@@ -107,16 +145,26 @@ export default function CustomerList() {
   };
 
   return (
-    <div className="animate-fade">
+    <div className="animate-fade customers-page">
       <div className="page-header">
         <div className="page-header-left">
           <h2>Customers</h2>
-          <p>{customers.length} customers in database</p>
+          <p>{customers.length} customers in database <span>Client directory & service histories</span></p>
         </div>
+        <div className="customers-header-actions">
+        <button className="btn btn-secondary" onClick={exportCustomers} disabled={loading || !!loadError || !filteredCustomers.length}><Download size={16} /> Export CSV</button>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
           <MdAdd /> Add Customer
         </button>
+        </div>
       </div>
+
+      <section className="customers-summary" aria-label="Customer database summary">
+        <div><span>Total Database</span><strong>{customers.length}</strong><small>All customer locations</small><Users aria-hidden="true" /></div>
+        <div><span>Residential Sites</span><strong>{customers.filter(c => siteGroup(c) === 'home').length}</strong><small>Homes and villas</small><House aria-hidden="true" /></div>
+        <div><span>Commercial / Office</span><strong>{customers.filter(c => siteGroup(c) === 'office').length}</strong><small>Business locations</small><Building2 aria-hidden="true" /></div>
+        <div><span>Other Sites</span><strong>{customers.filter(c => siteGroup(c) === 'other').length}</strong><small>Other or unspecified types</small><MapPin aria-hidden="true" /></div>
+      </section>
 
       <div className="filter-bar">
         <div className="search-input-wrapper">
@@ -124,34 +172,43 @@ export default function CustomerList() {
           <input
             className="form-input search-input"
             placeholder="Search by name, nickname, phone, location..."
+            aria-label="Search customers"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => updateFilter(setSearch, e.target.value)}
           />
         </div>
+        <select className="form-select" aria-label="Site type" value={siteType} onChange={event => updateFilter(setSiteType, event.target.value)}><option value="">All site types</option>{[...new Set(customers.map(c => c.site_type).filter(Boolean))].sort().map(type => <option key={type}>{type}</option>)}</select>
+        <select className="form-select" aria-label="Location" value={area} onChange={event => updateFilter(setArea, event.target.value)}><option value="">All locations</option>{[...new Set(customers.map(c => c.location).filter(Boolean))].sort().map(location => <option key={location}>{location}</option>)}</select>
+        <select className="form-select" aria-label="Job volume" value={volume} onChange={event => updateFilter(setVolume, event.target.value)}><option value="">All job volumes</option><option value="high">High (6+ jobs)</option><option value="regular">Regular (2-5 jobs)</option><option value="single">Single job</option><option value="none">No jobs</option></select>
+        <button className="btn btn-secondary btn-icon" title="Refresh customers" aria-label="Refresh customers" onClick={fetchCustomers} disabled={loading}><RefreshCw size={16} /></button>
+      </div>
+
+      <div className="customers-segment-bar">
+        <div className="customers-segments" aria-label="Customer categories">{[['', 'All'], ['home', 'Home'], ['office', 'Office'], ['other', 'Other Sites']].map(([value, label]) => <button className="btn btn-secondary" key={value} aria-pressed={segment === value} onClick={() => updateFilter(setSegment, value)}>{label} ({value ? customers.filter(c => siteGroup(c) === value).length : customers.length})</button>)}</div>
+        <select className="form-select" aria-label="Sort customers" value={sort} onChange={event => updateFilter(setSort, event.target.value)}><option value="recent">Recent service activity</option><option value="name">Customer name</option><option value="jobs">Most jobs</option></select>
+        <button className="btn btn-secondary" onClick={() => { setSearch(''); setSiteType(''); setArea(''); setVolume(''); setSegment(''); setPage(1); }}>Clear filters</button>
       </div>
 
       {loading ? (
         <div className="loading-center">
           <div className="spinner" />
         </div>
-      ) : customers.length === 0 ? (
+      ) : loadError ? <div className="customers-error" role="alert">{loadError}<button className="btn btn-secondary" onClick={fetchCustomers}>Retry</button></div> : filteredCustomers.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">
             <MdPeople />
           </div>
-          <h3>No customers yet</h3>
-          <p>Customers are automatically created when you add jobs</p>
+          <h3>No customers found</h3>
+          <p>{customers.length ? 'No customers match the selected filters.' : 'Customers appear here after they are added.'}</p>
         </div>
       ) : (
         <div className="table-wrapper">
           <table className="table">
             <thead>
               <tr>
-                <th>Customer ID</th>
                 <th>Name</th>
                 <th>Nickname</th>
                 <th>Phone</th>
-                <th>Alt Phone</th>
                 <th>Location</th>
                 <th>Site Type</th>
                 <th>Total Jobs</th>
@@ -161,17 +218,11 @@ export default function CustomerList() {
               </tr>
             </thead>
             <tbody>
-              {customers.map((c) => (
+              {filteredCustomers.slice(pageStart, pageStart + pageSize).map((c) => (
                 <tr key={c.customer_id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/customers/${c.customer_id}`)}>
-                  <td>
-                    <span style={{ fontFamily: 'monospace', color: 'var(--color-accent)', fontSize: '0.8rem' }}>
-                      {c.customer_id}
-                    </span>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{c.customer_name}</td>
+                  <td><Link className="customers-name" to={`/customers/${c.customer_id}`}>{c.customer_name}</Link></td>
                   <td>{c.nickname || '-'}</td>
-                  <td style={{ color: 'var(--color-text-secondary)' }}>{c.phone_number}</td>
-                  <td style={{ color: 'var(--color-text-secondary)' }}>{c.alternative_phone_number || '-'}</td>
+                  <td>{c.phone_number}{c.alternative_phone_number && <small className="customers-subline">Alt: {c.alternative_phone_number}</small>}</td>
                   <td style={{ color: 'var(--color-text-secondary)', fontSize: '0.85rem' }}>{c.location || '-'}</td>
                   <td style={{ fontSize: '0.85rem' }}>{c.site_type || '-'}</td>
                   <td>
@@ -184,6 +235,8 @@ export default function CustomerList() {
                   <td>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
+                        title="Edit customer"
+                        aria-label={`Edit ${c.customer_name}`}
                         className="btn btn-secondary"
                         type="button"
                         onClick={(e) => {
@@ -201,9 +254,11 @@ export default function CustomerList() {
                         }}
                         style={{ padding: '6px 10px' }}
                       >
-                        <MdEdit /> Edit
+                        <MdEdit />
                       </button>
                       <button
+                        title="Delete customer"
+                        aria-label={`Delete ${c.customer_name}`}
                         className="btn btn-danger"
                         type="button"
                         onClick={(e) => {
@@ -212,7 +267,7 @@ export default function CustomerList() {
                         }}
                         style={{ padding: '6px 10px' }}
                       >
-                        <MdDelete /> Delete
+                        <MdDelete />
                       </button>
                     </div>
                   </td>
@@ -223,9 +278,16 @@ export default function CustomerList() {
         </div>
       )}
 
+      {!loading && !loadError && filteredCustomers.length > 0 && <nav className="customers-pagination" aria-label="Customers pagination">
+        <span role="status">Showing {pageStart + 1}-{Math.min(pageStart + pageSize, filteredCustomers.length)} of {filteredCustomers.length}</span>
+        <label>Rows per page <select className="form-select" value={pageSize} onChange={event => updateFilter(setPageSize, Number(event.target.value))}>{[10, 20, 50, 100].map(size => <option key={size}>{size}</option>)}</select></label>
+        <div className="customers-page-buttons"><button className="btn btn-secondary btn-icon" title="Previous page" aria-label="Previous page" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={16} /></button>{pageNumbers.map((number, index) => <span key={number}>{index > 0 && number - pageNumbers[index - 1] > 1 && <span aria-hidden="true">...</span>}<button className={`btn ${number === currentPage ? 'btn-primary' : 'btn-secondary'}`} aria-label={`Page ${number}`} aria-current={number === currentPage ? 'page' : undefined} onClick={() => setPage(number)}>{number}</button></span>)}<button className="btn btn-secondary btn-icon" title="Next page" aria-label="Next page" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}><ChevronRight size={16} /></button></div>
+        <form key={`${currentPage}-${pageCount}-${pageSize}`} className="customers-page-jump" onSubmit={event => { event.preventDefault(); const target = Number(new FormData(event.currentTarget).get('page')); if (Number.isInteger(target) && target >= 1 && target <= pageCount) setPage(target); }}><label>Jump to page <input className="form-input" name="page" type="number" required min="1" max={pageCount} step="1" defaultValue={currentPage} /></label><span>of {pageCount}</span><button className="btn btn-secondary btn-icon" type="submit" title="Jump to page" aria-label="Jump to page"><ArrowRight size={16} /></button></form>
+      </nav>}
+
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" role="dialog" aria-modal="true" aria-label="Add New Customer" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Add New Customer</h3>
               <button className="btn-icon" onClick={() => setShowModal(false)}>
@@ -309,7 +371,7 @@ export default function CustomerList() {
 
       {showEditModal && (
         <div className="modal-overlay" onClick={() => setShowEditModal(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" role="dialog" aria-modal="true" aria-label="Edit Customer" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Edit Customer</h3>
               <button className="btn-icon" onClick={() => setShowEditModal(null)}>
