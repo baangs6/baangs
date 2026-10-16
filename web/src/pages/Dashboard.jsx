@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createElement, useEffect, useState } from 'react';
 import { dashboardApi, exportApi } from '../api';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -8,6 +8,7 @@ import {
 import { MdWork, MdPeople, MdAttachMoney, MdTrendingUp, MdEngineering, MdDownload, MdLocationOn, MdOpenInNew } from 'react-icons/md';
 import { formatDateTime } from '../utils/dateFormat';
 import DateRangePicker from '../components/DateRangePicker';
+import './Dashboard.css';
 
 const STATUS_COLORS = {
   pending: '#f59e0b', in_progress: '#3b82f6', complete: '#10b981', cancelled: '#ef4444'
@@ -156,13 +157,27 @@ export default function Dashboard() {
 
   const jobs = summary?.jobs || {};
   const revenue = summary?.revenue || {};
+  const metricGroups = [
+    { title: 'Service Volume & Completion', tag: 'Active flow', items: [
+      ['Total Jobs', jobs.total || 0, MdWork, '/jobs', 'blue'],
+      ['In Progress', jobs.in_progress || 0, MdWork, '/jobs?status=in_progress', 'amber'],
+      ['Completed', jobs.complete || 0, MdWork, '/jobs?status=complete', 'green'],
+      ['Pending Jobs', jobs.pending || 0, MdWork, '/jobs?status=pending', 'red'],
+    ] },
+    { title: 'Business Revenue & Capacity', tag: 'Finance hub', items: [
+      ['Customers', summary?.customers?.total || 0, MdPeople, '/customers', 'blue'],
+      ['Total Revenue', `Rs ${Number(revenue.total || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, MdAttachMoney, '/billing', 'green'],
+      ['Total Profit', `Rs ${Number(revenue.profit || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, MdTrendingUp, '/reports', 'green'],
+      ['Active Staff', summary?.staff?.total || 0, MdEngineering, '/staff', 'purple'],
+    ] },
+  ];
 
   return (
-    <div className="animate-fade">
+    <div className="animate-fade ops-dashboard">
       <div className="page-header">
         <div className="page-header-left">
           <h2>Dashboard</h2>
-          <p>Welcome back! Here's your operations overview.</p>
+          <p>Field service operations overview</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <DateRangePicker start={dateFilter.from} end={dateFilter.to} onChange={(from, to) => setDateFilter({ from, to })} />
@@ -172,52 +187,27 @@ export default function Dashboard() {
       </div>
 
       {/* Stats */}
-      <div className="stat-grid" style={{ marginBottom: 24 }}>
-        <div className="stat-card accent" {...clickablePanel('/jobs', 'View all jobs')}>
-          <div className="stat-icon accent"><MdWork /></div>
-          <div className="stat-value">{jobs.total || 0}</div>
-          <div className="stat-label">Total Jobs</div>
-        </div>
-        <div className="stat-card purple" {...clickablePanel('/jobs?status=in_progress', 'View jobs in progress')}>
-          <div className="stat-icon purple"><MdWork /></div>
-          <div className="stat-value">{jobs.in_progress || 0}</div>
-          <div className="stat-label">In Progress</div>
-        </div>
-        <div className="stat-card green" {...clickablePanel('/jobs?status=complete', 'View completed jobs')}>
-          <div className="stat-icon green"><MdWork /></div>
-          <div className="stat-value">{jobs.complete || 0}</div>
-          <div className="stat-label">Completed</div>
-        </div>
-        <div className="stat-card amber" {...clickablePanel('/customers', 'View customers')}>
-          <div className="stat-icon amber"><MdPeople /></div>
-          <div className="stat-value">{summary?.customers?.total || 0}</div>
-          <div className="stat-label">Customers</div>
-        </div>
-        <div className="stat-card green" {...clickablePanel('/billing', 'View billing and revenue')}>
-          <div className="stat-icon green"><MdAttachMoney /></div>
-          <div className="stat-value">₹{((revenue.total || 0) / 1000).toFixed(1)}K</div>
-          <div className="stat-label">Total Revenue</div>
-        </div>
-        <div className="stat-card accent" {...clickablePanel('/reports', 'View profit reports')}>
-          <div className="stat-icon accent"><MdTrendingUp /></div>
-          <div className="stat-value">₹{((revenue.profit || 0) / 1000).toFixed(1)}K</div>
-          <div className="stat-label">Total Profit</div>
-        </div>
-        <div className="stat-card purple" {...clickablePanel('/staff', 'View active staff')}>
-          <div className="stat-icon purple"><MdEngineering /></div>
-          <div className="stat-value">{summary?.staff?.total || 0}</div>
-          <div className="stat-label">Active Staff</div>
-        </div>
-        <div className="stat-card amber" {...clickablePanel('/jobs?status=pending', 'View pending jobs')}>
-          <div className="stat-icon amber"><MdWork /></div>
-          <div className="stat-value">{jobs.pending || 0}</div>
-          <div className="stat-label">Pending Jobs</div>
-        </div>
+      <div className="dashboard-metrics">
+        {metricGroups.map(group => (
+          <section className="dashboard-metric-group" key={group.title}>
+            <div className="dashboard-group-heading"><h3>{group.title}</h3><span>{group.tag}</span></div>
+            <div className="dashboard-metric-grid">
+              {group.items.map(([label, value, icon, destination, tone]) => (
+                <button key={label} type="button" className={`dashboard-metric ${tone}`} onClick={() => navigate(filteredDestination(destination))}>
+                  <span className="dashboard-metric-label">{label}{createElement(icon, { 'aria-hidden': true })}</span>
+                  <strong>{value}</strong>
+                  <span className="dashboard-metric-caption">{label === 'Completed' && jobs.total ? `${Math.round((jobs.complete || 0) / jobs.total * 100)}% completion` : 'View details'}<MdOpenInNew aria-hidden="true" /></span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card dashboard-dispatch">
         <div className="card-header">
           <h3 className="card-title">Today Checked-In Technicians</h3>
+          <span className="dashboard-count">{fieldStaff.length} checked in</span>
         </div>
         {fieldStaff.length > 0 ? (
           <div className="table-wrapper" style={{ border: 'none' }}>
@@ -290,8 +280,8 @@ export default function Dashboard() {
       </div>
 
       {/* Charts Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card" {...clickablePanel('/billing', 'View billing details')}>
+      <div className="dashboard-chart-group">
+        <div className="card dashboard-revenue" {...clickablePanel('/billing', 'View billing details')}>
           <div className="card-header">
             <h3 className="card-title">Monthly Revenue & Profit</h3>
           </div>
@@ -308,34 +298,35 @@ export default function Dashboard() {
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7ece9" vertical={false} />
                 <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
                 <YAxis stroke="#64748b" fontSize={11} tickFormatter={v => `₹${(v/1000).toFixed(0)}K`} />
                 <Tooltip
-                  contentStyle={{ background: '#141928', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
+                  contentStyle={{ background: '#fff', border: '1px solid #dce5df', borderRadius: 8 }}
                   formatter={v => [`₹${v.toLocaleString()}`, '']}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="#00d4ff" fill="url(#revGrad)" strokeWidth={2} name="Revenue" />
-                <Area type="monotone" dataKey="profit" stroke="#10b981" fill="url(#profGrad)" strokeWidth={2} name="Profit" />
+                <Area isAnimationActive={false} type="monotone" dataKey="revenue" stroke="#00d4ff" fill="url(#revGrad)" strokeWidth={2} name="Revenue" />
+                <Area isAnimationActive={false} type="monotone" dataKey="profit" stroke="#10b981" fill="url(#profGrad)" strokeWidth={2} name="Profit" />
                 <Legend />
               </AreaChart>
             </ResponsiveContainer>
           ) : <div className="empty-state"><p>No billing data yet</p></div>}
         </div>
 
-        <div className="card" {...clickablePanel('/jobs', 'View jobs by status')}>
+        <div className="card dashboard-status" {...clickablePanel('/jobs', 'View jobs by status')}>
           <div className="card-header">
             <h3 className="card-title">Jobs by Status</h3>
           </div>
           {jobsByStatus.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie data={jobsByStatus} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={80} label={({ status, count }) => `${status}: ${count}`} labelLine={false}>
+                <Pie isAnimationActive={false} data={jobsByStatus} dataKey="count" nameKey="status" cx="50%" cy="45%" innerRadius={48} outerRadius={70} paddingAngle={3}>
                   {jobsByStatus.map((entry) => (
                     <Cell key={entry.status} fill={STATUS_COLORS[entry.status] || '#64748b'} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ background: '#141928', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                <Tooltip contentStyle={{ background: '#fff', border: '1px solid #dce5df', borderRadius: 8 }} />
+                <Legend formatter={value => value.replaceAll('_', ' ')} />
               </PieChart>
             </ResponsiveContainer>
           ) : <div className="empty-state"><p>No job data yet</p></div>}
@@ -343,19 +334,19 @@ export default function Dashboard() {
       </div>
 
       {/* Charts Row 2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div className="card" {...clickablePanel('/jobs', 'View jobs by priority')}>
+      <div className="dashboard-chart-group">
+        <div className="card dashboard-priority" {...clickablePanel('/jobs', 'View jobs by priority')}>
           <div className="card-header">
             <h3 className="card-title">Jobs by Priority</h3>
           </div>
           {jobsByPriority.length > 0 ? (
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={jobsByPriority} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7ece9" horizontal={false} />
                 <XAxis type="number" stroke="#64748b" fontSize={11} />
                 <YAxis type="category" dataKey="priority" stroke="#64748b" fontSize={11} width={60} />
-                <Tooltip contentStyle={{ background: '#141928', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                <Tooltip contentStyle={{ background: '#fff', border: '1px solid #dce5df', borderRadius: 8 }} />
+                <Bar isAnimationActive={false} dataKey="count" radius={[0, 4, 4, 0]}>
                   {jobsByPriority.map((entry) => (
                     <Cell key={entry.priority} fill={PRIORITY_COLORS[entry.priority] || '#64748b'} />
                   ))}
@@ -365,7 +356,7 @@ export default function Dashboard() {
           ) : <div className="empty-state"><p>No data yet</p></div>}
         </div>
 
-        <div className="card" {...clickablePanel('/reports', 'View technician performance reports')}>
+        <div className="card dashboard-performance" {...clickablePanel('/reports', 'View technician performance reports')}>
           <div className="card-header">
             <h3 className="card-title">Technician Performance</h3>
           </div>

@@ -1,4 +1,4 @@
-import { NavLink, useNavigate, Outlet } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../context/useAuth';
 import { notificationsApi } from '../../api';
@@ -13,6 +13,7 @@ import {
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
@@ -109,7 +110,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout${location.pathname === '/dashboard' ? ' dashboard-shell' : ''}`}>
       <aside className="sidebar">
         <div className="sidebar-logo">
           <h1><span className="brand-mark">B</span> Baangs</h1>
