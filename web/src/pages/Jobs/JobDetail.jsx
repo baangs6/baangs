@@ -9,6 +9,7 @@ import JobItemsEditor from '../../components/JobItemsEditor';
 import { MdArrowBack, MdEdit, MdAttachMoney, MdVerified, MdClose, MdExpandMore, MdPerson, MdLocationOn, MdEngineering, MdSchedule, MdStar } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { MdDownload } from 'react-icons/md';
+import './JobDetail.css';
 
 // ── Multi-select technician picker ──────────────────────────────────────────
 function TechnicianPicker({ staff, primaryId, additionalIds, onChangePrimary, onChangeAdditional }) {
@@ -485,30 +486,27 @@ export default function JobDetail() {
 
       <div className="job-ticket-detail-shell">
         <div className="job-detail-tabs">
-          <button type="button" className={`job-detail-tab ${activeTab === 'details' ? 'active' : ''}`} onClick={() => setActiveTab('details')}>Ticket Details</button>
-          <button type="button" className={`job-detail-tab ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>History</button>
-          <button type="button" className={`job-detail-tab ${activeTab === 'customer-history' ? 'active' : ''}`} onClick={() => setActiveTab('customer-history')}>Customer History</button>
-          <button type="button" className={`job-detail-tab ${activeTab === 'files' ? 'active' : ''}`} onClick={() => setActiveTab('files')}>Files</button>
+          <button type="button" aria-pressed={activeTab === 'details'} className={`job-detail-tab ${activeTab === 'details' ? 'active' : ''}`} onClick={() => setActiveTab('details')}>Ticket Details</button>
+          <button type="button" aria-pressed={activeTab === 'history'} className={`job-detail-tab ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>History</button>
+          <button type="button" aria-pressed={activeTab === 'customer-history'} className={`job-detail-tab ${activeTab === 'customer-history' ? 'active' : ''}`} onClick={() => setActiveTab('customer-history')}>Customer History</button>
+          <button type="button" aria-pressed={activeTab === 'files'} className={`job-detail-tab ${activeTab === 'files' ? 'active' : ''}`} onClick={() => setActiveTab('files')}>Files</button>
         </div>
 
         <div id="ticket-details" className="job-detail-header">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
               <h2>{job.job_id}</h2>
+              <span className={`badge badge-${job.status}`}>{STATUS_LABELS[job.status] || job.status}</span>
+              <span className={`badge badge-${job.priority}`}>{job.priority} Priority</span>
             </div>
             <p className="job-detail-customer">{job.customer_name}</p>
             {job.customer_nickname && <p style={{ margin: '0 0 6px', color: 'var(--color-text-secondary)', fontSize: 14 }}>Nickname: {job.customer_nickname}</p>}
             <p className="job-detail-summary">{job.work_type}</p>
-            <p className="job-detail-description"><strong>Description :</strong> {job.complaint || '-'}</p>
           </div>
           <div className="job-detail-created">Ticket Created on {formatDateTime(job.service_request_date)}</div>
         </div>
 
         <div className="job-detail-status-strip">
-          <div className="job-detail-badges">
-            <span className={`badge badge-${job.status}`}>{STATUS_LABELS[job.status] || job.status}</span>
-            <span className={`badge badge-${job.priority}`}>{job.priority}</span>
-          </div>
           <span>Ticket Created by {job.created_by_name || 'Admin'}</span>
         </div>
 
@@ -534,10 +532,9 @@ export default function JobDetail() {
 
       {activeTab === 'details' && (
       <>
-      <AmcPanel key={jobId} job={job} />
       <div className="job-detail-main-grid">
         <div className="job-detail-panel">
-          <h3 className="job-detail-section-title">Ticket Details</h3>
+          <h3 className="job-detail-section-title">Ticket Details & Work Scope</h3>
           <div className="detail-grid">
             <div className="detail-item"><span className="detail-label"><MdPerson /> Assigned To</span><span className="detail-value">{job.assigned_staff_name || 'Unassigned'}</span></div>
             <div className="detail-item"><span className="detail-label"><MdLocationOn /> Address</span><span className="detail-value">{job.location || '-'}</span></div>
@@ -545,7 +542,10 @@ export default function JobDetail() {
             <div className="detail-item"><span className="detail-label"><MdEngineering /> Site Type</span><span className="detail-value">{job.site_type || '-'}</span></div>
             <div className="detail-item"><span className="detail-label"><MdEngineering /> Work Type</span><span className="detail-value">{job.work_type}</span></div>
             <div className="detail-item"><span className="detail-label"><MdSchedule /> Scheduled on</span><span className="detail-value">{formatDate(job.scheduled_date)}</span></div>
+            {job.additional_staff_names?.length > 0 && <div className="detail-item"><span className="detail-label">Additional Techs</span><span className="detail-value">{job.additional_staff_names.join(', ')}</span></div>}
+            <div className="detail-item"><span className="detail-label">Requested</span><span className="detail-value">{formatDate(job.service_request_date)}</span></div>
           </div>
+          <div className="job-scope-description"><span className="detail-label">Description</span><p>{job.complaint || '-'}</p></div>
         </div>
 
         <div className="job-detail-panel">
@@ -558,7 +558,7 @@ export default function JobDetail() {
             </div>
             <a className="job-detail-call" href={`tel:${job.phone_number}`}>Call</a>
           </div>
-          <h3 className="job-detail-section-title" style={{ marginTop: 20 }}>Work Tracking</h3>
+          <h3 className="job-detail-section-title" style={{ marginTop: 20 }}>Work Tracking & GPS</h3>
           <div className="detail-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <div className="detail-item"><span className="detail-label">Started At</span><span className="detail-value">{formatDateTime(job.work_started_at)}</span></div>
             <div className="detail-item"><span className="detail-label">Start Location</span><span className="detail-value">{formatLocation(job.work_start_location)}</span></div>
@@ -568,25 +568,9 @@ export default function JobDetail() {
             <div className="detail-item"><span className="detail-label">Technician</span><span className="detail-value">{job.work_started_by || job.work_ended_by || '-'}</span></div>
           </div>
         </div>
+        <div className="job-maintenance-panel"><AmcPanel key={jobId} job={job} /></div>
       </div>
 
-      <div className="job-detail-panel" style={{ marginBottom: 16 }}>
-        <h3 className="job-detail-section-title">Job Info</h3>
-        <div className="detail-grid">
-          <div className="detail-item"><span className="detail-label">Work Type</span><span className="detail-value">{job.work_type}</span></div>
-          <div className="detail-item"><span className="detail-label">Assigned To</span><span className="detail-value">{job.assigned_staff_name || 'Unassigned'}</span></div>
-          {job.additional_staff_names?.length > 0 && (
-            <div className="detail-item"><span className="detail-label">Additional Techs</span><span className="detail-value">{job.additional_staff_names.join(', ')}</span></div>
-          )}
-          <div className="detail-item"><span className="detail-label">Scheduled</span><span className="detail-value">{formatDate(job.scheduled_date)}</span></div>
-          <div className="detail-item"><span className="detail-label">Requested</span><span className="detail-value">{formatDate(job.service_request_date)}</span></div>
-        </div>
-        {job.complaint ? (
-          <p style={{ marginTop: 12, fontSize: '0.875rem', color: 'var(--color-text-secondary)', padding: '8px', background: 'var(--color-surface-2)', borderRadius: 6 }}>
-            {job.complaint}
-          </p>
-        ) : null}
-      </div>
 
       <JobItemsEditor job={job} onSaved={load} />
 

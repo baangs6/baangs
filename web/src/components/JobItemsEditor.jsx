@@ -5,6 +5,7 @@ import { useAuth } from '../context/useAuth';
 import './JobItemsEditor.css';
 
 const money = value => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const serialNumbers = stock => [...new Set([...(stock?.serial_numbers || []), ...(stock?.serial_number || '').split(',')].map(value => String(value).trim()).filter(Boolean))];
 
 export default function JobItemsEditor({ job, onSaved }) {
   const { user } = useAuth();
@@ -18,6 +19,10 @@ export default function JobItemsEditor({ job, onSaved }) {
   const [items, setItems] = useState([]);
   const [catalogue, setCatalogue] = useState([]);
   const [selected, setSelected] = useState('');
+  const [selectedBarcode, setSelectedBarcode] = useState('');
+  const [selectedSerials, setSelectedSerials] = useState([]);
+  const selectedStock = catalogue.find(item => item.barcode === (selectedBarcode || selected));
+  const matches = selected.trim() ? catalogue.filter(item => [item.item_name, item.barcode, item.model_number, ...serialNumbers(item)].some(value => String(value || '').toLowerCase().includes(selected.trim().toLowerCase()))) : [];
   const displayed = open ? items : (job.inventory_used || []);
 
   useEffect(() => {
@@ -29,6 +34,8 @@ export default function JobItemsEditor({ job, onSaved }) {
     setLoading(true);
     setError('');
     setSelected('');
+    setSelectedBarcode('');
+    setSelectedSerials([]);
     try {
       const [used, stock] = await Promise.all([jobsApi.items(job.job_id), inventoryApi.list()]);
       setVersion(used.data.version);
@@ -45,14 +52,18 @@ export default function JobItemsEditor({ job, onSaved }) {
   };
 
   const add = () => {
-    const stock = catalogue.find(item => item.barcode === selected);
+    const stock = selectedStock;
     if (!stock) { setError('Select a product from Inventory'); return; }
-    setItems(rows => [...rows, { key: crypto.randomUUID(), usage_id: null,
+    if (serialNumbers(stock).length && !selectedSerials.length) { setError('Select at least one serial number'); return; }
+    const serials = selectedSerials.length ? selectedSerials : [''];
+    setItems(rows => [...rows, ...serials.map(serial => ({ key: crypto.randomUUID(), usage_id: null,
       barcode: stock.barcode, item_name: stock.item_name, model_number: stock.model_number,
       quantity_used: 1, unit_selling_price: stock.selling_price || 0,
-      serial_number: '', warranty_years: stock.warranty_years ?? null,
-    }]);
+      serial_number: serial, warranty_years: stock.warranty_years ?? null,
+    }))]);
     setSelected('');
+    setSelectedBarcode('');
+    setSelectedSerials([]);
     setError('');
   };
   const change = (key, field, value) => setItems(rows => rows.map(row => row.key === key ? { ...row, [field]: value } : row));
@@ -89,12 +100,12 @@ export default function JobItemsEditor({ job, onSaved }) {
       {!open && error && <p role="alert" className="job-items-error">{error}</p>}
       <div className="table-wrapper">
         <table className="table">
-          <thead><tr><th>Product</th><th>Quantity</th><th>Unit Price</th><th>Amount</th></tr></thead>
+          <thead><tr><th>Product</th><th>Serial Number</th><th>Quantity</th><th>Unit Price</th><th>Amount</th></tr></thead>
           <tbody>{(job.inventory_used || []).map(row => <tr key={row._id}>
             <td>{row.item_name || row.barcode}{row.model_number && <small className="job-item-model">{row.model_number}</small>}</td>
-            <td>{row.quantity_used}</td><td>Rs {money(row.unit_selling_price)}</td>
+            <td>{row.serial_number || '-'}</td><td>{row.quantity_used}</td><td>Rs {money(row.unit_selling_price)}</td>
             <td>Rs {money(row.quantity_used * row.unit_selling_price)}</td>
-          </tr>)}{!job.inventory_used?.length && <tr><td colSpan={4}>No products recorded</td></tr>}</tbody>
+          </tr>)}{!job.inventory_used?.length && <tr><td colSpan={5}>No products recorded</td></tr>}</tbody>
         </table>
       </div>
       {open && <dialog ref={dialog} className="job-items-dialog" aria-labelledby="job-items-title"
@@ -108,20 +119,28 @@ export default function JobItemsEditor({ job, onSaved }) {
             {loading ? <p role="status">Loading items...</p> : <fieldset disabled={saving || !version}>
               <div className="job-items-add">
                 <label htmlFor="job-item-catalogue">Inventory product</label>
-                <input id="job-item-catalogue" className="form-input" list="job-item-options" value={selected}
-                  onChange={event => setSelected(event.target.value)} placeholder="Search by product name or barcode" />
-                <datalist id="job-item-options">{catalogue.map(item => <option key={item.barcode} value={item.barcode}>
-                  {item.item_name} {item.model_number} - Stock: {item.current_quantity}
-                </option>)}</datalist>
+                <input id="job-item-catalogue" className="form-input" value={selected} autoComplete="off"
+                  onChange={event => { setSelected(event.target.value); setSelectedBarcode(''); setSelectedSerials([]); }} placeholder="Search item name, model, barcode or serial number" />
                 <button type="button" className="btn btn-secondary" onClick={add}><MdAdd /> Add Item</button>
               </div>
+              {selected.trim() && !selectedBarcode && <ul className="job-product-results" aria-label="Inventory search results">
+                {matches.map(stock => <li key={stock.barcode}><button type="button" onClick={() => { setSelectedBarcode(stock.barcode); setSelected(`${stock.item_name} (${stock.barcode})`); setSelectedSerials([]); setError(''); }}><strong>{stock.item_name}</strong><span>{stock.model_number || '-'} | {stock.barcode} | Stock: {stock.current_quantity} | Rs {money(stock.selling_price)}</span></button></li>)}
+                {!matches.length && <li>No matching inventory products</li>}
+              </ul>}
+              {selectedStock && serialNumbers(selectedStock).length > 0 && <fieldset className="job-serial-picker"><legend>Serial Numbers - {selectedStock.item_name}</legend>
+                {serialNumbers(selectedStock).map(serial => {
+                  const used = items.some(row => row.barcode === selectedStock.barcode && row.serial_number?.trim().toLowerCase() === serial.toLowerCase());
+                  return <label key={serial}><input type="checkbox" checked={selectedSerials.includes(serial)} disabled={used} onChange={event => { setSelectedSerials(values => event.target.checked ? [...values, serial] : values.filter(value => value !== serial)); setError(''); }} />{serial}{used && <small>Already selected</small>}</label>;
+                })}
+                <span>{selectedSerials.length} selected</span>
+              </fieldset>}
               <div className="table-wrapper"><table className="table job-items-edit-table">
                 <thead><tr><th>Product</th><th>Quantity</th><th>Unit Price (Rs)</th><th>Serial Number</th><th>Warranty</th><th>Amount (Rs)</th><th aria-label="Actions" /></tr></thead>
                 <tbody>{items.map((row, index) => <tr key={row.key}>
                   <td>{row.item_name || row.barcode}<small className="job-item-model">{row.model_number}</small></td>
-                  <td><input aria-label={`Quantity for item ${index + 1}`} className="form-input" type="number" min="0.001" step="any" required value={row.quantity_used} onChange={event => change(row.key, 'quantity_used', event.target.value)} /></td>
+                  <td><input aria-label={`Quantity for item ${index + 1}`} className="form-input" type="number" min="0.001" step="any" required readOnly={!!row.serial_number && Number(row.quantity_used) === 1} value={row.quantity_used} onChange={event => change(row.key, 'quantity_used', event.target.value)} /></td>
                   <td><input aria-label={`Price for item ${index + 1}`} className="form-input" type="number" min="0" step="0.01" required value={row.unit_selling_price} onChange={event => change(row.key, 'unit_selling_price', event.target.value)} /></td>
-                  <td><input aria-label={`Serial number for item ${index + 1}`} className="form-input" maxLength={256} value={row.serial_number || ''} onChange={event => change(row.key, 'serial_number', event.target.value)} /></td>
+                  <td><input aria-label={`Serial number for item ${index + 1}`} className="form-input" list={`job-serial-options-${index}`} maxLength={256} value={row.serial_number || ''} onChange={event => change(row.key, 'serial_number', event.target.value)} /><datalist id={`job-serial-options-${index}`}>{serialNumbers(catalogue.find(stock => stock.barcode === row.barcode)).filter(serial => serial === row.serial_number || !items.some(other => other.key !== row.key && other.barcode === row.barcode && other.serial_number === serial)).map(serial => <option key={serial} value={serial} />)}</datalist></td>
                   <td><select aria-label={`Warranty for item ${index + 1}`} className="form-select" value={row.warranty_years ?? ''} onChange={event => change(row.key, 'warranty_years', event.target.value)}>
                     <option value="">Not recorded</option><option value="0">No warranty</option>
                     {[1, 2, 3, 4, 5].map(year => <option key={year} value={year}>{year} year{year > 1 ? 's' : ''}</option>)}

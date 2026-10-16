@@ -51,3 +51,39 @@ test('mobile editor fits the viewport and technicians cannot edit prices', async
   await page.goto('/tests/fixtures/job-items.html?role=technician');
   await expect(page.getByRole('button', { name: 'Edit Items' })).toHaveCount(0);
 });
+
+test('search by item name and serial, select multiple serials, and save one unit per serial', async ({ page }, testInfo) => {
+  let saved;
+  const serialized = { ...camera, barcode: 'INV-9', item_name: 'Outdoor Camera', serial_numbers: ['SER-001', 'SER-002'], serial_number: 'SER-003, SER-004', warranty_years: 2 };
+  await page.route('**/inventory/', route => route.fulfill({ json: [serialized, cable] }));
+  await page.route('**/jobs/TEST/items', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { version: 'a'.repeat(64), items: [] } });
+    saved = route.request().postDataJSON();
+    return route.fulfill({ json: { message: 'Saved' } });
+  });
+  await page.goto('/tests/fixtures/job-items.html');
+  await page.getByRole('button', { name: 'Edit Items' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Inventory product').fill('outdoor');
+  await dialog.getByRole('button', { name: /Outdoor Camera.*INV-9/ }).click();
+  await dialog.getByRole('button', { name: 'Add Item' }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('Select at least one serial number');
+  await dialog.getByLabel('SER-001', { exact: true }).check();
+  await dialog.getByLabel('SER-003', { exact: true }).check();
+  await expect(dialog.getByText('2 selected', { exact: true })).toBeVisible();
+  await dialog.screenshot({ path: testInfo.outputPath('serial-selection.png') });
+  await dialog.getByRole('button', { name: 'Add Item' }).click();
+  await expect(dialog.getByLabel('Serial number for item 1')).toHaveValue('SER-001');
+  await expect(dialog.getByLabel('Serial number for item 2')).toHaveValue('SER-003');
+  await expect(dialog.getByLabel('Quantity for item 1', { exact: true })).toHaveAttribute('readonly', '');
+  await expect(dialog.getByText('Material Total: Rs 200.00')).toBeVisible();
+  await dialog.getByLabel('Inventory product').fill('SER-004');
+  await dialog.getByRole('button', { name: /Outdoor Camera.*INV-9/ }).click();
+  await expect(dialog.getByRole('checkbox', { name: /SER-001/ })).toBeDisabled();
+  await dialog.getByLabel('SER-004', { exact: true }).check();
+  await dialog.getByRole('button', { name: 'Add Item' }).click();
+  await dialog.getByRole('button', { name: 'Save Items' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(saved.items.map(row => row.serial_number)).toEqual(['SER-001', 'SER-003', 'SER-004']);
+  expect(saved.items.every(row => row.quantity_used === 1 && row.warranty_years === 2 && row.unit_selling_price === 100)).toBe(true);
+});

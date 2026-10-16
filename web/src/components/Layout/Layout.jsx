@@ -110,7 +110,7 @@ export default function Layout() {
   };
 
   return (
-    <div className={`app-layout${location.pathname === '/dashboard' ? ' dashboard-shell' : location.pathname === '/jobs' ? ' jobs-shell' : location.pathname.startsWith('/customers') ? ' customers-shell' : ''}`}>
+    <div className={`app-layout${location.pathname === '/dashboard' ? ' dashboard-shell' : location.pathname === '/jobs' || (location.pathname.startsWith('/jobs/') && location.pathname !== '/jobs/create') ? ' jobs-shell' : location.pathname.startsWith('/customers') ? ' customers-shell' : ''}`}>
       <aside className="sidebar">
         <div className="sidebar-logo">
           <h1><span className="brand-mark">B</span> Baangs</h1>
