@@ -110,7 +110,7 @@ export default function Layout() {
   };
 
   return (
-    <div className={`app-layout${location.pathname === '/dashboard' ? ' dashboard-shell' : ''}`}>
+    <div className={`app-layout${location.pathname === '/dashboard' ? ' dashboard-shell' : location.pathname === '/jobs' ? ' jobs-shell' : ''}`}>
       <aside className="sidebar">
         <div className="sidebar-logo">
           <h1><span className="brand-mark">B</span> Baangs</h1>

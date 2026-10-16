@@ -1,9 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Camera, Download, Users, ClipboardList, CircleCheck, ArrowUpRight, ArrowRight, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { jobsApi, lookupsApi, staffApi } from '../../api';
 import { MdAdd, MdCheck, MdClose, MdDelete, MdRefresh, MdSearch } from 'react-icons/md';
 import { formatDate } from '../../utils/dateFormat';
 import DateRangePicker from '../../components/DateRangePicker';
+import AmcIndicator from '../../components/AmcIndicator';
+import './JobList.css';
 
 const STATUS_LABELS = { pending: 'Pending', in_progress: 'In Progress', complete: 'Complete', cancelled: 'Cancelled' };
 
@@ -30,7 +33,11 @@ export default function JobList() {
   const [staff, setStaff] = useState([]);
   const [workTypes, setWorkTypes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const requestId = useRef(0);
   const [activeTab, setActiveTab] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [actionSaving, setActionSaving] = useState(false);
   const [acceptJob, setAcceptJob] = useState(null);
   const [rejectJob, setRejectJob] = useState(null);
@@ -64,7 +71,10 @@ export default function JobList() {
   }, [searchParams]);
 
   const fetchJobs = useCallback(async () => {
+    setPage(1);
+    const currentRequest = ++requestId.current;
     setLoading(true);
+    setLoadError('');
     try {
       const params = {};
       if (filters.search) params.search = filters.search;
@@ -76,11 +86,14 @@ export default function JobList() {
       if (filters.date_from) params.date_from = filters.date_from;
       if (filters.date_to) params.date_to = filters.date_to;
       const res = await jobsApi.list(params);
-      setJobs(res.data || []);
+      if (currentRequest === requestId.current) setJobs(res.data || []);
     } catch (e) {
-      console.error(e);
+      if (currentRequest === requestId.current) {
+        setJobs([]);
+        setLoadError(e.response?.data?.detail || 'Unable to load jobs. Please try refreshing.');
+      }
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
   }, [filters]);
 
@@ -108,6 +121,23 @@ export default function JobList() {
     }
     return !isCustomerRequest(job);
   });
+  const pageCount = Math.max(1, Math.ceil(displayedJobs.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pagedJobs = displayedJobs.slice(pageStart, pageStart + pageSize);
+  const pageNumbers = [...new Set([1, currentPage - 1, currentPage, currentPage + 1, pageCount])].filter(number => number >= 1 && number <= pageCount).sort((a, b) => a - b);
+
+  const exportJobs = () => {
+    const cell = value => `"${String(value ?? '').replace(/^[=+@\-\t\r]/, "'$&").replaceAll('"', '""')}"`;
+    const rows = [['Job ID', 'Customer', 'Nickname', 'Phone', 'Location', 'Work Type', 'Assigned To', 'Priority', 'Status', 'Scheduled'],
+      ...displayedJobs.map(job => [job.job_id, job.customer_name, job.customer_nickname, job.phone_number, job.location, job.work_type, job.assigned_staff_name, job.priority, job.request_status === 'rejected' ? 'Rejected' : job.status, job.scheduled_date])];
+    const url = URL.createObjectURL(new Blob(['\uFEFF', rows.map(row => row.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = activeTab === 'requests' ? 'customer-requests.csv' : 'work-orders.csv';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   const openAccept = (event, job) => {
     event.stopPropagation();
@@ -188,28 +218,40 @@ export default function JobList() {
   };
 
   return (
-    <div className="animate-fade">
+    <div className="animate-fade jobs-page">
       <div className="page-header">
         <div className="page-header-left">
           <h2>Jobs & Service Requests</h2>
-          <p>{displayedJobs.length} records found</p>
+          <p><span className="jobs-record-count">{displayedJobs.length} records found</span> Field dispatch, maintenance, and installations</p>
         </div>
+        <div className="jobs-header-actions">
+        <button className="btn btn-secondary" onClick={exportJobs} disabled={loading || !displayedJobs.length}><Download size={16} /> Export</button>
         <button className="btn btn-primary" onClick={() => navigate('/jobs/create')}>
           <MdAdd /> New Job
         </button>
+        </div>
+      </div>
+
+      <div className="jobs-summary" aria-label="Filtered jobs summary">
+        <div><span>Total Work Orders</span><strong>{jobs.filter(job => !isCustomerRequest(job)).length}</strong><ClipboardList aria-hidden="true" /></div>
+        <div><span>Inbound Requests</span><strong>{customerRequestsCount}</strong><Users aria-hidden="true" /></div>
+        <div><span>Technicians on Jobs</span><strong>{new Set(jobs.filter(job => job.assigned_staff_id && job.status === 'in_progress').map(job => job.assigned_staff_id)).size}</strong><Camera aria-hidden="true" /></div>
+        <div><span>Completed Jobs</span><strong>{jobs.filter(job => job.status === 'complete').length}</strong><CircleCheck aria-hidden="true" /></div>
       </div>
 
       {/* Section Tabs */}
-      <div className="card" style={{ marginBottom: 16, padding: '10px 16px', display: 'flex', gap: 12, alignItems: 'center' }}>
+      <div className="jobs-tabs" aria-label="Job categories">
         <button
           className={activeTab === 'all' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
-          onClick={() => setActiveTab('all')}
+          onClick={() => { setActiveTab('all'); setPage(1); }}
+          aria-pressed={activeTab === 'all'}
         >
           All Work Orders ({jobs.filter((job) => !isCustomerRequest(job)).length})
         </button>
         <button
           className={activeTab === 'requests' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
-          onClick={() => setActiveTab('requests')}
+          onClick={() => { setActiveTab('requests'); setPage(1); }}
+          aria-pressed={activeTab === 'requests'}
         >
           Customer Requests ({customerRequestsCount})
         </button>
@@ -222,6 +264,7 @@ export default function JobList() {
           <input
             className="form-input search-input"
             placeholder="Search jobs, customers..."
+            aria-label="Search jobs and customers"
             value={filters.search}
             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
           />
@@ -230,6 +273,7 @@ export default function JobList() {
           className="form-select"
           style={{ width: 140 }}
           value={filters.status}
+          aria-label="Status"
           onChange={(e) => setFilters({ ...filters, status: e.target.value })}
         >
           <option value="">All Status</option>
@@ -242,6 +286,7 @@ export default function JobList() {
           className="form-select"
           style={{ width: 130 }}
           value={filters.priority}
+          aria-label="Priority"
           onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
         >
           <option value="">All Priority</option>
@@ -254,6 +299,7 @@ export default function JobList() {
           className="form-select"
           style={{ width: 130 }}
           value={filters.work_type}
+          aria-label="Work type"
           onChange={(e) => setFilters({ ...filters, work_type: e.target.value })}
         >
           <option value="">All Work Types</option>
@@ -265,6 +311,7 @@ export default function JobList() {
           className="form-select"
           style={{ width: 180 }}
           value={filters.assigned_staff_id}
+          aria-label="Assigned technician"
           onChange={(e) => setFilters({ ...filters, assigned_staff_id: e.target.value })}
         >
           <option value="">All Assigned To</option>
@@ -282,12 +329,15 @@ export default function JobList() {
         <button className="btn btn-secondary btn-icon" onClick={fetchJobs} title="Refresh">
           <MdRefresh />
         </button>
+        <button className="btn btn-secondary btn-icon" title="Clear filters" aria-label="Clear filters" onClick={() => setFilters({ search: '', status: '', priority: '', work_type: '', site_type: '', assigned_staff_id: '', date_from: '', date_to: '' })}><RotateCcw size={17} /></button>
       </div>
 
       {loading ? (
         <div className="loading-center">
           <div className="spinner" />
         </div>
+      ) : loadError ? (
+        <div className="jobs-load-error" role="alert"><p>{loadError}</p><button className="btn btn-secondary" onClick={fetchJobs}><MdRefresh /> Retry</button></div>
       ) : displayedJobs.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">🔧</div>
@@ -298,91 +348,71 @@ export default function JobList() {
           </button>
         </div>
       ) : (
-        <div className="table-wrapper">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Job ID</th>
-                <th>Customer</th>
-                <th>Location</th>
-                <th>Work Type</th>
-                <th>Assigned To</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Days Open</th>
-                <th>Scheduled</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedJobs.map((job) => (
-                <tr key={job.job_id} onClick={() => navigate(`/jobs/${job.job_id}`)} style={{ cursor: 'pointer' }}>
-                  <td>
-                    <span style={{ fontFamily: 'monospace', color: 'var(--color-accent)', fontSize: '0.8rem' }}>
-                      {job.job_id}
-                    </span>
-                    {job.is_public_submission && (
-                      <span className="badge badge-warning" style={{ fontSize: '0.65rem', marginLeft: 6 }}>
-                        Customer Request
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{job.customer_name}</div>
-                    <AmcIndicator coverage={job.amc_coverage} />
-                    {job.customer_nickname && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Nickname: {job.customer_nickname}</div>}
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{job.phone_number}</div>
-                  </td>
-                  <td style={{ color: 'var(--color-text-secondary)', fontSize: '0.85rem' }}>{job.location || '—'}</td>
-                  <td style={{ fontSize: '0.85rem' }}>{job.work_type}</td>
-                  <td style={{ fontSize: '0.85rem' }}>
-                    {job.assigned_staff_name || <span style={{ color: 'var(--color-text-muted)' }}>Unassigned</span>}
-                  </td>
-                  <td>
-                    <span className={`badge badge-${job.priority}`}>{job.priority}</span>
-                  </td>
-                  <td>
-                    <span className={`badge badge-${job.status}`}>
-                      {job.request_status === 'rejected' ? 'Rejected' : STATUS_LABELS[job.status]}
-                    </span>
-                    {job.rejection_remark && (
-                      <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                        {job.rejection_remark}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                    {daysSinceCreated(job) === null ? (
-                      <span style={{ color: 'var(--color-text-muted)' }}>-</span>
-                    ) : (
-                      `${daysSinceCreated(job)} day${daysSinceCreated(job) === 1 ? '' : 's'}`
-                    )}
-                  </td>
-                  <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                    {formatDate(job.scheduled_date || job.service_request_date)}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {activeTab === 'requests' && job.request_status !== 'rejected' && (
-                        <>
-                          <button className="btn btn-success btn-sm" onClick={(event) => openAccept(event, job)} disabled={actionSaving}>
-                            <MdCheck /> Accept
-                          </button>
-                          <button className="btn btn-secondary btn-sm" onClick={(event) => openReject(event, job)} disabled={actionSaving}>
-                            <MdClose /> Reject
-                          </button>
-                        </>
-                      )}
-                      <button className="btn btn-danger btn-sm" onClick={(event) => openDelete(event, job)} disabled={actionSaving}>
-                        <MdDelete /> Delete
-                      </button>
+        <div className="jobs-rows" aria-label="Jobs">
+          {pagedJobs.map(job => {
+            const days = daysSinceCreated(job);
+            return (
+              <article className="jobs-row" key={job.job_id}>
+                <div className="jobs-customer">
+                  <span className="jobs-device-icon"><Camera size={20} aria-hidden="true" /></span>
+                  <div className="jobs-customer-copy">
+                    <div className="jobs-id-line">
+                      <Link className="jobs-id" to={`/jobs/${job.job_id}`}>{job.job_id}</Link>
+                      <span className="jobs-work-type">{job.work_type || '-'}</span>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <Link className="jobs-customer-name" to={`/jobs/${job.job_id}`}>{job.customer_name || 'Customer'}</Link>
+                    {job.customer_nickname && <span className="jobs-nickname">{job.customer_nickname}</span>}
+                    <div className="jobs-contact">{job.phone_number || '-'}<span>{job.location || 'Location not provided'}</span></div>
+                    <AmcIndicator coverage={job.amc_coverage} />
+                    {job.is_public_submission && <span className="jobs-request-label">Customer Request</span>}
+                  </div>
+                </div>
+                <dl className="jobs-attributes">
+                  <div><dt>Assigned To</dt><dd><span className="jobs-tech-initial" aria-hidden="true">{(job.assigned_staff_name || '?').slice(0, 1).toUpperCase()}</span>{job.assigned_staff_name || 'Unassigned'}</dd></div>
+                  <div><dt>Priority</dt><dd><span className={`badge badge-${job.priority}`}>{job.priority || '-'}</span></dd></div>
+                  <div><dt>Status</dt><dd><span className={`badge badge-${job.status}`}>{job.request_status === 'rejected' ? 'Rejected' : STATUS_LABELS[job.status] || job.status}</span></dd>{job.rejection_remark && <dd className="jobs-rejection">{job.rejection_remark}</dd>}</div>
+                  <div><dt>Scheduled</dt><dd>{formatDate(job.scheduled_date || job.service_request_date)}</dd>{days !== null && <dd className="jobs-days">{days} day{days === 1 ? '' : 's'} open</dd>}</div>
+                </dl>
+                <div className="jobs-row-actions">
+                  {activeTab === 'requests' && job.request_status !== 'rejected' && <>
+                    <button className="btn btn-success btn-sm" onClick={event => openAccept(event, job)} disabled={actionSaving}><MdCheck /> Accept</button>
+                    <button className="btn btn-secondary btn-sm" onClick={event => openReject(event, job)} disabled={actionSaving}><MdClose /> Reject</button>
+                  </>}
+                  <Link className="btn btn-secondary btn-icon" to={`/jobs/${job.job_id}`} title="Open job" aria-label={`Open ${job.job_id}`}><ArrowUpRight size={17} /></Link>
+                  <button className="btn btn-icon jobs-delete" title="Delete job" aria-label={`Delete ${job.job_id}`} onClick={event => openDelete(event, job)} disabled={actionSaving}><MdDelete /></button>
+                </div>
+              </article>
+            );
+          })}
         </div>
+      )}
+
+      {!loading && !loadError && displayedJobs.length > 0 && (
+        <nav className="jobs-pagination" aria-label="Jobs pagination">
+          <span role="status">Showing {pageStart + 1}-{Math.min(pageStart + pageSize, displayedJobs.length)} of {displayedJobs.length}</span>
+          <label className="jobs-page-size">Rows per page
+            <select className="form-select" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>
+              {[10, 20, 50, 100].map(size => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+          <div className="jobs-page-buttons">
+            <button className="btn btn-secondary btn-icon" aria-label="Previous page" title="Previous page" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={17} /></button>
+            {pageNumbers.map((number, index) => <span className="jobs-page-number" key={number}>
+              {index > 0 && number - pageNumbers[index - 1] > 1 && <span className="jobs-page-gap" aria-hidden="true">...</span>}
+              <button className={`btn ${number === currentPage ? 'btn-primary' : 'btn-secondary'}`} aria-label={`Page ${number}`} aria-current={number === currentPage ? 'page' : undefined} onClick={() => setPage(number)}>{number}</button>
+            </span>)}
+            <button className="btn btn-secondary btn-icon" aria-label="Next page" title="Next page" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}><ChevronRight size={17} /></button>
+          </div>
+          <form className="jobs-page-jump" key={`${currentPage}-${pageCount}-${pageSize}`} onSubmit={event => {
+            event.preventDefault();
+            const target = Number(new FormData(event.currentTarget).get('page'));
+            if (Number.isInteger(target) && target >= 1 && target <= pageCount) setPage(target);
+          }}>
+            <label>Jump to page <input className="form-input" name="page" type="number" min="1" max={pageCount} step="1" required defaultValue={currentPage} /></label>
+            <span>of {pageCount}</span>
+            <button type="submit" className="btn btn-secondary btn-icon" title="Jump to page" aria-label="Jump to page"><ArrowRight size={17} /></button>
+          </form>
+        </nav>
       )}
 
       {acceptJob && (
@@ -505,5 +535,3 @@ export default function JobList() {
     </div>
   );
 }
-
-import AmcIndicator from '../../components/AmcIndicator';
