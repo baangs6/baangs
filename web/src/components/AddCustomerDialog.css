@@ -1,0 +1,38 @@
+.customer-create-dialog { width: min(1080px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: auto; border: 1px solid #dce5ed; border-radius: 8px; background: #fff; color: #223549; }
+.customer-create-dialog::backdrop { background: #172d4166; }
+.customer-create-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid #e2e9ef; }
+.customer-create-header h3 { font-size: 22px; margin: 4px 0 0; }
+.customer-create-eyebrow { font-size: 10px; text-transform: uppercase; color: #7b8fa3; }
+.customer-create-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.customer-create-fields { min-width: 0; padding: 0 24px; border: 0; margin: 0; }
+.customer-create-fields > section { padding: 22px 0; border-bottom: 1px solid #e6edf2; }
+.customer-create-dialog h4 { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 18px; color: #254b4a; }
+.customer-create-dialog h4 > span { color: #8c9bab; font-size: 10px; white-space: nowrap; }
+.customer-create-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.customer-create-fields label { display: flex; flex-direction: column; gap: 7px; min-width: 0; font-size: 12px; }
+.customer-create-dialog .form-input { width: 100%; min-width: 0; font-size: 13px; border-radius: 6px; border-color: #dce5ed; background: #fff; }
+.customer-create-site { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; border: 0; margin: 0 0 20px; padding: 0; }
+.customer-create-site legend { font-size: 12px; margin-bottom: 10px; }
+.customer-create-site label { display: flex; flex-direction: row; align-items: center; padding: 12px; border: 1px solid #e0e7f1; border-radius: 6px; background: #f1f5fc; cursor: pointer; font-size: 11px; }
+.customer-create-site label:has(:checked) { border-color: #0f766e; background: #edf9f5; color: #0c625a; }
+.customer-create-site input { accent-color: #0f766e; flex-shrink: 0; }
+.customer-create-site svg { flex-shrink: 0; }
+.customer-create-map-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 18px 0 8px; }
+.customer-create-map { display: flex; gap: 6px; }
+.customer-create-map > .btn { flex-shrink: 0; }
+.customer-create-dialog .btn { font-size: 12px; border-radius: 6px; box-shadow: none; }
+.customer-create-dialog .btn-primary { background: #0f766e; border-color: #0f766e; }
+.customer-create-dialog .btn-primary:hover { background: #0a625c; }
+.customer-create-preview { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 24px; background: #f7fafc; border-left: 1px solid #e2e9ef; }
+.customer-create-preview-identity { display: flex; gap: 12px; align-items: center; }
+.customer-create-preview-identity > span { padding: 14px; background: #e3f4ef; color: #0f766e; border-radius: 8px; }
+.customer-create-preview-identity strong { font-size: 17px; overflow-wrap: anywhere; }
+.customer-create-preview-identity small { display: block; color: #8b9bac; font-size: 12px; margin-top: 5px; overflow-wrap: anywhere; }
+.customer-create-preview dl { display: flex; flex-direction: column; gap: 18px; padding: 20px 0; border-top: 1px solid #e2e9ef; }
+.customer-create-preview dl > div { display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px; font-size: 12px; }
+.customer-create-preview dt { color: #8599ad; }
+.customer-create-preview dd { margin: 0; overflow-wrap: anywhere; }
+.customer-create-actions { display: flex; flex-direction: column; gap: 10px; margin-top: auto; border-top: 1px solid #e2e9ef; padding-top: 20px; }
+.customer-create-actions .btn { justify-content: center; min-height: 42px; }
+.customer-create-error { color: #b33e4f; font-size: 12px; padding: 12px 0 0; }
+@media(max-width: 720px) { .customer-create-layout { grid-template-columns: minmax(0, 1fr); } .customer-create-fields { padding: 0 18px; } .customer-create-preview { border-left: 0; border-top: 1px solid #e2e9ef; padding: 18px; } .customer-create-grid { grid-template-columns: minmax(0, 1fr); } .customer-create-header { padding: 16px 18px; } .customer-create-site { grid-template-columns: minmax(0, 1fr); } .customer-create-map { flex-wrap: wrap; } }

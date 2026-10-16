@@ -5,6 +5,7 @@ import { customersApi } from '../../api';
 import { MdSearch, MdPeople, MdAdd, MdEdit, MdDelete } from 'react-icons/md';
 import { formatDate } from '../../utils/dateFormat';
 import './CustomerList.css';
+import AddCustomerDialog from '../../components/AddCustomerDialog';
 
 function siteGroup(customer) {
   const site = (customer.site_type || '').toLowerCase();
@@ -27,6 +28,7 @@ export default function CustomerList() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [showModal, setShowModal] = useState(false);
+  const [addError, setAddError] = useState('');
   const [showEditModal, setShowEditModal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -81,11 +83,12 @@ export default function CustomerList() {
 
   const handleAddCustomer = async (e) => {
     e.preventDefault();
-    if (!formData.customer_name || !formData.phone_number) {
-      alert('Name and Phone are required');
+    if (!formData.customer_name.trim() || !formData.phone_number.trim()) {
+      setAddError('Name and Phone are required');
       return;
     }
     setSaving(true);
+    setAddError('');
     try {
       await customersApi.create(formData);
       setShowModal(false);
@@ -99,8 +102,8 @@ export default function CustomerList() {
         site_type: ''
       });
       await fetchCustomers();
-    } catch {
-      alert('Failed to add customer');
+    } catch (error) {
+      setAddError(typeof error.response?.data?.detail === 'string' ? error.response.data.detail : 'Failed to add customer. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -153,7 +156,7 @@ export default function CustomerList() {
         </div>
         <div className="customers-header-actions">
         <button className="btn btn-secondary" onClick={exportCustomers} disabled={loading || !!loadError || !filteredCustomers.length}><Download size={16} /> Export CSV</button>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+        <button className="btn btn-primary" onClick={() => { setAddError(''); setShowModal(true); }}>
           <MdAdd /> Add Customer
         </button>
         </div>
@@ -285,89 +288,7 @@ export default function CustomerList() {
         <form key={`${currentPage}-${pageCount}-${pageSize}`} className="customers-page-jump" onSubmit={event => { event.preventDefault(); const target = Number(new FormData(event.currentTarget).get('page')); if (Number.isInteger(target) && target >= 1 && target <= pageCount) setPage(target); }}><label>Jump to page <input className="form-input" name="page" type="number" required min="1" max={pageCount} step="1" defaultValue={currentPage} /></label><span>of {pageCount}</span><button className="btn btn-secondary btn-icon" type="submit" title="Jump to page" aria-label="Jump to page"><ArrowRight size={16} /></button></form>
       </nav>}
 
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" role="dialog" aria-modal="true" aria-label="Add New Customer" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Add New Customer</h3>
-              <button className="btn-icon" onClick={() => setShowModal(false)}>
-                x
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Customer Name*</label>
-                <input
-                  className="form-input"
-                  required
-                  value={formData.customer_name}
-                  onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Nickname (internal)</label>
-                <input className="form-input" maxLength={80} value={formData.nickname}
-                  onChange={(e) => setFormData({ ...formData, nickname: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Phone Number*</label>
-                <input
-                  className="form-input"
-                  required
-                  value={formData.phone_number}
-                  onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Alternative Phone Number</label>
-                <input
-                  className="form-input"
-                  value={formData.alternative_phone_number}
-                  onChange={(e) => setFormData({ ...formData, alternative_phone_number: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Location</label>
-                <input
-                  className="form-input"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Map Location (URL)</label>
-                <input
-                  className="form-input"
-                  placeholder="Google Maps link"
-                  value={formData.map_location}
-                  onChange={(e) => setFormData({ ...formData, map_location: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Site Type</label>
-                <select
-                  className="form-input"
-                  value={formData.site_type}
-                  onChange={(e) => setFormData({ ...formData, site_type: e.target.value })}
-                >
-                  <option value="">Select Type</option>
-                  <option value="Residential">Residential</option>
-                  <option value="Commercial">Commercial</option>
-                  <option value="Industrial">Industrial</option>
-                </select>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                Cancel
-              </button>
-              <button type="button" className="btn btn-primary" onClick={handleAddCustomer} disabled={saving}>
-                {saving ? 'Saving...' : 'Create Customer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {showModal && <AddCustomerDialog data={formData} onChange={setFormData} onSubmit={handleAddCustomer} onClose={() => setShowModal(false)} saving={saving} error={addError} />}
 
       {showEditModal && (
         <div className="modal-overlay" onClick={() => setShowEditModal(null)}>
