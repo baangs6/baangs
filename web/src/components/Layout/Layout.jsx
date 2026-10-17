@@ -1,13 +1,13 @@
 import { NavLink, useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../../context/useAuth';
-import { notificationsApi } from '../../api';
-import { formatDateTime } from '../../utils/dateFormat';
+import NotificationCenter from './NotificationCenter';
+import { Bell } from 'lucide-react';
 import { Avatar } from '@/components/base/avatar/avatar';
 import {
   MdDashboard, MdWork, MdPeople, MdAttachMoney,
   MdLocationOn, MdLogout, MdSupervisorAccount,
-  MdEngineering, MdListAlt, MdInventory, MdAssessment, MdNotifications, MdTaskAlt, MdSchool
+  MdEngineering, MdListAlt, MdInventory, MdAssessment, MdTaskAlt, MdSchool
 } from 'react-icons/md';
 
 export default function Layout() {
@@ -16,7 +16,6 @@ export default function Layout() {
   const location = useLocation();
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
-  const [notifications, setNotifications] = useState([]);
 
   const handleLogout = async () => {
     await logout();
@@ -28,123 +27,12 @@ export default function Layout() {
   const isSales = user?.role === 'sales';
   const canUseTasks = isAdmin || isManager || isSales;
 
-  const prevNotifIds = useState(() => new Set())[0];
-
-  // Request browser notification permission on mount
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    let isFirstLoad = true;
-    const load = async () => {
-      try {
-        const [listRes, countRes] = await Promise.all([
-          notificationsApi.list(20),
-          notificationsApi.unreadCount(),
-        ]);
-        if (!mounted) return;
-        const incoming = listRes.data || [];
-        setNotifications(incoming);
-        setNotifCount(Number(countRes.data?.count || 0));
-
-        // Fire browser notifications for newly arrived unread items (skip first load)
-        if (!isFirstLoad && 'Notification' in window && Notification.permission === 'granted') {
-          incoming.forEach((n) => {
-            if (!n.is_read && !prevNotifIds.has(n.notification_id)) {
-              const browserNotif = new Notification(n.title || 'Baangs', {
-                body: n.message,
-                icon: '/favicon.ico',
-                tag: n.notification_id,
-              });
-              browserNotif.onclick = () => {
-                window.focus();
-                if (n.meta?.job_id) navigate(`/jobs/${encodeURIComponent(n.meta.job_id)}`);
-              };
-            }
-          });
-        }
-        isFirstLoad = false;
-        incoming.forEach((n) => prevNotifIds.add(n.notification_id));
-      } catch {
-        // no-op
-      }
-    };
-    load();
-    const timer = setInterval(load, 15000);
-    return () => {
-      mounted = false;
-      clearInterval(timer);
-    };
-  }, []);
-
-  const openNotification = async (n) => {
-    if (!n.is_read) {
-      try {
-        await notificationsApi.markRead(n.notification_id);
-        setNotifications((prev) => prev.map((x) => x.notification_id === n.notification_id ? { ...x, is_read: true } : x));
-        setNotifCount((c) => Math.max(0, c - 1));
-      } catch {
-        // no-op
-      }
-    }
-    const jobId = n?.meta?.job_id;
-    if (jobId) navigate(`/jobs/${jobId}`);
-    const taskId = n?.meta?.task_id;
-    if (taskId) navigate('/tasks');
-    setNotifOpen(false);
-  };
-
-  const clearNotifications = async () => {
-    try {
-      await notificationsApi.clear();
-      setNotifications([]);
-      setNotifCount(0);
-      prevNotifIds.clear();
-    } catch {
-      // no-op
-    }
-  };
-
   return (
     <div className={`app-layout${location.pathname === '/dashboard' ? ' dashboard-shell' : location.pathname === '/jobs' || (location.pathname.startsWith('/jobs/') && location.pathname !== '/jobs/create') ? ' jobs-shell' : location.pathname.startsWith('/customers') ? ' customers-shell' : location.pathname === '/quotations' ? ' quotations-shell' : location.pathname === '/billing' ? ' billing-shell' : location.pathname === '/attendance' ? ' attendance-shell' : ''}`}>
       <aside className="sidebar">
         <div className="sidebar-logo">
           <h1><span className="brand-mark">B</span> Baangs</h1>
           <span>CCTV Field Service</span>
-          <div className="notification-wrap">
-            <button className="notification-trigger" onClick={() => setNotifOpen((v) => !v)}>
-              <span><MdNotifications /> Notifications</span>
-              {notifCount > 0 ? <span className="badge badge-pending">{notifCount}</span> : null}
-            </button>
-            {notifOpen && (
-              <div className="notification-menu">
-                {notifications.length > 0 && (
-                  <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
-                    <button className="btn btn-secondary btn-sm" onClick={clearNotifications}>
-                      Clear All
-                    </button>
-                  </div>
-                )}
-                {notifications.length === 0 ? (
-                  <div className="notification-empty">No notifications</div>
-                ) : notifications.map((n) => (
-                  <button
-                    key={n.notification_id}
-                    onClick={() => openNotification(n)}
-                    className={`notification-item ${n.is_read ? '' : 'unread'}`}
-                  >
-                    <strong>{n.title}</strong>
-                    <p>{n.message}</p>
-                    <small>{formatDateTime(n.created_at)}</small>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
         <nav className="sidebar-nav">
@@ -220,6 +108,7 @@ export default function Layout() {
       <main className="main-content">
         <div className="app-topbar">
           <div className="topbar-spacer" />
+          <button className="alerts-topbar-button" aria-label="Open notification drawer" aria-expanded={notifOpen} title="Notifications" onClick={() => setNotifOpen(true)}><Bell size={19} />{notifCount > 0 && <span>{notifCount}</span>}</button>
           <div className="topbar-profile">
             <Avatar
               key={user?.profile_photo_url || user?.user_id}
@@ -243,6 +132,7 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+      <NotificationCenter key={user.user_id} user={user} open={notifOpen} onClose={() => setNotifOpen(false)} onCount={setNotifCount} />
     </div>
   );
 }

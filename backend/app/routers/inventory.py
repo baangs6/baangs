@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
 from typing import List, Dict, Any
 import re
+import csv
+import io
+from pydantic import ValidationError
 from ..models.inventory import (
     InventoryItemCreate,
     InventoryItemUpdate,
@@ -28,7 +31,7 @@ async def price_history(barcode: str, _=Depends(require_admin_or_manager)):
         raise HTTPException(404, 'Item not found')
     sales = await db.job_inventory_usage.find({'barcode': barcode, 'unit_selling_price': {'$ne': None}}).sort('usage_datetime', -1).limit(3).to_list(3)
     purchases = await db.inventory_transactions.find({'barcode': barcode,
-        'transaction_type': {'$in': ['stock_added', 'opening_stock']},
+        'transaction_type': {'$in': ['stock_added', 'opening_stock', 'STOCK_IN']},
         'purchase_price': {'$ne': None}}).sort('transaction_datetime', -1).limit(3).to_list(3)
     return {'barcode': barcode, 'current_selling_price': item.get('selling_price'),
         'current_purchase_price': item.get('purchase_price'),
@@ -111,7 +114,7 @@ async def get_summary(current_user: dict = Depends(require_admin)):
 
 
 @router.get("/transactions")
-async def get_transactions(limit: int = 100, current_user: dict = Depends(require_admin)):
+async def get_transactions(limit: int = Query(100, ge=1, le=1000), current_user: dict = Depends(require_admin)):
     db = get_db()
     txns = await db.inventory_transactions.find().sort("transaction_datetime", -1).limit(limit).to_list(limit)
     res = []
@@ -230,10 +233,6 @@ async def create_item(data: InventoryItemCreate, current_user: dict = Depends(re
     item_doc["_id"] = item_id
     item_doc["barcode"] = barcode 
     
-    # Ensure tax_percentage defaults to 18 if 0
-    if item_doc.get("tax_percentage") == 0:
-        item_doc["tax_percentage"] = 18.0
-        
     item_doc["current_quantity"] = data.opening_quantity
     item_doc["created_at"] = now_ist_str()
     item_doc["updated_at"] = now_ist_str()
@@ -267,6 +266,10 @@ async def bulk_upload_items(items: List[InventoryItemCreate], current_user: dict
     errors = []
     
     for idx, data in enumerate(items):
+        if not data.barcode:
+            await create_item(data, current_user)
+            success_count += 1
+            continue
         existing = await db.inventory.find_one({"barcode": data.barcode})
         if existing:
             errors.append({"index": idx, "barcode": data.barcode, "error": "Barcode exists"})
@@ -301,6 +304,33 @@ async def bulk_upload_items(items: List[InventoryItemCreate], current_user: dict
     return {"success": success_count, "errors": errors}
 
 
+@router.post("/import-csv")
+async def import_inventory_csv(file: UploadFile = File(...), current_user: dict = Depends(require_admin)):
+    content = await file.read(2 * 1024 * 1024 + 1)
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(400, "CSV file must be at most 2 MB")
+    try:
+        reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig")), strict=True)
+        if not {"item_name", "model_number"}.issubset(reader.fieldnames or []):
+            raise HTTPException(400, "CSV requires item_name and model_number headers")
+        entries = []
+        for index, row in enumerate(reader):
+            if index >= 1000:
+                raise HTTPException(400, "Import at most 1,000 items at a time")
+            if None in row:
+                raise HTTPException(400, f"Malformed CSV row {index + 2}")
+            values = {k: v for k, v in row.items() if v not in (None, "")}
+            values.setdefault("unit_type", "Pcs")
+            values["serial_numbers"] = [s.strip() for s in (values.get("serial_numbers") or values.get("serial_number") or "").split("|") if s.strip()]
+            values["serial_number"] = ", ".join(values["serial_numbers"])
+            entries.append(InventoryItemCreate(**values))
+        if not entries:
+            raise HTTPException(400, "CSV has no item rows")
+    except (UnicodeDecodeError, csv.Error, ValidationError, TypeError, ValueError) as exc:
+        raise HTTPException(400, "Invalid CSV data. Check numeric fields and the template.") from exc
+    return await bulk_upload_items(entries, current_user)
+
+
 @router.put("/{barcode}", response_model=InventoryItemInDB)
 async def update_item(barcode: str, data: InventoryItemUpdate, current_user: dict = Depends(require_admin)):
     db = get_db()
@@ -333,21 +363,37 @@ async def deactivate_item(barcode: str, current_user: dict = Depends(require_adm
 
 
 @router.post("/{barcode}/adjust", response_model=Dict[str, Any])
-async def adjust_stock(barcode: str, data: Dict[str, Any], current_user: dict = Depends(require_admin)):
+async def adjust_stock(barcode: str, data: InventoryAdjustmentRequest, current_user: dict = Depends(require_admin)):
+    data = data.model_dump()
     db = get_db()
     item = await db.inventory.find_one({"barcode": barcode})
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
+    if item.get("status") != "active":
+        raise HTTPException(400, "Only active inventory can be adjusted")
         
-    quantity_changed = float(data.get("quantity_changed", 0))
+    quantity_changed = data["quantity_changed"]
+    if not quantity_changed:
+        raise HTTPException(400, "Quantity cannot be zero")
+    kind = data.get("transaction_type")
+    if (kind in {"STOCK_OUT", "stock_used", "STOCK_USED"} and quantity_changed > 0) or (kind in {"STOCK_IN", "stock_added"} and quantity_changed < 0):
+        raise HTTPException(400, "Quantity sign does not match movement type")
+    serials = [serial.strip() for serial in data["serial_numbers"] if serial.strip()]
+    if len(serials) != len(set(serials)) or (serials and len(serials) != abs(quantity_changed)):
+        raise HTTPException(400, "Selected serial count must equal quantity, with no duplicates")
+    known = item.get("serial_numbers") or [s.strip() for s in (item.get("serial_number") or "").split(",") if s.strip()]
+    if quantity_changed < 0 and any(serial not in known for serial in serials):
+        raise HTTPException(400, "Selected serial is not recorded for this item")
     new_quantity = item["current_quantity"] + quantity_changed
     if new_quantity < 0:
         raise HTTPException(status_code=400, detail="Adjustment would result in negative stock")
         
-    await db.inventory.update_one(
-        {"barcode": barcode},
-        {"$set": {"current_quantity": new_quantity, "updated_at": now_ist_str()}}
+    result = await db.inventory.find_one_and_update(
+        {"barcode": barcode, "current_quantity": item["current_quantity"]},
+        {"$inc": {"current_quantity": quantity_changed}, "$set": {"updated_at": now_ist_str()}}, return_document=True
     )
+    if not result:
+        raise HTTPException(409, "Stock changed. Refresh the item before retrying.")
     
     # Log transaction
     txn_type = data.get("transaction_type") or (TransactionType.STOCK_ADDED if quantity_changed >= 0 else TransactionType.STOCK_ADJUSTED)
@@ -355,7 +401,8 @@ async def adjust_stock(barcode: str, data: Dict[str, Any], current_user: dict = 
         "_id": generate_transaction_id(),
         "inventory_item_id": str(item["_id"]),
         "barcode": barcode,
-        "serial_number": item.get("serial_number"),
+        "serial_number": ", ".join(serials) if serials else None,
+        "serial_numbers": serials,
         "transaction_type": txn_type,
         "purchase_price": item.get("purchase_price"),
         "selling_price": item.get("selling_price"),
@@ -410,6 +457,7 @@ async def get_stock_summary(current_user: dict = Depends(require_admin_or_manage
         model_map[model_num]["initial_quantity"] += item.get("opening_quantity", 0)
         model_map[model_num]["total_transactions"] += total_txns
         model_map[model_num]["current_stock"] += item.get("current_quantity", 0)
+        model_map[model_num]["minimum_stock_level"] = max(model_map[model_num]["minimum_stock_level"], item.get("minimum_stock_level", 0))
     
     report = []
     for data in model_map.values():
@@ -435,8 +483,10 @@ async def get_sold_details(current_user: dict = Depends(require_admin_or_manager
         item = await db.inventory.find_one({"barcode": t["barcode"]})
         if item:
             t["item_name"] = item["item_name"]
-            t["purchase_price"] = item["purchase_price"]
-            t["selling_price"] = item["selling_price"]
+            if t.get("purchase_price") is None:
+                t["purchase_price"] = item["purchase_price"]
+            if t.get("selling_price") is None:
+                t["selling_price"] = item["selling_price"]
         qty = abs(float(t.get("quantity_changed", 0) or 0))
         t["sold_price"] = float(t.get("selling_price", 0) or 0)
         t["sale_amount"] = float(t.get("amount_paid", 0) or 0) or round(qty * t["sold_price"], 2)

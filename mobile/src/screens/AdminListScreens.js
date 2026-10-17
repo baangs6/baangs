@@ -189,8 +189,13 @@ export function InventoryScreen() {
   const [qty, setQty] = React.useState('');
   const items = state.items.filter((i) => `${i.item_name || i.name || ''} ${i.model_number || ''} ${i.serial_number || i.barcode || ''}`.toLowerCase().includes(search.toLowerCase()));
   const adjust = async () => {
+    const quantity = Number(qty);
+    if (!Number.isFinite(quantity) || quantity === 0) {
+      Alert.alert('Invalid quantity', 'Enter a non-zero stock adjustment.');
+      return;
+    }
     try {
-      await inventoryApi.adjust(adjusting.barcode || adjusting.serial_number, { quantity: Number(qty), reason: 'Mobile admin stock adjustment' });
+      await inventoryApi.adjust(adjusting.barcode || adjusting.serial_number, { quantity_changed: quantity, remarks: 'Mobile admin stock adjustment' });
       setAdjusting(null);
       setQty('');
       state.load();
@@ -207,7 +212,7 @@ export function InventoryScreen() {
           <Text style={styles.meta}>Model: {i.model_number || '-'}</Text>
           <Text style={styles.meta}>Serial: {i.serial_number || i.barcode || '-'}</Text>
           <Text style={styles.meta}>Status: {i.status || '-'}</Text>
-          <Text style={styles.status}>Qty: {i.quantity ?? i.current_stock ?? 0}</Text>
+          <Text style={styles.status}>Qty: {i.current_quantity ?? i.quantity ?? i.current_stock ?? 0}</Text>
         </TouchableOpacity>
       ))}
       <Modal transparent animationType="fade" visible={!!adjusting} onRequestClose={() => setAdjusting(null)}>
@@ -215,7 +220,7 @@ export function InventoryScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Adjust Stock</Text>
             <Text style={styles.cardTitle}>{adjusting?.item_name || adjusting?.name}</Text>
-            <Text style={styles.meta}>Current Qty: {adjusting?.quantity ?? adjusting?.current_stock ?? 0}</Text>
+            <Text style={styles.meta}>Current Qty: {adjusting?.current_quantity ?? adjusting?.quantity ?? adjusting?.current_stock ?? 0}</Text>
             <FormInput styles={styles} colors={colors} label="Adjustment Qty" value={qty} onChangeText={setQty} keyboardType="numeric" />
             <View style={styles.actionRow}>
               <TouchableOpacity style={styles.smallBtn} onPress={adjust}><Text style={styles.smallBtnText}>Apply</Text></TouchableOpacity>

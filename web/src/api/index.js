@@ -198,22 +198,26 @@ export const exportApi = {
 export const inventoryApi = {
   priceHistory: barcode => api.get(`/inventory/${encodeURIComponent(barcode)}/price-history`),
   list: () => api.get('/inventory/'),
-  get: (barcode) => api.get(`/inventory/${barcode}`),
+  get: (barcode) => api.get(`/inventory/${encodeURIComponent(barcode)}`),
   summary: () => api.get('/inventory/summary'),
   transactions: (limit=100) => api.get('/inventory/transactions', { params: { limit } }),
   create: (data) => api.post('/inventory/', data),
-  update: (barcode, data) => api.put(`/inventory/${barcode}`, data),
-  adjust: (barcode, data) => api.post(`/inventory/${barcode}/adjust`, data),
+  update: (barcode, data) => api.put(`/inventory/${encodeURIComponent(barcode)}`, data),
+  adjust: (barcode, data) => api.post(`/inventory/${encodeURIComponent(barcode)}/adjust`, data),
   bulkUpload: (items) => api.post('/inventory/bulk', items),
-  deactivate: (barcode) => api.delete(`/inventory/${barcode}`),
+  importCsv: file => { const data = new FormData(); data.append('file', file); return api.post('/inventory/import-csv', data); },
+  deactivate: (barcode) => api.delete(`/inventory/${encodeURIComponent(barcode)}`),
   stockSummary: () => api.get('/inventory/reports/stock-summary'),
   soldDetails: () => api.get('/inventory/reports/sold-details'),
 };
 
 export const notificationsApi = {
-  list: (limit = 30) => api.get('/notifications/', { params: { limit } }),
+  list: (limit = 30, skip = 0) => api.get('/notifications/', { params: { limit, skip } }),
   unreadCount: () => api.get('/notifications/unread-count'),
-  markRead: (id) => api.patch(`/notifications/${id}/read`),
+  markRead: (id) => api.patch(`/notifications/${encodeURIComponent(id)}/read`),
+  markUnread: id => api.patch(`/notifications/${encodeURIComponent(id)}/unread`),
+  markAllRead: () => api.patch('/notifications/read-all'),
+  clearSelected: ids => api.post('/notifications/clear-selected', { notification_ids: ids }),
   clear: () => api.delete('/notifications/clear'),
 };
 

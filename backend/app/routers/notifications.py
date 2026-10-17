@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
 from ..auth.utils import get_current_user
 from ..database import get_db
@@ -13,6 +13,10 @@ class PushTokenRegister(BaseModel):
     token: str
     device_id: str | None = None
     platform: str | None = None
+
+
+class NotificationSelection(BaseModel):
+    notification_ids: List[str] = Field(min_length=1, max_length=200)
 
 
 def _fmt(n: dict) -> dict:
@@ -40,20 +44,38 @@ async def _is_visible_notification(db, notification: dict, current_user: dict) -
 
 
 async def _visible_notifications(db, rows: list[dict], current_user: dict) -> list[dict]:
-    visible = []
-    for row in rows:
-        if await _is_visible_notification(db, row, current_user):
-            visible.append(row)
-    return visible
+    if current_user.get("role") != "technician":
+        return rows
+    job_ids = list({(row.get("meta") or {}).get("job_id") for row in rows if (row.get("meta") or {}).get("job_id")})
+    jobs = await db.jobs.find({"job_id": {"$in": job_ids}}, {"job_id": 1, "assigned_staff_id": 1, "additional_staff_ids": 1}).to_list(None)
+    accessible = {job["job_id"] for job in jobs if is_assigned_to_job(job, current_user.get("staff_id"))}
+    return [row for row in rows if not (row.get("meta") or {}).get("job_id") or (row.get("meta") or {}).get("job_id") in accessible]
 
 
 @router.get("/", response_model=List[dict])
-async def list_notifications(limit: int = Query(30, ge=1, le=200), current_user: dict = Depends(get_current_user)):
+async def list_notifications(limit: int = Query(30, ge=1, le=200), skip: int = Query(0, ge=0, le=100000), current_user: dict = Depends(get_current_user)):
     db = get_db()
-    fetch_limit = limit if current_user.get("role") != "technician" else min(limit * 5, 500)
-    rows = await db.notifications.find({"user_id": current_user["user_id"]}).sort("created_at", -1).limit(fetch_limit).to_list(fetch_limit)
-    visible = await _visible_notifications(db, rows, current_user)
-    return [_fmt(r) for r in visible[:limit]]
+    cursor = db.notifications.find({"user_id": current_user["user_id"]}).sort("created_at", -1)
+    if current_user.get("role") == "technician":
+        rows = await cursor.to_list(None)
+        visible = await _visible_notifications(db, rows, current_user)
+        return [_fmt(r) for r in visible[skip:skip + limit]]
+    rows = await cursor.skip(skip).limit(limit).to_list(limit)
+    return [_fmt(row) for row in rows]
+
+
+@router.patch("/read-all")
+async def mark_all_read(current_user: dict = Depends(get_current_user)):
+    db = get_db()
+    await db.notifications.update_many({"user_id": current_user["user_id"], "is_read": False}, {"$set": {"is_read": True}})
+    return {"message": "All notifications marked as read"}
+
+
+@router.post("/clear-selected")
+async def clear_selected(data: NotificationSelection, current_user: dict = Depends(get_current_user)):
+    db = get_db()
+    result = await db.notifications.delete_many({"user_id": current_user["user_id"], "notification_id": {"$in": data.notification_ids}})
+    return {"deleted_count": result.deleted_count}
 
 
 @router.get("/unread-count")
@@ -63,7 +85,7 @@ async def unread_count(current_user: dict = Depends(get_current_user)):
         rows = await db.notifications.find({
             "user_id": current_user["user_id"],
             "is_read": False,
-        }).sort("created_at", -1).limit(1000).to_list(1000)
+        }).sort("created_at", -1).to_list(None)
         visible = await _visible_notifications(db, rows, current_user)
         return {"count": len(visible)}
 
@@ -117,6 +139,18 @@ async def mark_read(notification_id: str, current_user: dict = Depends(get_curre
     if not row:
         raise HTTPException(status_code=404, detail="Notification not found")
     return {"message": "Marked as read"}
+
+
+@router.patch("/{notification_id}/unread")
+async def mark_unread(notification_id: str, current_user: dict = Depends(get_current_user)):
+    db = get_db()
+    row = await db.notifications.find_one_and_update(
+        {"notification_id": notification_id, "user_id": current_user["user_id"]},
+        {"$set": {"is_read": False}}, return_document=True,
+    )
+    if not row:
+        raise HTTPException(404, "Notification not found")
+    return {"message": "Marked as unread"}
 
 
 @router.delete("/clear")

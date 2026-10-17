@@ -1,0 +1,10 @@
+import { useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+export default function InventoryTable({ title, rows, columns, resetKey = '' }) {
+  const [pagination, setPagination] = useState({ key: '', page: 1, size: 10 });
+  const pages = Math.max(1, Math.ceil(rows.length / pagination.size));
+  const page = Math.min(pagination.key === resetKey ? pagination.page : 1, pages);
+  const start = (page - 1) * pagination.size;
+  return <div className="stock-table-section"><div className="stock-table-wrap"><table aria-label={title}><thead><tr>{columns.map(column => <th key={column.label}>{column.label}</th>)}</tr></thead><tbody>{rows.slice(start, start + pagination.size).map((row, index) => <tr key={row._id || row.barcode || row.model_number || index}>{columns.map(column => <td key={column.label}>{column.render ? column.render(row) : row[column.field] ?? '-'}</td>)}</tr>)}</tbody></table>{!rows.length && <p className="stock-empty">No matching records</p>}</div><footer className="stock-pagination"><span>{rows.length ? `${start + 1}-${Math.min(start + pagination.size, rows.length)}` : 0} of {rows.length} records</span><div><label>Rows<select aria-label={`${title} rows per page`} value={pagination.size} onChange={event => setPagination({ key: resetKey, page: 1, size: Number(event.target.value) })}>{[10, 25, 50].map(size => <option key={size}>{size}</option>)}</select></label><button className="btn-icon" aria-label={`Previous ${title} page`} disabled={page === 1} onClick={() => setPagination({ ...pagination, key: resetKey, page: page - 1 })}><ChevronLeft size={17} /></button><label>Page<select aria-label={`${title} page`} value={page} onChange={event => setPagination({ ...pagination, key: resetKey, page: Number(event.target.value) })}>{Array.from({ length: pages }, (_, i) => <option key={i + 1}>{i + 1}</option>)}</select>of {pages}</label><button className="btn-icon" aria-label={`Next ${title} page`} disabled={page === pages} onClick={() => setPagination({ ...pagination, key: resetKey, page: page + 1 })}><ChevronRight size={17} /></button></div></footer></div>;
+}
