@@ -1,14 +1,16 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { attendanceApi, staffApi, exportApi, leavesApi } from '../../api';
-import { MdDelete, MdDownload, MdLocationOn, MdPayment, MdPhoto } from 'react-icons/md';
-import { formatDate } from '../../utils/dateFormat';
+import { MdDelete, MdDownload, MdPayment } from 'react-icons/md';
+import { Fingerprint, CalendarDays, Wallet, Fuel } from 'lucide-react';
 import DateRangePicker from '../../components/DateRangePicker';
+import AttendanceLog from './AttendanceLog';
+import './AttendanceReport.css';
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export default function AttendanceReport() {
@@ -29,22 +31,30 @@ export default function AttendanceReport() {
   const [selectedAllowances, setSelectedAllowances] = useState([]);
   const [payForm, setPayForm] = useState({ paid_amount: '', payment_remark: '' });
   const [rowBusy, setRowBusy] = useState('');
+  const [attendanceError, setAttendanceError] = useState('');
+  const requestId = useRef(0);
+  const photoDialog = useRef(null);
+  useEffect(() => { if (viewPhoto) photoDialog.current?.showModal(); }, [viewPhoto]);
 
   const fetchRecords = useCallback(async () => {
+    const id = ++requestId.current;
     setLoading(true);
+    setAttendanceError('');
     try {
       const params = {};
       if (filters.staff_id) params.staff_id = filters.staff_id;
       if (filters.date_from) params.date_from = filters.date_from;
       if (filters.date_to) params.date_to = filters.date_to;
       const res = await attendanceApi.list(params);
-      setRecords(res.data);
+      if (id === requestId.current) setRecords(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      if (id === requestId.current) setAttendanceError(typeof error.response?.data?.detail === 'string' ? error.response.data.detail : 'Unable to load attendance. Please try again.');
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
   }, [filters]);
 
-  useEffect(() => { staffApi.list().then(r => setStaff(r.data)); }, []);
+  useEffect(() => { staffApi.list().then(r => setStaff(r.data)).catch(console.error); }, []);
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
   useEffect(() => {
     leavesApi.list({ status: 'pending' }).then((r) => setLeaveRows(r.data || [])).catch(console.error);
@@ -194,50 +204,48 @@ export default function AttendanceReport() {
   };
 
   return (
-    <div className="animate-fade">
+    <div className="animate-fade attendance-report">
       <div className="page-header">
         <div className="page-header-left">
           <h2>Attendance Report</h2>
-          <p>{records.length} records</p>
+          <p>Staff check-ins, locations, leave and daily expenses</p>
         </div>
         <button className="btn btn-secondary" onClick={handleExport}><MdDownload /> Export CSV</button>
       </div>
 
-      <div className="card" style={{ marginBottom: 16, padding: 12 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <div className="attendance-nav" role="tablist" aria-label="Attendance views">
           <button
-            className={activeTab === 'attendance' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+            role="tab" aria-selected={activeTab === 'attendance'}
             onClick={() => setActiveTab('attendance')}
           >
-            Attendance Log
+            <Fingerprint size={18} /> Attendance Log <span>{records.length}</span>
           </button>
           <button
-            className={activeTab === 'leave' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+            role="tab" aria-selected={activeTab === 'leave'}
             onClick={() => setActiveTab('leave')}
           >
-            Leave History
+            <CalendarDays size={18} /> Leave History
           </button>
           <button
-            className={activeTab === 'payroll' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+            role="tab" aria-selected={activeTab === 'payroll'}
             onClick={() => setActiveTab('payroll')}
           >
-            Payroll
+            <Wallet size={18} /> Payroll
           </button>
           <button
-            className={activeTab === 'allowance' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+            role="tab" aria-selected={activeTab === 'allowance'}
             onClick={() => setActiveTab('allowance')}
           >
-            Daily Allowance
+            <Fuel size={18} /> Daily Allowance
           </button>
-        </div>
       </div>
 
       {(activeTab === 'attendance' || activeTab === 'allowance') && (
         <div className="filter-bar">
-          <select className="form-select" style={{ width: 200 }} value={filters.staff_id}
+          <select aria-label="Filter by staff" className="form-select" style={{ width: 200 }} value={filters.staff_id}
             onChange={e => setFilters({ ...filters, staff_id: e.target.value })}>
             <option value="">All Staff</option>
-            {staff.map(s => <option key={s.staff_id} value={s.staff_id}>{s.name}</option>)}
+            {staff.map(s => <option key={s.staff_id} value={s.staff_id}>{s.name || s.full_name || s.staff_id}</option>)}
           </select>
           <DateRangePicker start={filters.date_from} end={filters.date_to}
             onChange={(date_from, date_to) => setFilters({ ...filters, date_from, date_to })} />
@@ -247,7 +255,7 @@ export default function AttendanceReport() {
 
       {activeTab === 'payroll' ? (
         <>
-          <div className="card" style={{ marginBottom: 16, padding: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="card" style={{ marginBottom: 16, padding: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
             <input
               className="form-input"
               type="month"
@@ -377,7 +385,7 @@ export default function AttendanceReport() {
 
           <div className="card" style={{ marginBottom: 16 }}>
             <h3 className="card-title" style={{ marginBottom: 12 }}>Pay Selected Expenses</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
+            <div className="attendance-payment-grid">
               <div>
                 <div className="detail-label">Selected</div>
                 <div style={{ fontWeight: 700 }}>{selectedAllowances.length} rows · ₹{selectedBalance.toFixed(2)} balance</div>
@@ -585,87 +593,18 @@ export default function AttendanceReport() {
             )}
           </div>
         </>
-      ) : loading ? (
-        <div className="loading-center"><div className="spinner" /></div>
-      ) : records.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">📍</div>
-          <h3>No attendance records</h3>
-          <p>Technicians use the mobile app to check in/out</p>
-        </div>
-      ) : (
-        <div className="table-wrapper">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Staff</th>
-                <th>Check-In</th>
-                <th>Check-Out</th>
-                <th>Location (In)</th>
-                <th>Remarks</th>
-                <th>Status</th>
-                <th>Photos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map(r => (
-                <tr key={r.attendance_id}>
-                  <td style={{ fontWeight: 600 }}>{formatDate(r.date)}</td>
-                  <td>{r.staff_name || r.staff_id}</td>
-                  <td style={{ fontSize: '0.8rem', fontFamily: 'monospace', color: 'var(--color-success)' }}>
-                    {r.checkin_time?.slice(11, 19) || '—'}
-                  </td>
-                  <td style={{ fontSize: '0.8rem', fontFamily: 'monospace', color: r.checkout_time ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>
-                    {r.checkout_time?.slice(11, 19) || '—'}
-                  </td>
-                  <td>
-                    {r.checkin_latitude ? (
-                      <a href={`https://maps.google.com/?q=${r.checkin_latitude},${r.checkin_longitude}`}
-                        target="_blank" rel="noopener noreferrer"
-                        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem' }}>
-                        <MdLocationOn style={{ color: 'var(--color-accent)' }} />
-                        {r.checkin_latitude?.toFixed(4)}, {r.checkin_longitude?.toFixed(4)}
-                      </a>
-                    ) : '—'}
-                  </td>
-                  <td style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', maxWidth: 200 }}>{r.remarks || '—'}</td>
-                  <td>
-                    {r.is_checked_out
-                      ? <span className="badge badge-complete">Checked Out</span>
-                      : <span className="badge badge-in_progress">Active</span>}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {r.checkin_photo_url && (
-                        <button className="btn btn-secondary btn-sm" onClick={() => setViewPhoto(r.checkin_photo_url)} title="Check-in photo">
-                          <MdPhoto /> In
-                        </button>
-                      )}
-                      {r.checkout_photo_url && (
-                        <button className="btn btn-secondary btn-sm" onClick={() => setViewPhoto(r.checkout_photo_url)} title="Check-out photo">
-                          <MdPhoto /> Out
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      ) : <AttendanceLog records={records} loading={loading} error={attendanceError} onRetry={fetchRecords} onPhoto={setViewPhoto} />}
 
       {/* Photo Viewer Modal */}
       {viewPhoto && (
-        <div className="modal-overlay" onClick={() => setViewPhoto(null)}>
+        <dialog ref={photoDialog} className="attendance-photo-dialog" aria-label="Attendance photo" onCancel={() => setViewPhoto(null)} onClick={event => { if (event.target === event.currentTarget) setViewPhoto(null); }}>
           <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', maxWidth: 500 }}>
-            <img src={viewPhoto} alt="Attendance photo" style={{ width: '100%', maxHeight: 500, objectFit: 'cover', display: 'block' }} />
+            <img src={viewPhoto} alt="Attendance photo" style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', display: 'block' }} />
             <div style={{ padding: 12, textAlign: 'center' }}>
               <button className="btn btn-secondary" onClick={() => setViewPhoto(null)}>Close</button>
             </div>
           </div>
-        </div>
+        </dialog>
       )}
     </div>
   );
