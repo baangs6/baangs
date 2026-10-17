@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, createElement, useRef } from 'react';
-import { Animated, PanResponder, View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator, Platform } from 'react-native';
+import { Animated, PanResponder, View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator, Platform } from 'react-native';
+import Icon from '@expo/vector-icons/MaterialIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { jobsApi, lookupsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +19,7 @@ export default function JobsScreen({ navigation, route }) {
   const { user } = useAuth();
   const [jobs, setJobs] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [showFrom, setShowFrom] = useState(false);
@@ -136,6 +138,7 @@ export default function JobsScreen({ navigation, route }) {
     }
     if (filter !== 'all') res = res.filter(j => String(j.status || '').toLowerCase() === filter);
     if (serviceTypeFilter !== 'all') res = res.filter(j => j.work_type === serviceTypeFilter);
+    if (search.trim()) res = res.filter(j => [j.job_id, j.customer_name, j.customer_nickname, j.phone_number, j.location].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
     const position = new Map(jobOrder.map((id, index) => [id, index]));
     return [...res].sort((a, b) => {
       if (daysSort) {
@@ -144,7 +147,7 @@ export default function JobsScreen({ navigation, route }) {
       }
       return (position.get(a.job_id) ?? 99999) - (position.get(b.job_id) ?? 99999);
     });
-  }, [dateFilteredJobs, filter, serviceTypeFilter, assignedStaffId, jobOrder, daysSort]);
+  }, [dateFilteredJobs, filter, serviceTypeFilter, assignedStaffId, jobOrder, daysSort, search]);
 
   const moveJob = (jobId, direction) => {
     const visibleIds = filteredJobs.map((j) => j.job_id);
@@ -183,6 +186,7 @@ export default function JobsScreen({ navigation, route }) {
         )}
       </View>
       {!!error && <Text style={{ color: colors.danger, padding: spacing.base }} accessibilityRole="alert">{error}</Text>}
+      <View style={styles.searchRow}><Icon name="search" size={22} color={colors.textMuted} /><TextInput accessibilityLabel="Search jobs" placeholder="Customer, nickname or job number" placeholderTextColor={colors.textMuted} value={search} onChangeText={setSearch} style={styles.searchInput} /></View>
 
       {canPrioritize && (
         <View style={styles.priorityPanel}>
@@ -345,7 +349,7 @@ export default function JobsScreen({ navigation, route }) {
                   callPhone(job.phone_number);
                 }}
               >
-                <Text style={[styles.quickBtnText, { color: colors.success }]}>Call</Text>
+                <Icon name="call" size={18} color={colors.success} /><Text style={[styles.quickBtnText, { color: colors.success }]}>Call Client</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.quickBtn, { borderColor: colors.info }]}
@@ -354,7 +358,7 @@ export default function JobsScreen({ navigation, route }) {
                   openJobMap(job);
                 }}
               >
-                <Text style={[styles.quickBtnText, { color: colors.info }]}>Map</Text>
+                <Icon name="navigation" size={18} color={colors.info} /><Text style={[styles.quickBtnText, { color: colors.info }]}>Open Map</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.cardFooter}>
@@ -415,7 +419,9 @@ function getDaysOpen(job) {
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' },
-  header: { padding: spacing.xl, paddingBottom: spacing.md },
+  header: { padding: spacing.base, paddingBottom: spacing.md, flexDirection: 'row', gap: 12 },
+  searchRow: { marginHorizontal: 16, marginBottom: 16, paddingHorizontal: 12, minHeight: 48, flexDirection: 'row', gap: 8, alignItems: 'center', borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  searchInput: { flex: 1, color: colors.text, fontSize: 14, minHeight: 48 },
   headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
   headerSub: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   createBtn: {
@@ -457,13 +463,13 @@ const createStyles = (colors) => StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     marginHorizontal: spacing.base,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.base,
     borderRadius: radius.lg,
     padding: spacing.base,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs },
+  cardHeader: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   jobTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1 },
   rankBadge: {
     minWidth: 32,
@@ -479,7 +485,7 @@ const createStyles = (colors) => StyleSheet.create({
   jobId: { fontFamily: 'monospace', fontSize: 11, color: colors.accent, fontWeight: '700' },
   badge: { paddingHorizontal: 10, paddingVertical: 2, borderRadius: radius.full, borderWidth: 1 },
   badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
-  customerName: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 2 },
+  customerName: { fontSize: 19, fontWeight: '700', color: colors.text, marginBottom: 6 },
   detail: { fontSize: 13, color: colors.textSecondary, marginBottom: spacing.sm },
   quickActions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   quickBtn: {
@@ -489,9 +495,13 @@ const createStyles = (colors) => StyleSheet.create({
     paddingVertical: spacing.sm,
     alignItems: 'center',
     backgroundColor: colors.surface2,
+    minHeight: 48,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   quickBtnText: { fontSize: 12, fontWeight: '800' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardFooter: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', alignItems: 'center' },
   workType: { fontSize: 12, color: colors.textMuted, textTransform: 'capitalize' },
   priorityBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.full },
   priorityText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },

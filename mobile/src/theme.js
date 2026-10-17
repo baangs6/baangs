@@ -15,17 +15,17 @@ export const lightColors = {
   secondaryDim: 'rgba(100, 116, 139, 0.12)',
   info: '#3b82f6',
   infoDim: 'rgba(59, 130, 246, 0.1)',
-  success: '#10b981',
+  success: '#047857',
   successDim: 'rgba(16, 185, 129, 0.1)',
-  warning: '#f59e0b',
+  warning: '#b45309',
   warningDim: 'rgba(245, 158, 11, 0.1)',
   amber: '#f59e0b',
   amberDim: 'rgba(245, 158, 11, 0.1)',
   danger: '#ef4444',
   dangerDim: 'rgba(239, 68, 68, 0.1)',
-  text: '#1e293b',
+  text: '#131b2e',
   textSecondary: '#475569',
-  textMuted: '#94a3b8',
+  textMuted: '#64748b',
 };
 
 export const darkColors = {

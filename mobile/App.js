@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AppHeader from './src/components/AppHeader';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { AppState, Platform, View, ActivityIndicator, StatusBar, StyleSheet, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import * as Notifications from 'expo-notifications';
@@ -75,7 +76,6 @@ function RootApp() {
         <RootStack.Screen name="Reports" component={ReportsScreen} />
         <RootStack.Screen name="LearningLog" component={LearningLogScreen} options={{ title: 'Learning & Doubts' }} />
       </RootStack.Navigator>
-      <AdminOverlay />
     </View>
   );
 }
@@ -186,6 +186,8 @@ function MainTabs() {
   const { user } = useAuth();
   const bottomInset = Math.max(insets.bottom, 8);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [activeTab, setActiveTab] = useState('Dashboard');
+  const isAdmin = ['admin', 'manager', 'sales'].includes(String(user?.role || '').toLowerCase());
 
   useEffect(() => {
     let disposed = false;
@@ -247,16 +249,22 @@ function MainTabs() {
   }, []);
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View>
+      <AppHeader title={activeTab === 'Notifications' ? 'Alerts' : activeTab} admin={isAdmin} onProfile={() => navigationRef.current?.navigate('MainTabs', { screen: 'Settings' })} />
+      <AdminOverlay />
+    </View>
     <Tab.Navigator
+      screenListeners={({ route }) => ({ focus: () => setActiveTab(route.name) })}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarHideOnKeyboard: true,
         tabBarIcon: ({ color, size }) => {
           let iconName;
-          if (route.name === 'Dashboard') iconName = 'dashboard';
-          else if (route.name === 'Jobs') iconName = 'work';
+          if (route.name === 'Dashboard') iconName = 'grid-view';
+          else if (route.name === 'Jobs') iconName = 'work-outline';
           else if (route.name === 'Finance') iconName = 'account-balance-wallet';
-          else if (route.name === 'Notifications') iconName = 'notifications';
+          else if (route.name === 'Notifications') iconName = 'notifications-none';
           else if (route.name === 'Settings') iconName = 'settings';
           return <Icon name={iconName} size={size} color={color} />;
         },
@@ -265,11 +273,11 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 56 + bottomInset,
+          height: 60 + bottomInset,
           paddingBottom: bottomInset,
           paddingTop: 8,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' }
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginHorizontal: 0 }
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
@@ -278,10 +286,11 @@ function MainTabs() {
       <Tab.Screen
         name="Notifications"
         component={NotificationsScreen}
-        options={{ tabBarBadge: unreadCount > 0 ? unreadCount : undefined }}
+        options={{ tabBarLabel: 'Alerts', tabBarBadge: unreadCount > 0 ? unreadCount : undefined }}
       />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
+    </View>
   );
 }
 
@@ -368,7 +377,7 @@ function AppNavigator() {
 const overlayStyles = (colors, insets) => StyleSheet.create({
   menuFab: {
     position: 'absolute',
-    top: insets.top + 8,
+    top: 12,
     left: 12,
     width: 44,
     height: 44,
@@ -381,7 +390,7 @@ const overlayStyles = (colors, insets) => StyleSheet.create({
   },
   techFab: {
     position: 'absolute',
-    top: insets.top + 8,
+    top: 12,
     right: 12,
     height: 44,
     borderRadius: 22,
@@ -447,7 +456,7 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <AppNavigator />
+          <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1 }}><AppNavigator /></SafeAreaView>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>

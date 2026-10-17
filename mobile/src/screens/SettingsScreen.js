@@ -7,6 +7,8 @@ import { leavesApi } from '../api';
 import storage from '../utils/storage';
 import { subscribe } from '../utils/appEvents';
 import { configurePhoneNotifications, NOTIFICATION_STATUS_KEY } from '../utils/phoneNotifications';
+import Icon from '@expo/vector-icons/MaterialIcons';
+import Constants from 'expo-constants';
 
 function toYmd(date) {
   const y = date.getFullYear();
@@ -111,7 +113,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
       </View>
@@ -130,7 +132,7 @@ export default function SettingsScreen() {
 
       <Text style={styles.sectionTitle}>Account Actions</Text>
       <View style={styles.card}>
-        <Text style={styles.actionBtnTextNeutral}>Phone Notifications</Text>
+        <View style={styles.settingHeading}><Icon name="notifications-active" size={24} color={colors.accent} /><Text style={styles.actionBtnTextNeutral}>Phone Notifications</Text></View>
         <Text style={styles.detail}>{notificationStatus}</Text>
         <TouchableOpacity style={styles.themeSystemBtn} onPress={() => configurePhoneNotifications().catch(() => Alert.alert('Notification setup failed', 'Please check your connection.'))}>
           <Text style={styles.themeSystemText}>Retry Notification Setup</Text>
@@ -161,7 +163,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={handleLogout} activeOpacity={0.7}>
           <Text style={styles.actionBtnText}>Logout</Text>
-          <Text style={styles.actionIcon}>🚪</Text>
+          <Icon name="logout" size={22} color={colors.danger} />
         </TouchableOpacity>
       </View>
 
@@ -284,9 +286,8 @@ export default function SettingsScreen() {
               value={leaveForm.reason}
               onChangeText={(v) => setLeaveForm((p) => ({ ...p, reason: v }))}
             />
-            <TouchableOpacity style={styles.actionBtn} onPress={applyLeave} activeOpacity={0.75}>
-              <Text style={[styles.actionBtnText, { color: colors.accent }]}>{savingLeave ? 'Submitting...' : 'Apply Leave'}</Text>
-              <Text style={styles.actionIcon}>📝</Text>
+            <TouchableOpacity style={styles.applyBtn} onPress={applyLeave} disabled={savingLeave} activeOpacity={0.75}>
+              <Icon name="event-available" size={22} color="#fff" /><Text style={[styles.actionBtnText, { color: '#fff' }]}>{savingLeave ? 'Submitting...' : 'Apply Leave'}</Text>
             </TouchableOpacity>
           </View>
 
@@ -308,13 +309,15 @@ export default function SettingsScreen() {
         </>
       )}
 
-      <Text style={styles.versionText}>Baangs FSM Mobile v1.0.0</Text>
+      <Text style={styles.versionText}>Baangs FSM Mobile v{Constants.expoConfig?.version || '1.0.14'}</Text>
     </ScrollView>
   );
 }
 
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  settingHeading: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 12 },
+  applyBtn: { minHeight: 52, backgroundColor: colors.accent, borderRadius: radius.md, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 8 },
   header: { padding: spacing.xl, paddingBottom: spacing.md },
   headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
   profileCard: {
@@ -330,13 +333,15 @@ const createStyles = (colors) => StyleSheet.create({
   avatarText: { fontSize: 24, fontWeight: '800', color: colors.accent },
   profileInfo: { flex: 1 },
   name: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  role: { fontSize: 12, fontWeight: '800', color: colors.accent, marginBottom: 4, letterSpacing: 1 },
+  role: { fontSize: 12, fontWeight: '800', color: colors.accent, marginBottom: 4, letterSpacing: 0 },
   detail: { fontSize: 13, color: colors.textSecondary },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: spacing.xl, marginBottom: spacing.sm },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0, paddingHorizontal: spacing.base, marginBottom: spacing.sm },
   card: {
     backgroundColor: colors.surface, marginHorizontal: spacing.base,
     borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border,
     overflow: 'hidden',
+    padding: spacing.base,
+    marginBottom: spacing.lg,
   },
   actionBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.base },
   actionBtnText: { color: colors.danger, fontSize: 15, fontWeight: '600' },
@@ -378,7 +383,7 @@ const createStyles = (colors) => StyleSheet.create({
     letterSpacing: 0.5,
   },
   dropdownTrigger: {
-    minHeight: 42,
+    minHeight: 48,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',

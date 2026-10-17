@@ -14,6 +14,7 @@ import {
   Linking,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import Icon from '@expo/vector-icons/MaterialIcons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
 import * as Sharing from 'expo-sharing';
@@ -546,10 +547,10 @@ export default function JobDetailScreen({ route }) {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }}>
       {!!loadError && <Text style={{ color: colors.danger, padding: spacing.base }}>{loadError}</Text>}
       <View style={styles.jobHeader}>
-        <Text style={styles.jobId}>{job.job_id}</Text>
+        <View style={{ flex: 1 }}><Text style={styles.workOrderLabel}>WORK ORDER ID</Text><Text selectable style={styles.jobId}>{job.job_id}</Text></View>
         <View style={[styles.badge, { backgroundColor: `${STATUS_COLORS[job.status] || colors.textMuted}22`, borderColor: STATUS_COLORS[job.status] || colors.textMuted }]}>
           <Text style={[styles.badgeText, { color: STATUS_COLORS[job.status] || colors.textMuted }]}>
             {job.status?.replace('_', ' ')}
@@ -559,7 +560,7 @@ export default function JobDetailScreen({ route }) {
 
       <View style={styles.card}>
         <AmcPanel key={jobId} job={job} styles={styles} />
-        <Text style={styles.sectionTitle}>Customer</Text>
+        <Text style={styles.sectionTitle}>Customer Details</Text>
         <InfoRow styles={styles} label="Name" value={job.customer_name} />
         {!!job.customer_nickname && <InfoRow styles={styles} label="Nickname" value={job.customer_nickname} />}
         <InfoRow styles={styles} label="Phone" value={job.phone_number} />
@@ -568,16 +569,16 @@ export default function JobDetailScreen({ route }) {
         <InfoRow styles={styles} label="Site Type" value={job.site_type || '-'} />
         <View style={styles.contactActions}>
           <TouchableOpacity
-            style={[styles.contactBtn, { borderColor: colors.success }]}
+            style={[styles.contactBtn, { borderColor: colors.success, backgroundColor: colors.successDim }]}
             onPress={() => callPhone(job.phone_number)}
           >
-            <Text style={[styles.contactBtnText, { color: colors.success }]}>Call Customer</Text>
+            <Icon name="call" size={20} color={colors.success} /><Text style={[styles.contactBtnText, { color: colors.success }]}>Call Customer</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.contactBtn, { borderColor: colors.info }]}
+            style={[styles.contactBtn, { borderColor: colors.info, backgroundColor: colors.accentDim }]}
             onPress={() => openJobMap(job)}
           >
-            <Text style={[styles.contactBtnText, { color: colors.info }]}>Open Map</Text>
+            <Icon name="navigation" size={20} color={colors.info} /><Text style={[styles.contactBtnText, { color: colors.info }]}>Open Map</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -595,7 +596,7 @@ export default function JobDetailScreen({ route }) {
       )}
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Job Details</Text>
+        <Text style={styles.sectionTitle}>Job Specifications</Text>
         <InfoRow styles={styles} label="Work Type" value={job.work_type} />
         <InfoRow styles={styles} label="Priority" value={job.priority} />
         <InfoRow styles={styles} label="Scheduled" value={formatDate(job.scheduled_date)} />
@@ -1261,22 +1262,28 @@ const createStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.xl,
-    paddingBottom: spacing.md,
+    padding: spacing.base,
+    margin: spacing.base,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    gap: 8,
+    flexWrap: 'wrap',
   },
-  jobId: { fontFamily: 'monospace', fontSize: 16, fontWeight: '800', color: colors.accent },
+  workOrderLabel: { color: colors.textSecondary, fontSize: 11, fontWeight: '700', marginBottom: 6 },
+  jobId: { fontSize: 17, fontWeight: '700', color: colors.accent, flexShrink: 1 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.full, borderWidth: 1 },
   badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
   card: {
     backgroundColor: colors.surface,
     marginHorizontal: spacing.base,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.base,
     borderRadius: radius.lg,
     padding: spacing.base,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: spacing.md },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: spacing.base },
   complaint: {
     fontSize: 13,
     color: colors.textSecondary,
@@ -1285,12 +1292,16 @@ const createStyles = (colors) => StyleSheet.create({
     padding: spacing.sm,
     marginTop: spacing.xs,
   },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, gap: 12 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 10, marginBottom: 4, gap: 12, backgroundColor: colors.surface2, borderRadius: radius.sm },
   infoLabel: { fontSize: 12, color: colors.textMuted, textTransform: 'uppercase', fontWeight: '600', width: '36%' },
-  infoValue: { fontSize: 13, color: colors.text, flex: 1, textAlign: 'right' },
+  infoValue: { fontSize: 14, color: colors.text, flex: 1, textAlign: 'right', fontWeight: '500' },
   contactActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   contactBtn: {
     flex: 1,
+    minHeight: 48,
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
     borderWidth: 1,
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
@@ -1313,7 +1324,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: colors.accent,
   },
   updateBtnText: { color: colors.accent, fontWeight: '700', fontSize: 14 },
-  updateItem: { borderLeftWidth: 2, borderLeftColor: colors.accent, paddingLeft: spacing.md, marginBottom: spacing.md },
+  updateItem: { borderLeftWidth: 2, borderLeftColor: colors.accent, paddingLeft: spacing.base, paddingVertical: spacing.sm, marginBottom: spacing.base },
   updateStaff: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4 },
   updateMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   updateNotes: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },

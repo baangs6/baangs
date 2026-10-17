@@ -129,5 +129,5 @@ test('phone alerts baseline old records, show new records once and expose missin
   await module.showNewPhoneAlerts('U', rows);
   assert.equal(scheduled.length, 1);
   assert.equal(scheduled[0].content.data.job_id, 'J');
-  assert.equal(scheduled[0].trigger.channelId, 'baangs-alerts-v2');
+  assert.equal(scheduled[0].trigger.channelId, module.PHONE_CHANNEL);
 });

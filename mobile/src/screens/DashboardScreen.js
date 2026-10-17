@@ -7,6 +7,7 @@ import { attendanceApi, dashboardApi, jobsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing, radius, useTheme } from '../theme';
 import useLiveRefresh from '../hooks/useLiveRefresh';
+import { callPhone, openJobMap } from '../utils/contactActions';
 
 export default function DashboardScreen({ navigation, route }) {
   const theme = useTheme();
@@ -28,7 +29,7 @@ export default function DashboardScreen({ navigation, route }) {
         dashboardApi.summary(),
         dashboardApi.technicianPerformance(),
         user?.staff_id ? attendanceApi.today(user.staff_id).catch(() => ({ data: null })) : Promise.resolve({ data: null }),
-        selectedTechnician?.staff_id ? jobsApi.listAll({ assigned_staff_id: selectedTechnician.staff_id }) : Promise.resolve({ data: [] }),
+        (selectedTechnician?.staff_id || user?.staff_id) ? jobsApi.listAll({ assigned_staff_id: selectedTechnician?.staff_id || user.staff_id }) : Promise.resolve({ data: [] }),
       ]);
       if (!isCurrent()) return;
       setError('');
@@ -126,6 +127,10 @@ export default function DashboardScreen({ navigation, route }) {
     });
   };
   const rootNavigation = navigation.getParent?.()?.getParent?.() || navigation.getParent?.();
+  const nextJob = [...techJobs].filter(j => !['complete', 'cancelled'].includes(j.status)).sort((a, b) => {
+    const priorities = { urgent: 0, high: 1, medium: 2, low: 3 };
+    return (priorities[a.priority] ?? 2) - (priorities[b.priority] ?? 2) || String(a.scheduled_date || '9999').localeCompare(String(b.scheduled_date || '9999'));
+  })[0];
 
   return (
     <ScrollView
@@ -143,7 +148,7 @@ export default function DashboardScreen({ navigation, route }) {
       }
     >
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>
             {selectedTechnician ? `${selectedTechnician.full_name || selectedTechnician.name || selectedTechnician.staff_id}` : `Good ${getTimeOfDay()}, ${user?.full_name?.split(' ')[0] || user?.username}!`}
           </Text>
@@ -191,6 +196,24 @@ export default function DashboardScreen({ navigation, route }) {
         <StatCard label="Pending" value={jobs.pending || 0} color={colors.warning} onPress={() => openJobs('pending')} />
         <StatCard label="In Progress" value={jobs.in_progress || 0} color={colors.info} onPress={() => openJobs('in_progress')} />
         <StatCard label="Complete" value={jobs.complete || 0} color={colors.success} onPress={() => openJobs('complete')} />
+      </View>
+
+      {nextJob && <>
+        <Text style={styles.sectionLabel}>Priority Up Next</Text>
+        <View style={styles.card}>
+          <TouchableOpacity onPress={() => navigation.navigate('Jobs', { screen: 'JobDetail', params: { jobId: nextJob.job_id } })} style={styles.nextJob}>
+            <View style={styles.techAvatar}><Icon name="place" size={24} color={colors.accent} /></View>
+            <View style={{ flex: 1 }}><Text style={styles.techName}>{nextJob.customer_name}</Text><Text style={styles.techSub}>{nextJob.location || 'Location not provided'}</Text><Text style={styles.techSub}>{nextJob.job_id} | {nextJob.priority || 'medium'}</Text></View><Icon name="chevron-right" size={24} color={colors.accent} />
+          </TouchableOpacity>
+          <View style={styles.quickRow}>
+            <TouchableOpacity style={[styles.quickAction, { backgroundColor: colors.successDim }]} onPress={() => callPhone(nextJob.phone_number)}><Icon name="call" size={20} color={colors.success} /><Text style={{ color: colors.success, fontWeight: '700' }}>Call Client</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.quickAction, { backgroundColor: colors.accent }]} onPress={() => openJobMap(nextJob)}><Icon name="navigation" size={20} color="#fff" /><Text style={{ color: '#fff', fontWeight: '700' }}>Navigate</Text></TouchableOpacity>
+          </View>
+        </View>
+      </>}
+      <Text style={styles.sectionLabel}>Field Quick Actions</Text>
+      <View style={styles.quickGrid}>
+        {[['work-outline', 'My Jobs', () => openJobs('all')], ['receipt-long', 'Daily Claim', () => navigation.navigate('Finance')], ['person-outline', 'Profile', () => navigation.navigate('Settings')]].map(([icon, label, action]) => <TouchableOpacity key={label} style={styles.quickTile} onPress={action}><Icon name={icon} size={24} color={colors.accent} /><Text style={styles.quickLabel}>{label}</Text></TouchableOpacity>)}
       </View>
 
       {showRevenue && (
@@ -260,8 +283,9 @@ function StatCard({ label, value, color, onPress }) {
   const styles = React.useMemo(() => createStyles(theme.colors), [theme.colors]);
   const card = (
     <>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <View style={styles.statTop}><Text style={styles.statLabel}>{label}</Text><Icon name={{ Total: 'assignment', Pending: 'hourglass-empty', 'In Progress': 'pending-actions', Complete: 'task-alt' }[label] || 'bar-chart'} size={24} color={color} /></View>
+      <Text style={[styles.statValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+      <View style={[styles.statLine, { backgroundColor: `${color}44` }]} />
     </>
   );
   if (onPress) {
@@ -285,7 +309,15 @@ function getTimeOfDay() {
 
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  scrollContent: { paddingTop: 56 },
+  scrollContent: { paddingTop: 8 },
+  nextJob: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  quickRow: { flexDirection: 'row', gap: 12 },
+  quickAction: { flex: 1, minHeight: 48, borderRadius: radius.md, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' },
+  quickGrid: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 20 },
+  quickTile: { flex: 1, backgroundColor: colors.surface, padding: 12, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', minHeight: 90, gap: 10 },
+  quickLabel: { color: colors.text, fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  statTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14 },
+  statLine: { height: 4, borderRadius: 2, marginTop: 16 },
   center: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -293,16 +325,18 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    flexDirection: 'row',
+    flexDirection: 'column-reverse',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'stretch',
+    gap: 10,
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.base,
     paddingBottom: spacing.md,
   },
-  greeting: { fontSize: 19, fontWeight: '900', color: colors.text },
+  greeting: { fontSize: 24, fontWeight: '800', color: colors.text },
   subGreeting: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   roleBadge: {
+    alignSelf: 'flex-start',
     backgroundColor: colors.accentDim,
     borderRadius: radius.full,
     paddingHorizontal: 12,
@@ -345,7 +379,7 @@ const createStyles = (colors) => StyleSheet.create({
     fontWeight: '700',
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0,
     paddingHorizontal: spacing.base,
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
@@ -364,7 +398,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.base,
     borderWidth: 1,
-    alignItems: 'center',
+    minHeight: 128,
   },
   statValue: { fontSize: 26, fontWeight: '800', marginBottom: 2 },
   statLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },

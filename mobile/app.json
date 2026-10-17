@@ -7,7 +7,7 @@
         "projectId": "1c209de7-c973-48ed-8833-32c36cc48b5d"
       }
     },
-    "version": "1.0.13",
+    "version": "1.0.14",
     "platforms": [
       "ios",
       "android",
@@ -41,7 +41,7 @@
         "VIBRATE"
       ],
       "package": "com.anonymous.mobile",
-      "versionCode": 14
+      "versionCode": 15
     },
     "notification": {
       "icon": "./assets/adaptive-icon.png",

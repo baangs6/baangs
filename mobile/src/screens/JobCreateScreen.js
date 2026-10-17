@@ -184,7 +184,7 @@ function DropdownField({ label, value, placeholder, options, onSelect, styles })
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.base, paddingBottom: spacing['3xl'] },
-  title: { color: colors.text, fontSize: 24, fontWeight: '900', marginBottom: spacing.xs },
+  title: { color: colors.text, fontSize: 24, fontWeight: '700', marginBottom: spacing.sm },
   sub: { color: colors.textMuted, fontSize: 13, marginBottom: spacing.lg },
   field: { marginBottom: spacing.md },
   label: { color: colors.textSecondary, fontSize: 12, fontWeight: '800', marginBottom: spacing.xs, textTransform: 'uppercase' },
@@ -193,7 +193,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surface2,
     color: colors.text,
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.sm,
@@ -202,6 +202,8 @@ const createStyles = (colors) => StyleSheet.create({
   textarea: { minHeight: 90, textAlignVertical: 'top' },
   optionWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   option: {
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.border,

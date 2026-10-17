@@ -12,6 +12,7 @@ export default function FinanceScreen() {
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme.colors), [theme.colors]);
   const { user } = useAuth();
+  const canViewBilling = ['admin', 'manager'].includes(user?.role);
   const [billing, setBilling] = useState([]);
   const [allowances, setAllowances] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +32,7 @@ export default function FinanceScreen() {
     setError('');
     try {
       const [billingRes, allowanceRes] = await Promise.allSettled([
-        billingApi.list(),
+        canViewBilling ? billingApi.list() : Promise.resolve({ data: [] }),
         user?.staff_id ? attendanceApi.allowances({ staff_id: user.staff_id, limit: 20 }) : Promise.resolve({ data: [] }),
       ]);
       if (!isCurrent()) return;
@@ -136,7 +137,7 @@ export default function FinanceScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.title}>Finance</Text>
-        <Text style={styles.subtitle}>Billing, collection, expense, and profit summary</Text>
+        <Text style={styles.subtitle}>Overview & allowances</Text>
       </View>
 
       {error ? (
@@ -146,6 +147,7 @@ export default function FinanceScreen() {
           <Text style={styles.emptyText}>{error}</Text>
         </View>
       ) : null}
+      {!canViewBilling && <View style={styles.accessPanel}><Icon name="lock-outline" size={28} color={theme.colors.accent} /><View style={{ flex: 1 }}><Text style={styles.cardTitle}>Billing unavailable</Text><Text style={styles.accessText}>Billing and margin records are reserved for admin and manager accounts. Submit your daily expenses below.</Text></View></View>}
 
       <View style={styles.formCard}>
         <Text style={styles.cardTitle}>Daily Allowance</Text>
@@ -154,15 +156,16 @@ export default function FinanceScreen() {
         <Text style={styles.label}>Expense Type</Text>
         <View style={styles.segmentRow}>
           {[
-            ['food', 'Food'],
-            ['petrol', 'Petrol'],
-            ['other', 'Other'],
-          ].map(([value, label]) => (
+            ['food', 'Food', 'restaurant'],
+            ['petrol', 'Petrol', 'local-gas-station'],
+            ['other', 'Other', 'more-horiz'],
+          ].map(([value, label, icon]) => (
             <TouchableOpacity
               key={value}
               style={[styles.segmentBtn, allowanceForm.expense_type === value && styles.segmentBtnActive]}
               onPress={() => setAllowanceForm((prev) => ({ ...prev, expense_type: value }))}
             >
+              <Icon name={icon} size={20} color={allowanceForm.expense_type === value ? theme.colors.accent : theme.colors.textSecondary} />
               <Text style={[styles.segmentText, allowanceForm.expense_type === value && styles.segmentTextActive]}>{label}</Text>
             </TouchableOpacity>
           ))}
@@ -189,6 +192,7 @@ export default function FinanceScreen() {
         />
 
         <TouchableOpacity style={styles.billBtn} onPress={pickBillPhoto}>
+          <Icon name="add-a-photo" size={22} color={theme.colors.accent} />
           <Text style={styles.billBtnText}>{allowanceForm.bill_uri ? 'Bill Photo Added' : 'Add Bill Photo'}</Text>
         </TouchableOpacity>
         {allowanceForm.bill_uri ? (
@@ -196,6 +200,7 @@ export default function FinanceScreen() {
         ) : null}
 
         <TouchableOpacity style={styles.saveBtn} onPress={submitAllowance} disabled={allowanceSaving}>
+          <Icon name="save" size={20} color="#fff" />
           <Text style={styles.saveBtnText}>{allowanceSaving ? 'Saving...' : 'Save Expense'}</Text>
         </TouchableOpacity>
       </View>
@@ -216,7 +221,7 @@ export default function FinanceScreen() {
         ))}
       </View>
 
-      {!error ? (
+      {canViewBilling && !error ? (
         <>
           <View style={styles.filterCard}>
             <Text style={styles.cardTitle}>Filter Billing</Text>
@@ -303,6 +308,8 @@ function formatExpenseType(value) {
 
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  accessPanel: { flexDirection: 'row', gap: 16, marginHorizontal: 16, marginBottom: 16, padding: 20, backgroundColor: colors.accentDim, borderRadius: radius.lg },
+  accessText: { color: colors.textSecondary, lineHeight: 21, fontSize: 13 },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   header: { padding: spacing.xl, paddingBottom: spacing.md },
   title: { color: colors.text, fontSize: 26, fontWeight: '800' },
@@ -376,12 +383,16 @@ const createStyles = (colors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  cardTitle: { color: colors.text, fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  cardTitle: { color: colors.text, fontSize: 20, fontWeight: '700', marginBottom: 8 },
   cardDesc: { color: colors.textMuted, fontSize: 12, marginBottom: spacing.base },
   label: { color: colors.textSecondary, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', marginBottom: spacing.xs },
   segmentRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   segmentBtn: {
     flex: 1,
+    minHeight: 48,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -405,6 +416,10 @@ const createStyles = (colors) => StyleSheet.create({
   },
   compactInput: { minHeight: 0, height: 46 },
   billBtn: {
+    minHeight: 48,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
     backgroundColor: colors.surface2,
     borderRadius: radius.md,
     padding: spacing.md,
@@ -413,17 +428,21 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: colors.border,
     marginBottom: spacing.sm,
   },
-  billBtnText: { color: colors.textSecondary, fontWeight: '800', fontSize: 13 },
+  billBtnText: { color: colors.accent, fontWeight: '700', fontSize: 14 },
   billPreview: { width: '100%', height: 140, borderRadius: radius.md, marginBottom: spacing.sm },
   saveBtn: {
-    backgroundColor: colors.accentDim,
+    backgroundColor: colors.accent,
+    minHeight: 52,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
     borderRadius: radius.md,
     padding: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.accent,
   },
-  saveBtnText: { color: colors.accent, fontWeight: '800', fontSize: 15 },
+  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   emptyInline: { color: colors.textMuted, fontSize: 13, textAlign: 'center', paddingVertical: spacing.md },
   expenseRow: {
     flexDirection: 'row',

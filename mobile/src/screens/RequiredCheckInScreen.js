@@ -9,6 +9,7 @@ import {
   Image,
   TextInput,
   Platform,
+  ScrollView,
 } from 'react-native';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
@@ -112,13 +113,13 @@ export default function RequiredCheckInScreen({ existingAttendance, onCheckedIn 
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.bg }} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.topBar}>
         <View>
           <Text style={styles.kicker}>Attendance required</Text>
           <Text style={styles.title}>Check in to continue</Text>
         </View>
-        <TouchableOpacity style={styles.logoutBtn} onPress={logout} disabled={saving}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={logout} disabled={saving} accessibilityLabel="Sign out">
           <Icon name="logout" size={20} color={theme.colors.textSecondary} />
         </TouchableOpacity>
       </View>
@@ -156,25 +157,25 @@ export default function RequiredCheckInScreen({ existingAttendance, onCheckedIn 
 
         <TouchableOpacity style={styles.primaryBtn} onPress={handleCheckIn} disabled={saving} activeOpacity={0.85}>
           {saving ? (
-            <ActivityIndicator color={theme.colors.accent} />
+              <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Icon name="camera-alt" size={20} color={theme.colors.accent} />
+              <Icon name="camera-alt" size={20} color="#fff" />
               <Text style={styles.primaryText}>Take Photo and Check In</Text>
             </>
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const createStyles = (colors) => StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: colors.bg,
     paddingHorizontal: spacing.lg,
-    paddingTop: Platform.OS === 'ios' ? 64 : 40,
+    paddingTop: 24,
     paddingBottom: spacing.xl,
   },
   topBar: {
@@ -242,7 +243,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   previewEmpty: {
     width: '100%',
-    height: 180,
+    height: 240,
     borderRadius: radius.md,
     marginBottom: spacing.base,
     backgroundColor: colors.surface2,
@@ -279,14 +280,14 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.accent,
-    backgroundColor: colors.accentDim,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
   },
   primaryText: {
-    color: colors.accent,
+    color: '#fff',
     fontSize: 15,
     fontWeight: '800',
   },
