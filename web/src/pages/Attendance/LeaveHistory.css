@@ -1,0 +1,39 @@
+.leave-history { margin-top: 26px; }
+.leave-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 20px; margin-bottom: 28px; }
+.leave-metric { position: relative; padding: 22px; background: #fff; border: 1px solid #e2e8f2; border-radius: 8px; text-align: left; cursor: pointer; color: #132327; font: inherit; min-height: 140px; }
+.leave-metric > span { display: block; font-size: 11px; text-transform: uppercase; color: #657672; margin-bottom: 14px; }
+.leave-metric strong { display: block; font-size: 26px; color: #005c55; padding-right: 30px; }
+.leave-metric svg { position: absolute; right: 20px; top: 58px; color: #0f766e; }
+.leave-metric-pending svg { color: #b77913; }.leave-metric-rejected svg { color: #be3550; }
+.leave-metric small { display: block; color: #657672; font-size: 11px; margin-top: 12px; }
+.leave-pending { border-top: 1px solid #dce5ed; border-bottom: 1px solid #dce5ed; padding: 24px 0; margin-bottom: 24px; }
+.leave-section-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+.leave-section-heading h3 { font-size: 16px; margin: 0; font-weight: 600; }
+.leave-section-heading > span { font-size: 11px; color: #657672; }
+.leave-queue-empty { border: 1px dashed #dce5ed; border-radius: 8px; padding: 30px 16px; text-align: center; }
+.leave-queue-empty > span { display: inline-flex; justify-content: center; align-items: center; width: 48px; height: 48px; border-radius: 50%; background: #d1fae5; color: #047857; margin-bottom: 14px; }
+.leave-queue-empty h4 { font-size: 16px; font-weight: 500; margin: 0 0 8px; }
+.leave-queue-empty p { font-size: 12px; color: #657672; }
+.leave-pending-list > div { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 0; border-bottom: 1px solid #e2e8f2; }
+.leave-pending-list strong { font-size: 14px; }.leave-pending-list small { display: block; font-size: 12px; color: #657672; margin-top: 5px; }.leave-pending-list p { margin-top: 8px; font-size: 13px; overflow-wrap: anywhere; }
+.leave-actions { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+.leave-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 18px 0; margin-bottom: 18px; }
+.leave-filter-bar .form-select { width: 160px; }.leave-filter-bar small { font-size: 12px; color: #657672; margin-left: auto; }
+.leave-workspace { display: grid; grid-template-columns: minmax(0,1.5fr) minmax(300px,1fr); gap: 24px; align-items: start; }
+.leave-register { min-width: 0; }.leave-register .table { min-width: 640px; }
+.leave-register .table-wrapper { box-shadow: none; }.leave-register td { padding: 16px 12px; }.leave-register td small { display: block; font-size: 11px; color: #657672; margin-top: 6px; }
+.leave-register tr.is-selected { background: #f0fdfa; }.leave-register tr.is-selected td:first-child { box-shadow: inset 3px 0 #0f766e; }
+.leave-person { display: flex; gap: 10px; align-items: center; text-align: left; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; min-width: 170px; }
+.leave-person strong { font-size: 13px; }.leave-person .attendance-avatar { width: 34px; height: 34px; border-radius: 8px; font-size: 12px; }
+.leave-type { display: inline-block; font-size: 10px; color: #3156a4; background: #edf2ff; border: 1px solid #d3dfff; padding: 3px 7px; border-radius: 4px; }
+.leave-reason-cell { max-width: 180px; overflow-wrap: anywhere; }
+.leave-status { display: inline-flex; gap: 5px; align-items: center; font-size: 11px; padding: 4px 8px; border-radius: 16px; background: #fff5d9; color: #876015; white-space: nowrap; }
+.leave-status-approved { background: #e1f8ef; color: #006f50; }.leave-status-rejected { background: #ffe9ee; color: #ab2946; }
+.leave-inspector { padding: 22px; background: #fff; border: 1px solid #e2e8f2; border-radius: 8px; min-width: 0; }
+.leave-inspector h3 { font-size: 18px; margin-bottom: 8px; }.leave-reference { color: #657672; font-size: 11px; overflow-wrap: anywhere; }
+.leave-profile { display: flex; gap: 14px; align-items: center; background: #f5f8ff; padding: 18px; border-radius: 8px; margin: 22px 0; }
+.leave-profile .attendance-avatar { background: #0f766e; color: #fff; border-radius: 8px; }.leave-profile strong { font-size: 15px; overflow-wrap: anywhere; }.leave-profile small { display: block; color: #657672; margin-top: 6px; font-size: 12px; overflow-wrap: anywhere; }
+.leave-inspector dt { font-size: 11px; color: #657672; margin-top: 20px; }.leave-inspector dd { margin: 6px 0 0; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }.leave-inspector .leave-days { color: #0f766e; font-size: 12px; }.leave-inspector .leave-actions { margin-top: 24px; }
+.leave-history-empty { text-align: center; padding: 42px 16px; background: #fff; color: #657672; border-radius: 8px; border: 1px solid #e2e8f2; }.leave-history-empty svg { margin: 0 auto 12px; }
+@media(max-width:1200px) { .leave-workspace { grid-template-columns: minmax(0,1fr); } .leave-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:650px) { .leave-metrics { gap: 10px; } .leave-metric { padding: 14px; } .leave-metric svg { right: 12px; width: 18px; } .leave-metric strong { font-size: 24px; } .leave-pending-list > div { flex-direction: column; align-items: flex-start; } .leave-filter-bar .form-select { flex: 1; min-width: 120px; } .leave-filter-bar small { margin-left: 0; } .leave-inspector { padding: 16px; } }

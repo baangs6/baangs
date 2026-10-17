@@ -1,17 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { attendanceApi, staffApi, exportApi, leavesApi } from '../../api';
-import { MdDelete, MdDownload, MdPayment } from 'react-icons/md';
-import { Fingerprint, CalendarDays, Wallet, Fuel } from 'lucide-react';
+import { Fingerprint, CalendarDays, Wallet, Fuel, Download } from 'lucide-react';
 import DateRangePicker from '../../components/DateRangePicker';
 import AttendanceLog from './AttendanceLog';
+import LeaveHistory from './LeaveHistory';
+import PayrollConsole from './PayrollConsole';
+import DailyAllowance from './DailyAllowance';
 import './AttendanceReport.css';
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 export default function AttendanceReport() {
   const [records, setRecords] = useState([]);
@@ -19,605 +14,81 @@ export default function AttendanceReport() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ staff_id: '', date_from: '', date_to: '' });
   const [viewPhoto, setViewPhoto] = useState(null);
-  const [leaveRows, setLeaveRows] = useState([]);
   const [leaveHistoryRows, setLeaveHistoryRows] = useState([]);
+  const [leaveLoading, setLeaveLoading] = useState(true);
+  const [leaveError, setLeaveError] = useState('');
   const [activeTab, setActiveTab] = useState('attendance');
   const [payrollMonth, setPayrollMonth] = useState(new Date().toISOString().slice(0, 7));
   const [payrollData, setPayrollData] = useState({ totals: null, items: [] });
   const [payrollLoading, setPayrollLoading] = useState(false);
-  const [allowanceRows, setAllowanceRows] = useState([]);
-  const [allowanceLoading, setAllowanceLoading] = useState(false);
-  const [allowanceFilters, setAllowanceFilters] = useState({ expense_type: '', payment_status: '' });
-  const [selectedAllowances, setSelectedAllowances] = useState([]);
-  const [payForm, setPayForm] = useState({ paid_amount: '', payment_remark: '' });
-  const [rowBusy, setRowBusy] = useState('');
+  const [payrollError, setPayrollError] = useState('');
   const [attendanceError, setAttendanceError] = useState('');
+  const [exportError, setExportError] = useState('');
+  const payrollRequest = useRef(0);
   const requestId = useRef(0);
   const photoDialog = useRef(null);
   useEffect(() => { if (viewPhoto) photoDialog.current?.showModal(); }, [viewPhoto]);
 
   const fetchRecords = useCallback(async () => {
     const id = ++requestId.current;
-    setLoading(true);
-    setAttendanceError('');
+    setLoading(true); setAttendanceError('');
     try {
-      const params = {};
-      if (filters.staff_id) params.staff_id = filters.staff_id;
-      if (filters.date_from) params.date_from = filters.date_from;
-      if (filters.date_to) params.date_to = filters.date_to;
+      const params = Object.fromEntries(Object.entries(filters).filter(([, value]) => value));
       const res = await attendanceApi.list(params);
       if (id === requestId.current) setRecords(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       if (id === requestId.current) setAttendanceError(typeof error.response?.data?.detail === 'string' ? error.response.data.detail : 'Unable to load attendance. Please try again.');
-    } finally {
-      if (id === requestId.current) setLoading(false);
-    }
+    } finally { if (id === requestId.current) setLoading(false); }
   }, [filters]);
-
   useEffect(() => { staffApi.list().then(r => setStaff(r.data)).catch(console.error); }, []);
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
-  useEffect(() => {
-    leavesApi.list({ status: 'pending' }).then((r) => setLeaveRows(r.data || [])).catch(console.error);
-    leavesApi.list().then((r) => setLeaveHistoryRows(r.data || [])).catch(console.error);
+
+  const loadLeaves = useCallback(async () => {
+    setLeaveLoading(true); setLeaveError('');
+    try { const { data } = await leavesApi.list(); setLeaveHistoryRows(Array.isArray(data) ? data : []); }
+    catch (error) { setLeaveError(typeof error.response?.data?.detail === 'string' ? error.response.data.detail : 'Unable to load leave history. Please try again.'); }
+    finally { setLeaveLoading(false); }
   }, []);
-
-  const loadPayroll = useCallback(async () => {
-    setPayrollLoading(true);
-    try {
-      const res = await staffApi.payrollSummary(payrollMonth);
-      setPayrollData({
-        totals: res.data?.totals || null,
-        items: res.data?.items || [],
-      });
-    } catch (e) {
-      console.error(e);
-      setPayrollData({ totals: null, items: [] });
-    } finally {
-      setPayrollLoading(false);
-    }
-  }, [payrollMonth]);
-
-  useEffect(() => {
-    if (activeTab === 'payroll') loadPayroll();
-  }, [activeTab, loadPayroll]);
-
-  const loadAllowances = useCallback(async () => {
-    setAllowanceLoading(true);
-    try {
-      const params = {};
-      if (filters.staff_id) params.staff_id = filters.staff_id;
-      if (filters.date_from) params.date_from = filters.date_from;
-      if (filters.date_to) params.date_to = filters.date_to;
-      if (allowanceFilters.expense_type) params.expense_type = allowanceFilters.expense_type;
-      if (allowanceFilters.payment_status) params.payment_status = allowanceFilters.payment_status;
-      const res = await attendanceApi.allowances(params);
-      setAllowanceRows(res.data || []);
-      setSelectedAllowances([]);
-      setPayForm({ paid_amount: '', payment_remark: '' });
-    } catch (e) {
-      console.error(e);
-      setAllowanceRows([]);
-    } finally {
-      setAllowanceLoading(false);
-    }
-  }, [filters, allowanceFilters]);
-
-  useEffect(() => {
-    if (activeTab === 'allowance') loadAllowances();
-  }, [activeTab, loadAllowances]);
-
-  const handleExport = async () => {
-    try {
-      const res = await exportApi.attendanceCsv();
-      downloadBlob(res.data, 'attendance.csv');
-    } catch (e) { console.error(e); }
-  };
-
+  useEffect(() => { loadLeaves(); }, [loadLeaves]);
   const decideLeave = async (leaveId, decision) => {
     try {
-      await leavesApi.decide(leaveId, decision);
-      const res = await leavesApi.list({ status: 'pending' });
-      setLeaveRows(res.data || []);
-      const historyRes = await leavesApi.list();
-      setLeaveHistoryRows(historyRes.data || []);
-    } catch (e) {
-      console.error(e);
-      alert(e.response?.data?.detail || 'Failed to update leave');
-    }
+      const { data } = await leavesApi.decide(leaveId, decision);
+      setLeaveHistoryRows(rows => rows.map(row => row.leave_id === leaveId ? { ...row, ...data, status: decision } : row));
+      await loadLeaves();
+    } catch (error) { alert(error.response?.data?.detail || 'Failed to update leave'); }
   };
 
-  const payableAllowanceRows = allowanceRows.filter((row) => Number(row.balance_amount || 0) > 0);
-
-  const toggleAllowance = (allowanceId) => {
-    const row = allowanceRows.find((item) => item.allowance_id === allowanceId);
-    if (!row || Number(row.balance_amount || 0) <= 0) return;
-    setSelectedAllowances((prev) =>
-      prev.includes(allowanceId)
-        ? prev.filter((id) => id !== allowanceId)
-        : [...prev, allowanceId]
-    );
-  };
-
-  const selectedAllowanceRows = payableAllowanceRows.filter((row) => selectedAllowances.includes(row.allowance_id));
-  const selectedBalance = selectedAllowanceRows.reduce((sum, row) => sum + Number(row.balance_amount || 0), 0);
-  const enteredPayment = Number(payForm.paid_amount || 0);
-  const paymentDifference = enteredPayment - selectedBalance;
-
-  const paySelectedAllowances = async () => {
-    if (selectedAllowances.length === 0) {
-      alert('Select at least one expense');
-      return;
-    }
-    if (!enteredPayment || enteredPayment <= 0) {
-      alert('Enter a valid paid amount');
-      return;
-    }
+  const loadPayroll = useCallback(async () => {
+    const id = ++payrollRequest.current;
+    if (!payrollMonth) { setPayrollError('Select a payroll month.'); setPayrollLoading(false); return; }
+    setPayrollLoading(true); setPayrollError('');
     try {
-      await attendanceApi.payAllowances({
-        allowance_ids: selectedAllowances,
-        paid_amount: enteredPayment,
-        payment_remark: payForm.payment_remark,
-      });
-      await loadAllowances();
-    } catch (e) {
-      alert(e.response?.data?.detail || 'Failed to update payment');
-    }
-  };
-
-  const paySingleAllowance = async (row) => {
-    const balance = Number(row.balance_amount || 0);
-    if (balance <= 0) return;
-    const input = window.prompt('Paid amount', balance.toFixed(2));
-    if (input === null) return;
-    const paidAmount = Number(input);
-    if (!paidAmount || paidAmount <= 0) {
-      alert('Enter a valid paid amount');
-      return;
-    }
-    const paymentRemark = window.prompt('Payment remark (optional)', '') || '';
-    setRowBusy(row.allowance_id);
+      const res = await staffApi.payrollSummary(payrollMonth);
+      if (id === payrollRequest.current) setPayrollData({ totals: res.data?.totals || null, items: res.data?.items || [] });
+    } catch (error) {
+      if (id === payrollRequest.current) setPayrollError(typeof error.response?.data?.detail === 'string' ? error.response.data.detail : 'Unable to load payroll. Please try again.');
+    } finally { if (id === payrollRequest.current) setPayrollLoading(false); }
+  }, [payrollMonth]);
+  useEffect(() => { if (activeTab === 'payroll') loadPayroll(); }, [activeTab, loadPayroll]);
+  const handleExport = async () => {
+    setExportError('');
     try {
-      await attendanceApi.payAllowances({
-        allowance_ids: [row.allowance_id],
-        paid_amount: paidAmount,
-        payment_remark: paymentRemark,
-      });
-      await loadAllowances();
-    } catch (e) {
-      alert(e.response?.data?.detail || 'Failed to update payment');
-    } finally {
-      setRowBusy('');
-    }
+      const res = await exportApi.attendanceCsv();
+      const url = URL.createObjectURL(res.data); const a = document.createElement('a'); a.href = url; a.download = 'attendance.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { setExportError('Unable to export attendance. Please try again.'); }
   };
 
-  const deleteAllowance = async (row) => {
-    if (!window.confirm(`Delete ${formatExpenseType(row.expense_type)} for ${row.staff_name || row.staff_id}?`)) return;
-    setRowBusy(row.allowance_id);
-    try {
-      await attendanceApi.deleteAllowance(row.allowance_id);
-      await loadAllowances();
-    } catch (e) {
-      alert(e.response?.data?.detail || 'Failed to delete expense');
-    } finally {
-      setRowBusy('');
-    }
-  };
-
-  return (
-    <div className="animate-fade attendance-report">
-      <div className="page-header">
-        <div className="page-header-left">
-          <h2>Attendance Report</h2>
-          <p>Staff check-ins, locations, leave and daily expenses</p>
-        </div>
-        <button className="btn btn-secondary" onClick={handleExport}><MdDownload /> Export CSV</button>
-      </div>
-
-      <div className="attendance-nav" role="tablist" aria-label="Attendance views">
-          <button
-            role="tab" aria-selected={activeTab === 'attendance'}
-            onClick={() => setActiveTab('attendance')}
-          >
-            <Fingerprint size={18} /> Attendance Log <span>{records.length}</span>
-          </button>
-          <button
-            role="tab" aria-selected={activeTab === 'leave'}
-            onClick={() => setActiveTab('leave')}
-          >
-            <CalendarDays size={18} /> Leave History
-          </button>
-          <button
-            role="tab" aria-selected={activeTab === 'payroll'}
-            onClick={() => setActiveTab('payroll')}
-          >
-            <Wallet size={18} /> Payroll
-          </button>
-          <button
-            role="tab" aria-selected={activeTab === 'allowance'}
-            onClick={() => setActiveTab('allowance')}
-          >
-            <Fuel size={18} /> Daily Allowance
-          </button>
-      </div>
-
-      {(activeTab === 'attendance' || activeTab === 'allowance') && (
-        <div className="filter-bar">
-          <select aria-label="Filter by staff" className="form-select" style={{ width: 200 }} value={filters.staff_id}
-            onChange={e => setFilters({ ...filters, staff_id: e.target.value })}>
-            <option value="">All Staff</option>
-            {staff.map(s => <option key={s.staff_id} value={s.staff_id}>{s.name || s.full_name || s.staff_id}</option>)}
-          </select>
-          <DateRangePicker start={filters.date_from} end={filters.date_to}
-            onChange={(date_from, date_to) => setFilters({ ...filters, date_from, date_to })} />
-          <button className="btn btn-secondary" onClick={() => setFilters({ staff_id: '', date_from: '', date_to: '' })}>Clear</button>
-        </div>
-      )}
-
-      {activeTab === 'payroll' ? (
-        <>
-          <div className="card" style={{ marginBottom: 16, padding: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-            <input
-              className="form-input"
-              type="month"
-              value={payrollMonth}
-              onChange={(e) => setPayrollMonth(e.target.value)}
-              style={{ width: 200 }}
-            />
-            <button className="btn btn-secondary btn-sm" onClick={loadPayroll}>Load Payroll</button>
-          </div>
-
-          {payrollLoading ? (
-            <div className="loading-center"><div className="spinner" /></div>
-          ) : (
-            <>
-              {payrollData.totals && (
-                <div className="stats-grid" style={{ marginBottom: 12 }}>
-                  <div className="stat-card">
-                    <div className="stat-value">{payrollData.totals.total_staff || 0}</div>
-                    <div className="stat-label">Employees</div>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-value">₹{Number(payrollData.totals.total_gross_pay || 0).toFixed(2)}</div>
-                    <div className="stat-label">Total Gross</div>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-value">₹{Number(payrollData.totals.total_net_pay || 0).toFixed(2)}</div>
-                    <div className="stat-label">Total Net</div>
-                  </div>
-                </div>
-              )}
-
-              <div className="card">
-                <h3 className="card-title" style={{ marginBottom: 12 }}>Monthly Payroll</h3>
-                {payrollData.items.length === 0 ? (
-                  <div className="empty-state"><p>No payroll rows for this month</p></div>
-                ) : (
-                  <div className="table-wrapper" style={{ border: 'none' }}>
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Staff</th>
-                          <th>Type</th>
-                          <th>Present</th>
-                          <th>Paid Leave</th>
-                          <th>Unpaid Leave</th>
-                          <th>Payable Days</th>
-                          <th>Base Pay</th>
-                          <th>Overtime</th>
-                          <th>Allowance</th>
-                          <th>Deduction</th>
-                          <th>Net Pay</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {payrollData.items.map((p) => (
-                          <tr key={p.staff_id}>
-                            <td>{p.name || p.staff_id}</td>
-                            <td>{String(p.salary_type || '-').toUpperCase()}</td>
-                            <td>{p.present_days}</td>
-                            <td>{p.paid_leave_days}</td>
-                            <td>{p.unpaid_leave_days}</td>
-                            <td>{p.payable_days}</td>
-                            <td>₹{Number(p.base_pay || 0).toFixed(2)}</td>
-                            <td>₹{Number(p.overtime_pay || 0).toFixed(2)}</td>
-                            <td>₹{Number(p.allowance || 0).toFixed(2)}</td>
-                            <td>₹{Number(p.deduction || 0).toFixed(2)}</td>
-                            <td style={{ fontWeight: 700 }}>₹{Number(p.net_pay || 0).toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </>
-      ) : activeTab === 'allowance' ? (
-        <>
-          <div className="filter-bar">
-            <select
-              className="form-select"
-              style={{ width: 180 }}
-              value={allowanceFilters.expense_type}
-              onChange={(e) => setAllowanceFilters((prev) => ({ ...prev, expense_type: e.target.value }))}
-            >
-              <option value="">All Expense Types</option>
-              <option value="food">Food Expense</option>
-              <option value="petrol">Petrol Expense</option>
-              <option value="other">Other Expense</option>
-            </select>
-            <select
-              className="form-select"
-              style={{ width: 180 }}
-              value={allowanceFilters.payment_status}
-              onChange={(e) => setAllowanceFilters((prev) => ({ ...prev, payment_status: e.target.value }))}
-            >
-              <option value="">All Payment Status</option>
-              <option value="unpaid">Unpaid</option>
-              <option value="partial">Partial</option>
-              <option value="paid">Paid</option>
-              <option value="overpaid">Overpaid</option>
-            </select>
-            <button className="btn btn-secondary" onClick={() => setAllowanceFilters({ expense_type: '', payment_status: '' })}>
-              Clear Allowance Filters
-            </button>
-          </div>
-
-          <div className="stats-grid" style={{ marginBottom: 12 }}>
-            <div className="stat-card">
-              <div className="stat-value">₹{allowanceRows.reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2)}</div>
-              <div className="stat-label">Total Expenses</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value">₹{allowanceRows.reduce((sum, row) => sum + Number(row.paid_amount || 0), 0).toFixed(2)}</div>
-              <div className="stat-label">Paid</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value">₹{allowanceRows.reduce((sum, row) => sum + Number(row.balance_amount || 0), 0).toFixed(2)}</div>
-              <div className="stat-label">Balance</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value">₹{allowanceRows.reduce((sum, row) => sum + Number(row.extra_paid_amount || 0), 0).toFixed(2)}</div>
-              <div className="stat-label">Extra Paid</div>
-            </div>
-          </div>
-
-          <div className="card" style={{ marginBottom: 16 }}>
-            <h3 className="card-title" style={{ marginBottom: 12 }}>Pay Selected Expenses</h3>
-            <div className="attendance-payment-grid">
-              <div>
-                <div className="detail-label">Selected</div>
-                <div style={{ fontWeight: 700 }}>{selectedAllowances.length} rows · ₹{selectedBalance.toFixed(2)} balance</div>
-              </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Paid Amount</label>
-                <input
-                  className="form-input"
-                  type="number"
-                  value={payForm.paid_amount}
-                  onChange={(e) => setPayForm((prev) => ({ ...prev, paid_amount: e.target.value }))}
-                  placeholder="0"
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Payment Remark</label>
-                <input
-                  className="form-input"
-                  value={payForm.payment_remark}
-                  onChange={(e) => setPayForm((prev) => ({ ...prev, payment_remark: e.target.value }))}
-                  placeholder="Cash / UPI ref"
-                />
-              </div>
-              <button className="btn btn-success" onClick={paySelectedAllowances}>Paid</button>
-            </div>
-            {selectedAllowances.length > 0 && enteredPayment > 0 ? (
-              <div style={{ marginTop: 10, fontSize: '0.85rem', color: paymentDifference >= 0 ? 'var(--color-success)' : 'var(--color-amber)' }}>
-                {paymentDifference >= 0
-                  ? `Extra paid after clearing balance: ₹${paymentDifference.toFixed(2)}`
-                  : `Balance remaining after payment: ₹${Math.abs(paymentDifference).toFixed(2)}`}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="card">
-            <h3 className="card-title" style={{ marginBottom: 12 }}>Daily Allowance Expenses</h3>
-            {allowanceLoading ? (
-              <div className="loading-center"><div className="spinner" /></div>
-            ) : allowanceRows.length === 0 ? (
-              <div className="empty-state"><p>No expense rows found</p></div>
-            ) : (
-              <div className="table-wrapper" style={{ border: 'none' }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>
-                        <input
-                          type="checkbox"
-                          checked={payableAllowanceRows.length > 0 && selectedAllowances.length === payableAllowanceRows.length}
-                          onChange={(e) => setSelectedAllowances(e.target.checked ? payableAllowanceRows.map((row) => row.allowance_id) : [])}
-                        />
-                      </th>
-                      <th>Date</th>
-                      <th>Staff</th>
-                      <th>Expense Type</th>
-                      <th>Amount</th>
-                      <th>Bill</th>
-                      <th>Remark</th>
-                      <th>Payment Status</th>
-                      <th>Payment Date</th>
-                      <th>Paid</th>
-                      <th>Balance</th>
-                      <th>Extra</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allowanceRows.map((row) => (
-                      <tr key={row.allowance_id}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={selectedAllowances.includes(row.allowance_id)}
-                            disabled={Number(row.balance_amount || 0) <= 0}
-                            onChange={() => toggleAllowance(row.allowance_id)}
-                          />
-                        </td>
-                        <td style={{ fontWeight: 600 }}>{row.date}</td>
-                        <td>{row.staff_name || row.staff_id}</td>
-                        <td>{formatExpenseType(row.expense_type)}</td>
-                        <td>₹{Number(row.amount || 0).toFixed(2)}</td>
-                        <td>
-                          {row.bill_url ? (
-                            <a
-                              href={row.bill_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="Open bill"
-                              style={{ display: 'inline-block', padding: 4, border: '1px solid var(--color-border)', borderRadius: 6 }}
-                            >
-                              <img src={row.bill_url} alt="Bill" style={{ width: 42, height: 32, objectFit: 'cover', borderRadius: 4 }} />
-                            </a>
-                          ) : '—'}
-                        </td>
-                        <td style={{ maxWidth: 220, fontSize: '0.82rem' }}>{row.remark || '—'}</td>
-                        <td><span className={`badge ${statusBadgeClass(row.payment_status)}`}>{row.payment_status}</span></td>
-                        <td>{row.payment_made_date || '—'}</td>
-                        <td>₹{Number(row.paid_amount || 0).toFixed(2)}</td>
-                        <td>₹{Number(row.balance_amount || 0).toFixed(2)}</td>
-                        <td>₹{Number(row.extra_paid_amount || 0).toFixed(2)}</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <button
-                              className="btn btn-success btn-sm"
-                              disabled={Number(row.balance_amount || 0) <= 0 || rowBusy === row.allowance_id}
-                              onClick={() => paySingleAllowance(row)}
-                            >
-                              <MdPayment /> Pay
-                            </button>
-                            <button
-                              className="btn btn-danger btn-sm"
-                              disabled={rowBusy === row.allowance_id}
-                              onClick={() => deleteAllowance(row)}
-                            >
-                              <MdDelete /> Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </>
-      ) : activeTab === 'leave' ? (
-        <>
-          <div className="card" style={{ marginBottom: 16 }}>
-            <h3 className="card-title" style={{ marginBottom: 12 }}>Leave Applications (Pending)</h3>
-            {leaveRows.length === 0 ? (
-              <div className="empty-state"><p>No pending leave requests</p></div>
-            ) : (
-              <div className="table-wrapper" style={{ border: 'none' }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Staff</th>
-                      <th>Type</th>
-                      <th>From</th>
-                      <th>To</th>
-                      <th>Reason</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leaveRows.map((l) => (
-                      <tr key={l.leave_id}>
-                        <td>{l.staff_name || l.staff_id}</td>
-                        <td>{String(l.leave_type || '-').toUpperCase()}</td>
-                        <td>{l.from_date}</td>
-                        <td>{l.to_date}</td>
-                        <td style={{ maxWidth: 260 }}>{l.reason}</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="btn btn-success btn-sm" onClick={() => decideLeave(l.leave_id, 'approved')}>Accept</button>
-                            <button className="btn btn-danger btn-sm" onClick={() => decideLeave(l.leave_id, 'rejected')}>Reject</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div className="card" style={{ marginBottom: 16 }}>
-            <h3 className="card-title" style={{ marginBottom: 12 }}>All Leave Requests</h3>
-            {leaveHistoryRows.length === 0 ? (
-              <div className="empty-state"><p>No leave history yet</p></div>
-            ) : (
-              <div className="table-wrapper" style={{ border: 'none' }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Staff</th>
-                      <th>Type</th>
-                      <th>From</th>
-                      <th>To</th>
-                      <th>Reason</th>
-                      <th>Status</th>
-                      <th>Decision Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leaveHistoryRows.map((l) => (
-                      <tr key={`history-${l.leave_id}`}>
-                        <td>{l.staff_name || l.staff_id}</td>
-                        <td>{String(l.leave_type || '-').toUpperCase()}</td>
-                        <td>{l.from_date}</td>
-                        <td>{l.to_date}</td>
-                        <td style={{ maxWidth: 280 }}>{l.reason}</td>
-                        <td>
-                          {l.status === 'approved' && <span className="badge badge-complete">Approved</span>}
-                          {l.status === 'rejected' && <span className="badge badge-cancelled">Rejected</span>}
-                          {l.status !== 'approved' && l.status !== 'rejected' && <span className="badge badge-in_progress">Pending</span>}
-                        </td>
-                        <td>{l.decision_at || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </>
-      ) : <AttendanceLog records={records} loading={loading} error={attendanceError} onRetry={fetchRecords} onPhoto={setViewPhoto} />}
-
-      {/* Photo Viewer Modal */}
-      {viewPhoto && (
-        <dialog ref={photoDialog} className="attendance-photo-dialog" aria-label="Attendance photo" onCancel={() => setViewPhoto(null)} onClick={event => { if (event.target === event.currentTarget) setViewPhoto(null); }}>
-          <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', maxWidth: 500 }}>
-            <img src={viewPhoto} alt="Attendance photo" style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', display: 'block' }} />
-            <div style={{ padding: 12, textAlign: 'center' }}>
-              <button className="btn btn-secondary" onClick={() => setViewPhoto(null)}>Close</button>
-            </div>
-          </div>
-        </dialog>
-      )}
+  return <div className="animate-fade attendance-report">
+    <div className="page-header"><div className="page-header-left"><h2>Attendance Report</h2><p>Staff check-ins, locations, leave and daily expenses</p></div>{activeTab === 'attendance' && <button className="btn btn-secondary" onClick={handleExport}><Download size={17} />Export CSV</button>}</div>
+    {activeTab === 'attendance' && exportError && <p role="alert" className="attendance-error">{exportError}</p>}
+    <div className="attendance-nav" role="tablist" aria-label="Attendance views">
+      <button role="tab" aria-selected={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')}><Fingerprint size={18} />Attendance Log<span>{records.length}</span></button>
+      <button role="tab" aria-selected={activeTab === 'leave'} onClick={() => setActiveTab('leave')}><CalendarDays size={18} />Leave History</button>
+      <button role="tab" aria-selected={activeTab === 'payroll'} onClick={() => setActiveTab('payroll')}><Wallet size={18} />Payroll</button>
+      <button role="tab" aria-selected={activeTab === 'allowance'} onClick={() => setActiveTab('allowance')}><Fuel size={18} />Daily Allowance</button>
     </div>
-  );
-}
-
-function formatExpenseType(value) {
-  if (value === 'food') return 'Food Expense';
-  if (value === 'petrol') return 'Petrol Expense';
-  return 'Other Expense';
-}
-
-function statusBadgeClass(status) {
-  if (status === 'paid' || status === 'overpaid') return 'badge-complete';
-  if (status === 'partial') return 'badge-in_progress';
-  return 'badge-pending';
+    {(activeTab === 'attendance' || activeTab === 'allowance') && <div className="filter-bar"><select aria-label="Filter by staff" className="form-select" style={{ width: 200 }} value={filters.staff_id} onChange={event => setFilters({ ...filters, staff_id: event.target.value })}><option value="">All Staff</option>{staff.map(person => <option key={person.staff_id} value={person.staff_id}>{person.name || person.full_name || person.staff_id}</option>)}</select><DateRangePicker start={filters.date_from} end={filters.date_to} onChange={(date_from, date_to) => setFilters({ ...filters, date_from, date_to })} /><button className="btn btn-secondary" onClick={() => setFilters({ staff_id: '', date_from: '', date_to: '' })}>Clear</button></div>}
+    {activeTab === 'payroll' ? <PayrollConsole data={payrollData} month={payrollMonth} onMonth={setPayrollMonth} loading={payrollLoading} error={payrollError} onReload={loadPayroll} /> : activeTab === 'leave' ? <LeaveHistory rows={leaveHistoryRows} pending={leaveHistoryRows.filter(row => !row.status || row.status === 'pending')} onDecide={decideLeave} loading={leaveLoading} error={leaveError} onRetry={loadLeaves} /> : activeTab === 'allowance' ? <DailyAllowance filters={filters} staff={staff} /> : <AttendanceLog records={records} loading={loading} error={attendanceError} onRetry={fetchRecords} onPhoto={setViewPhoto} />}
+    {viewPhoto && <dialog ref={photoDialog} className="attendance-photo-dialog" aria-label="Attendance photo" onCancel={() => setViewPhoto(null)} onClick={event => { if (event.target === event.currentTarget) setViewPhoto(null); }}><img src={viewPhoto} alt="Attendance photo" style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', display: 'block' }} /><div style={{ padding: 12, textAlign: 'center' }}><button className="btn btn-secondary" onClick={() => setViewPhoto(null)}>Close</button></div></dialog>}
+  </div>;
 }
