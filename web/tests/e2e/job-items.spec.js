@@ -1,8 +1,53 @@
 import { test, expect } from '@playwright/test';
+import { groupJobItems } from '../../src/utils/groupJobItems';
 
 const camera = { barcode: 'CAM', item_name: 'Camera', model_number: 'Model 1', selling_price: 100, current_quantity: 10 };
 const cable = { barcode: 'CABLE', item_name: 'Cable', selling_price: 20, current_quantity: 100 };
 const used = { ...camera, _id: 'usage-1', quantity_used: 2, unit_selling_price: 100, warranty_years: 1 };
+
+test('grouping keeps different prices and warranties separate without losing usage records', () => {
+  const rows = [
+    { ...used, _id: 'a', quantity_used: 1, serial_number: 'A' },
+    { ...used, _id: 'b', quantity_used: 1, serial_number: 'B' },
+    { ...used, _id: 'c', quantity_used: 1, serial_number: 'C', unit_selling_price: 200 },
+    { ...used, _id: 'd', quantity_used: 1, serial_number: 'D', warranty_years: 3 },
+    used,
+  ];
+  const groups = groupJobItems(rows);
+  expect(groups).toHaveLength(4);
+  expect(groups[0].quantity_used).toBe(2);
+  expect(groups[0].records.map(row => row._id)).toEqual(['a', 'b']);
+  expect(rows[0].quantity_used).toBe(1);
+});
+
+test('existing serial usages edit as one row and preserve IDs on save', async ({ page }) => {
+  let saved;
+  const records = ['A', 'B'].map(serial => ({ ...used, _id: `usage-${serial}`, serial_number: serial, quantity_used: 1 }));
+  await page.route('**/inventory/', route => route.fulfill({ json: [camera] }));
+  await page.route('**/jobs/TEST/items', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { version: 'a'.repeat(64), items: records } });
+    saved = route.request().postDataJSON();
+    return route.fulfill({ json: { message: 'Saved' } });
+  });
+  await page.goto('/tests/fixtures/job-items.html');
+  await page.getByRole('button', { name: 'Edit Items' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Quantity for item 1', { exact: true })).toHaveValue('2');
+  await expect(dialog.getByLabel('Quantity for item 2', { exact: true })).toHaveCount(0);
+  await dialog.getByLabel('Price for item 1', { exact: true }).fill('450');
+  await dialog.getByLabel('Warranty for item 1').selectOption('3');
+  await expect(dialog.getByText('Material Total: Rs 900.00')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save Items' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(saved.items.map(row => row.usage_id)).toEqual(['usage-A', 'usage-B']);
+  expect(saved.items.every(row => row.quantity_used === 1 && row.unit_selling_price === 450 && row.warranty_years === 3)).toBe(true);
+  await page.getByRole('button', { name: 'Edit Items' }).click();
+  await dialog.getByRole('button', { name: 'Remove item 1' }).click();
+  await expect(dialog.getByText('Material Total: Rs 0.00')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save Items' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(saved.items).toEqual([]);
+});
 
 test('edit, add, remove, save and show errors without closing the editor', async ({ page }, testInfo) => {
   let saved;
@@ -74,7 +119,9 @@ test('search by item name and serial, select multiple serials, and save one unit
   await dialog.screenshot({ path: testInfo.outputPath('serial-selection.png') });
   await dialog.getByRole('button', { name: 'Add Item' }).click();
   await expect(dialog.getByLabel('Serial number for item 1')).toHaveValue('SER-001');
-  await expect(dialog.getByLabel('Serial number for item 2')).toHaveValue('SER-003');
+  await expect(dialog.getByLabel('Serial number 2 for item 1')).toHaveValue('SER-003');
+  await expect(dialog.getByLabel('Quantity for item 1', { exact: true })).toHaveValue('2');
+  await expect(dialog.getByLabel('Quantity for item 2', { exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel('Quantity for item 1', { exact: true })).toHaveAttribute('readonly', '');
   await expect(dialog.getByText('Material Total: Rs 200.00')).toBeVisible();
   await dialog.getByLabel('Inventory product').fill('SER-004');
@@ -82,8 +129,10 @@ test('search by item name and serial, select multiple serials, and save one unit
   await expect(dialog.getByRole('checkbox', { name: /SER-001/ })).toBeDisabled();
   await dialog.getByLabel('SER-004', { exact: true }).check();
   await dialog.getByRole('button', { name: 'Add Item' }).click();
+  await expect(dialog.getByLabel('Quantity for item 1', { exact: true })).toHaveValue('3');
+  await dialog.getByLabel('Price for item 1', { exact: true }).fill('150');
   await dialog.getByRole('button', { name: 'Save Items' }).click();
   await expect(dialog).toHaveCount(0);
   expect(saved.items.map(row => row.serial_number)).toEqual(['SER-001', 'SER-003', 'SER-004']);
-  expect(saved.items.every(row => row.quantity_used === 1 && row.warranty_years === 2 && row.unit_selling_price === 100)).toBe(true);
+  expect(saved.items.every(row => row.quantity_used === 1 && row.warranty_years === 2 && row.unit_selling_price === 150)).toBe(true);
 });

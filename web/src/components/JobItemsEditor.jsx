@@ -3,6 +3,7 @@ import { MdAdd, MdClose, MdDelete, MdEdit } from 'react-icons/md';
 import { inventoryApi, jobsApi } from '../api';
 import { useAuth } from '../context/useAuth';
 import './JobItemsEditor.css';
+import { groupJobItems } from '../utils/groupJobItems';
 
 const money = value => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const serialNumbers = stock => [...new Set([...(stock?.serial_numbers || []), ...(stock?.serial_number || '').split(',')].map(value => String(value).trim()).filter(Boolean))];
@@ -24,6 +25,8 @@ export default function JobItemsEditor({ job, onSaved }) {
   const selectedStock = catalogue.find(item => item.barcode === (selectedBarcode || selected));
   const matches = selected.trim() ? catalogue.filter(item => [item.item_name, item.barcode, item.model_number, ...serialNumbers(item)].some(value => String(value || '').toLowerCase().includes(selected.trim().toLowerCase()))) : [];
   const displayed = open ? items : (job.inventory_used || []);
+  const editGroups = groupJobItems(items);
+  const productGroups = groupJobItems(job.inventory_used || []);
 
   useEffect(() => {
     if (open) dialog.current?.showModal();
@@ -67,6 +70,10 @@ export default function JobItemsEditor({ job, onSaved }) {
     setError('');
   };
   const change = (key, field, value) => setItems(rows => rows.map(row => row.key === key ? { ...row, [field]: value } : row));
+  const changeGroup = (group, field, value) => {
+    const keys = new Set(group.records.map(row => row.key));
+    setItems(rows => rows.map(row => keys.has(row.key) ? { ...row, [field]: value } : row));
+  };
 
   const save = async event => {
     event.preventDefault();
@@ -101,9 +108,9 @@ export default function JobItemsEditor({ job, onSaved }) {
       <div className="table-wrapper">
         <table className="table">
           <thead><tr><th>Product</th><th>Serial Number</th><th>Quantity</th><th>Unit Price</th><th>Amount</th></tr></thead>
-          <tbody>{(job.inventory_used || []).map(row => <tr key={row._id}>
+          <tbody>{productGroups.map((row, index) => <tr key={row._id || index}>
             <td>{row.item_name || row.barcode}{row.model_number && <small className="job-item-model">{row.model_number}</small>}</td>
-            <td>{row.serial_number || '-'}</td><td>{row.quantity_used}</td><td>Rs {money(row.unit_selling_price)}</td>
+            <td>{row.records.map(record => record.serial_number).filter(Boolean).join(', ') || '-'}</td><td>{row.quantity_used}</td><td>Rs {money(row.unit_selling_price)}</td>
             <td>Rs {money(row.quantity_used * row.unit_selling_price)}</td>
           </tr>)}{!job.inventory_used?.length && <tr><td colSpan={5}>No products recorded</td></tr>}</tbody>
         </table>
@@ -136,17 +143,17 @@ export default function JobItemsEditor({ job, onSaved }) {
               </fieldset>}
               <div className="table-wrapper"><table className="table job-items-edit-table">
                 <thead><tr><th>Product</th><th>Quantity</th><th>Unit Price (Rs)</th><th>Serial Number</th><th>Warranty</th><th>Amount (Rs)</th><th aria-label="Actions" /></tr></thead>
-                <tbody>{items.map((row, index) => <tr key={row.key}>
+                <tbody>{editGroups.map((row, index) => <tr key={row.key}>
                   <td>{row.item_name || row.barcode}<small className="job-item-model">{row.model_number}</small></td>
-                  <td><input aria-label={`Quantity for item ${index + 1}`} className="form-input" type="number" min="0.001" step="any" required readOnly={!!row.serial_number && Number(row.quantity_used) === 1} value={row.quantity_used} onChange={event => change(row.key, 'quantity_used', event.target.value)} /></td>
-                  <td><input aria-label={`Price for item ${index + 1}`} className="form-input" type="number" min="0" step="0.01" required value={row.unit_selling_price} onChange={event => change(row.key, 'unit_selling_price', event.target.value)} /></td>
-                  <td><input aria-label={`Serial number for item ${index + 1}`} className="form-input" list={`job-serial-options-${index}`} maxLength={256} value={row.serial_number || ''} onChange={event => change(row.key, 'serial_number', event.target.value)} /><datalist id={`job-serial-options-${index}`}>{serialNumbers(catalogue.find(stock => stock.barcode === row.barcode)).filter(serial => serial === row.serial_number || !items.some(other => other.key !== row.key && other.barcode === row.barcode && other.serial_number === serial)).map(serial => <option key={serial} value={serial} />)}</datalist></td>
-                  <td><select aria-label={`Warranty for item ${index + 1}`} className="form-select" value={row.warranty_years ?? ''} onChange={event => change(row.key, 'warranty_years', event.target.value)}>
+                  <td><input aria-label={`Quantity for item ${index + 1}`} className="form-input" type="number" min="0.001" step="any" required readOnly={row.records.length > 1 || (!!row.serial_number && Number(row.quantity_used) === 1)} value={row.quantity_used} onChange={event => change(row.key, 'quantity_used', event.target.value)} /></td>
+                  <td><input aria-label={`Price for item ${index + 1}`} className="form-input" type="number" min="0" step="0.01" required value={row.unit_selling_price} onChange={event => changeGroup(row, 'unit_selling_price', event.target.value)} /></td>
+                  <td>{row.records.map((record, serialIndex) => <input key={record.key} aria-label={serialIndex === 0 ? `Serial number for item ${index + 1}` : `Serial number ${serialIndex + 1} for item ${index + 1}`} className="form-input" style={{ marginBottom: 6 }} list={`job-serial-options-${index}`} maxLength={256} value={record.serial_number || ''} onChange={event => change(record.key, 'serial_number', event.target.value)} />)}<datalist id={`job-serial-options-${index}`}>{serialNumbers(catalogue.find(stock => stock.barcode === row.barcode)).filter(serial => !items.some(other => other.barcode === row.barcode && other.serial_number === serial)).map(serial => <option key={serial} value={serial} />)}</datalist></td>
+                  <td><select aria-label={`Warranty for item ${index + 1}`} className="form-select" value={row.warranty_years ?? ''} onChange={event => changeGroup(row, 'warranty_years', event.target.value)}>
                     <option value="">Not recorded</option><option value="0">No warranty</option>
                     {[1, 2, 3, 4, 5].map(year => <option key={year} value={year}>{year} year{year > 1 ? 's' : ''}</option>)}
                   </select></td>
                   <td>{money(row.quantity_used * row.unit_selling_price)}</td>
-                  <td><button type="button" className="btn-icon" aria-label={`Remove item ${index + 1}`} title="Remove item" onClick={() => setItems(rows => rows.filter(item => item.key !== row.key))}><MdDelete /></button></td>
+                  <td><button type="button" className="btn-icon" aria-label={`Remove item ${index + 1}`} title="Remove item" onClick={() => setItems(rows => rows.filter(item => !row.records.some(record => record.key === item.key)))}><MdDelete /></button></td>
                 </tr>)}{!items.length && <tr><td colSpan={7}>No products recorded</td></tr>}</tbody>
               </table></div>
               <div className="job-items-total">Material Total: Rs {money(total)}</div>
