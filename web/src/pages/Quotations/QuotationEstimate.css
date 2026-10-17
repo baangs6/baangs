@@ -1,0 +1,43 @@
+.quotations-page .quote-estimate-header { padding: 0 0 20px; border: 0; border-bottom: 1px solid #e1e8e4; background: transparent; border-radius: 0; box-shadow: none; margin-bottom: 24px; }
+.quote-estimate-header h2 { font-size: 28px; color: #244138; }
+.quote-estimate-header p { font-size: 12px; color: #879b8e; }
+.quote-estimate-form .quote-fieldset { display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, .46fr); align-items: start; gap: 24px; }
+.quote-estimate-form .quote-section { grid-column: 1; min-width: 0; background: #fff; border: 0; border-top: 1px solid #e0e8e4; border-bottom: 1px solid #e0e8e4; padding: 22px; }
+.quote-estimate-form .quote-section h3, .quote-estimate-summary h3 { font-size: 16px; color: #315346; margin-bottom: 20px; }
+.quote-estimate-customer { grid-row: 1; }
+.quote-estimate-items { grid-row: 2; }
+.quote-estimate-terms { grid-row: 3; }
+.quote-estimate-form .quote-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.quote-estimate-form .form-group { font-size: 11px; color: #667d70; gap: 7px; }
+.quote-estimate-form .form-input, .quote-estimate-form .form-select { font-size: 12px; border-radius: 6px; border-color: #dfe8e2; background: #fcfefd; }
+.quote-estimate-form .quote-item { padding: 20px 0; border-color: #e6ede8; }
+.quote-estimate-form .quote-item-title { gap: 12px; padding-bottom: 12px; font-size: 12px; color: #6f8577; }
+.quote-estimate-form .quote-item-title strong { font-size: 12px; background: #e7f3ed; padding: 6px 9px; border-radius: 4px; color: #28745c; }
+.quote-estimate-form .quote-item-title > span { margin-left: auto; font-weight: 600; color: #25483a; }
+.quote-estimate-items > .quote-item > .quote-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.quote-estimate-form .quote-wide { grid-column: span 2; min-width: 0; }
+.quote-estimate-items > .quote-item > .quote-fields > label:last-child { grid-column: 1 / -1; }
+.quote-estimate-form .quote-item .table-wrapper { max-width: 100%; overflow: auto; border-radius: 4px; box-shadow: none; }
+.quote-estimate-form .quote-item .table-wrapper > .table { min-width: 430px; }
+.quote-estimate-form .quote-item .quote-fields .quote-fields { grid-template-columns: minmax(0, 1fr); }
+.quote-estimate-form .quote-item .quote-fields .quote-fields > div { min-width: 0; overflow-x: auto; }
+.quote-estimate-form .quote-item .table td, .quote-estimate-form .quote-item .table th { font-size: 10px; padding: 9px; }
+.quote-estimate-form .quote-customer-results { top: 68px; }
+.quote-estimate-form .quote-customer-history .table-wrapper { overflow-x: auto; }
+.quote-estimate-form .quote-customer-history .table { min-width: 420px; }
+.quote-estimate-terms .form-group + .form-group { margin-top: 20px; }
+.quote-estimate-summary { grid-column: 2; grid-row: 1 / span 3; position: sticky; top: 90px; min-width: 0; padding: 22px; background: #fff; border: 1px solid #dfe8e2; border-radius: 8px; }
+.quote-estimate-line-count { display: block; margin: -8px 0 14px; font-size: 11px; color: #8c9d90; }
+.quote-estimate-summary .quote-totals dl > div { padding: 14px 0; border-color: #e6ede8; font-size: 12px; color: #728979; }
+.quote-estimate-summary .quote-totals dd { font-weight: 600; color: #294a39; font-variant-numeric: tabular-nums; }
+.quote-estimate-summary .quote-totals dl > div:last-child { font-size: 22px; color: #165c45; }
+.quote-estimate-summary .quote-totals > label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #718674; }
+.quote-estimate-summary input[type='checkbox'] { accent-color: #0f766e; }
+.quote-estimate-form .btn { border-radius: 6px; box-shadow: none; font-size: 12px; }
+.quote-estimate-form .btn-primary { background: #0f766e; border-color: #0f766e; }
+.quote-estimate-form .btn-primary:hover { background: #0b625b; }
+.quote-estimate-summary .quote-footer { flex-direction: column; align-items: stretch; padding: 20px 0 0; gap: 8px; }
+.quote-estimate-summary .quote-footer .btn { justify-content: center; white-space: normal; }
+.quote-estimate-form button:focus-visible { outline: 2px solid #0f766e; outline-offset: 3px; }
+@media(max-width: 1100px) { .quote-estimate-form .quote-fieldset { grid-template-columns: minmax(0, 1fr); } .quote-estimate-summary { grid-column: 1; grid-row: 4; position: static; } }
+@media(max-width: 600px) { .quote-estimate-header h2 { font-size: 24px; } .quote-estimate-form .quote-section, .quote-estimate-summary { padding: 16px; } .quote-estimate-form .quote-fields { grid-template-columns: minmax(0, 1fr); } .quote-estimate-items > .quote-item > .quote-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .quote-estimate-customer .quote-wide { grid-column: auto; } .quote-estimate-form .quote-item-title { flex-wrap: wrap; } }

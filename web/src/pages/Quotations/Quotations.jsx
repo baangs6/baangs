@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { TrendingUp, ClipboardClock, BadgeCheck, Banknote, Download, Printer, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import { MdAdd, MdArrowBack, MdDeleteOutline, MdDownload, MdEdit, MdSave, MdContentCopy, MdMoreVert } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { quotationsApi, customersApi, inventoryApi } from '../../api';
 import { useAuth } from '../../context/useAuth';
 import { formatDate } from '../../utils/dateFormat';
 import './quotations.css';
+import './QuotationDashboard.css';
+import './QuotationEstimate.css';
 import QuotationItemPicker from '../../components/QuotationItemPicker';
 import DateRangePicker from '../../components/DateRangePicker';
 import QuotationCustomerPicker from '../../components/QuotationCustomerPicker';
@@ -50,6 +53,9 @@ export default function Quotations() {
   const [dateRange, setDateRange] = useState({ start:'', end:'' });
   const [preparedBy, setPreparedBy] = useState('');
   const [view, setView] = useState('quotations');
+  const [customerType, setCustomerType] = useState('all');
+  const [pageSize, setPageSize] = useState(10);
+  const [pageState, setPageState] = useState({ key: '', page: 1 });
   const [selectedCustomerKey, setSelectedCustomerKey] = useState(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -171,10 +177,48 @@ export default function Quotations() {
   const filtered = rows.filter(row => (!selectedGroup || keyFor(row) === selectedGroup.key) && (!status || row.status === status)
     && (!preparedBy || row.prepared_by === preparedBy)
     && (!dateRange.start || row.quote_date >= dateRange.start) && (!dateRange.end || row.quote_date <= dateRange.end)
-    && `${row.estimation_no || ''} ${row.quote_id} ${row.customer_name} ${row.phone_number}`.toLowerCase().includes(search.toLowerCase()));
+    && `${row.estimation_no || ''} ${row.quote_id} ${row.customer_name} ${row.phone_number} ${row.address || ''}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredIds = new Set(filtered.map(row => row.quote_id));
+  const accountGroups = customerGroups.map(group => ({ ...group, quotes: group.quotes.filter(row => filteredIds.has(row.quote_id)).sort((a,b) => (b.quote_date || '').localeCompare(a.quote_date || '')) })).filter(group => group.quotes.length);
+  const visibleAccounts = accountGroups.filter(group => customerType === 'all' || (customerType === 'saved' ? !!group.row.customer_id : !group.row.customer_id));
+  const isCustomerList = view === 'customers' && !selectedGroup;
+  const accountQuotes = visibleAccounts.flatMap(group => group.quotes);
+  const savedAccounts = accountGroups.filter(group => group.row.customer_id).length;
   const totalQuoted = filtered.reduce((sum,row) => sum + Number(row.total || 0),0);
   const acceptedQuoted = filtered.filter(row => row.status === 'accepted').reduce((sum,row) => sum + Number(row.total || 0),0);
   const openQuoted = filtered.filter(row => ['draft','sent'].includes(row.status)).reduce((sum,row) => sum + Number(row.total || 0),0);
+  const openCount = filtered.filter(row => ['draft', 'sent'].includes(row.status)).length;
+  const acceptedCount = filtered.filter(row => row.status === 'accepted').length;
+  const recordCount = isCustomerList ? visibleAccounts.length : filtered.length;
+  const paginationKey = JSON.stringify([search, status, preparedBy, dateRange, view, selectedCustomerKey, pageSize, customerType]);
+  const pageCount = Math.max(1, Math.ceil(recordCount / pageSize));
+  const page = pageState.key === paginationKey ? Math.min(pageState.page, pageCount) : 1;
+  const pageStart = (page - 1) * pageSize;
+  const goPage = number => setPageState({ key: paginationKey, page: number });
+  const pageNumbers = [...new Set([1, page - 1, page, page + 1, pageCount])].filter(number => number >= 1 && number <= pageCount).sort((a, b) => a - b);
+  const exportCsv = () => {
+    const cell = value => `"${String(value ?? '').replace(/^\s*[=+@-]/, "'$&").replaceAll('"', '""')}"`;
+    const data = isCustomerList ? [['Customer', 'Phone', 'Location', 'Quotations Given', 'Customer Type', 'Total Quoted'], ...visibleAccounts.map(group => [group.row.customer_name, group.row.phone_number, group.row.address, group.quotes.length, group.row.customer_id ? 'Saved customer' : 'Quotation only', group.quotes.reduce((sum,row) => sum + Number(row.total || 0), 0)])] : [['Date', 'Reference No.', 'Customer', 'Phone', 'Amount', 'Valid Until', 'Status'], ...filtered.map(row => [row.quote_date, row.estimation_no || row.quote_id, row.customer_name, row.phone_number, row.total, row.valid_until, row.status])];
+    const url = URL.createObjectURL(new Blob(['\uFEFF', data.map(row => row.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a'); link.href = url; link.download = isCustomerList ? 'quotation-customers.csv' : 'quotations.csv'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const printSummary = () => {
+    const printRows = isCustomerList ? accountQuotes : filtered;
+    const popup = window.open('', '_blank');
+    if (!popup) { setNotice('Allow pop-ups to print the quotation summary.'); return; }
+    popup.opener = null;
+    popup.document.title = 'Baangs Quotation Summary';
+    const append = (parent, tag, value) => { const element = popup.document.createElement(tag); element.textContent = value; parent.appendChild(element); return element; };
+    append(popup.document.head, 'style', 'body{font:13px Arial;padding:24px;color:#243a36}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}h1{font-size:23px}');
+    append(popup.document.body, 'h1', 'BAANGS - Quotation Summary');
+    append(popup.document.body, 'p', `${printRows.length} quotations | Total: ${rupees(printRows.reduce((sum,row) => sum + Number(row.total || 0), 0))}`);
+    const table = append(popup.document.body, 'table', '');
+    const header = append(table, 'tr', '');
+    ['Date', 'Reference', 'Customer', 'Amount', 'Valid Until', 'Status'].forEach(value => append(header, 'th', value));
+    printRows.forEach(row => { const tr = append(table, 'tr', ''); [formatDate(row.quote_date), row.estimation_no || row.quote_id, row.customer_name, rupees(row.total), formatDate(row.valid_until), row.status].forEach(value => append(tr, 'td', value)); });
+    popup.focus(); popup.print();
+  };
   const choosePeriod = value => {
     setPeriod(value);
     const today = new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Kolkata'});
@@ -183,9 +227,9 @@ export default function Quotations() {
     else setDateRange({start:`${today.slice(0,7)}-01`,end:today});
   };
   const calculation = form ? totals(form.items, form.round_off) : null;
-  return <div className="quotations-page">
-    <header className={`page-header ${!form ? 'quote-dashboard-header' : ''}`}><div><h2>{form ? 'Quotations' : 'Estimate / Quotation'}</h2>{form && <p>{saved?.estimation_no || saved?.quote_id || 'New quotation'}</p>}</div>
-      {form ? <button className="btn btn-secondary" onClick={close} disabled={busy}><MdArrowBack /> Back</button> : <button className="btn btn-primary quote-add-estimate" onClick={() => open(null)}><MdAdd /> Add Estimate</button>}
+  return <div className={`quotations-page${!form ? ' quote-finance-dashboard' : ''}`}>
+    <header className={`page-header ${!form ? 'quote-dashboard-header' : 'quote-estimate-header'}`}><div><h2>{form ? saved ? 'Edit Estimate' : 'Add Estimate' : 'Quotations & Estimates'}</h2>{form ? <p>{saved?.estimation_no || saved?.quote_id || 'New quotation'}</p> : <p>Commercial proposals and customer estimates</p>}</div>
+      {form ? <button className="btn btn-secondary" onClick={close} disabled={busy}><MdArrowBack /> Back</button> : <div className="quote-header-actions"><button className="btn btn-secondary" onClick={exportCsv} disabled={loading || !filtered.length}><Download size={16} /> Export CSV</button><button className="btn btn-secondary" onClick={printSummary} disabled={loading || !filtered.length}><Printer size={16} /> Print Summary</button><button className="btn btn-primary quote-add-estimate" onClick={() => open(null)}><MdAdd /> Add Estimate</button></div>}
     </header>
     {error && <div role="alert" className="quote-message error">{error}</div>}
     {notice && <div role="status" className="quote-message">{notice}</div>}
@@ -221,23 +265,47 @@ export default function Quotations() {
         </div>
         <QuotationCustomerFollowup key={selectedGroup.key} customer={[...selectedGroup.quotes].sort((a,b) => (b.customer_remark_updated_at || '').localeCompare(a.customer_remark_updated_at || ''))[0]} onSaved={updated => setRows(prev => prev.map(row => updated.find(item => item.quote_id === row.quote_id) || row))} />
       </section>}
+      {(view === 'quotations' || selectedGroup) && <section className="quote-pipeline-metrics" aria-label="Filtered quotation metrics">
+        <div><span>Total Pipeline Value</span><TrendingUp aria-hidden="true" /><strong>{rupees(totalQuoted)}</strong><small>{filtered.length} proposals</small></div>
+        <div><span>Open / In Review</span><ClipboardClock aria-hidden="true" /><strong>{rupees(openQuoted)}</strong><small>{openCount} open proposals</small></div>
+        <div><span>Accepted</span><BadgeCheck aria-hidden="true" /><strong>{rupees(acceptedQuoted)}</strong><small>{acceptedCount} accepted proposals</small></div>
+        <div><span>Average Deal Size</span><Banknote aria-hidden="true" /><strong>{rupees(filtered.length ? totalQuoted / filtered.length : 0)}</strong><small>Across filtered quotations</small></div>
+      </section>}
+      {isCustomerList && <section className="quote-pipeline-metrics quote-account-metrics" aria-label="Quotation customer metrics">
+        <div><span>Quoted Accounts</span><TrendingUp aria-hidden="true" /><strong>{visibleAccounts.length}</strong><small>{accountQuotes.length} quotations issued</small></div>
+        <div><span>Total Quoted Value</span><Banknote aria-hidden="true" /><strong>{rupees(accountQuotes.reduce((sum,row) => sum + Number(row.total || 0), 0))}</strong><small>Across filtered customer accounts</small></div>
+        <div><span>Saved / Quotation Only</span><BadgeCheck aria-hidden="true" /><strong>{visibleAccounts.filter(group => group.row.customer_id).length} / {visibleAccounts.filter(group => !group.row.customer_id).length}</strong><small>Customer database / quotation-only accounts</small></div>
+        <div><span>Quotation Acceptance</span><ClipboardClock aria-hidden="true" /><strong>{accountQuotes.length ? Math.round(accountQuotes.filter(row => row.status === 'accepted').length / accountQuotes.length * 100) : 0}%</strong><small>Accepted quotations in this selection</small></div>
+      </section>}
       <div className="quote-dashboard-filters">
         <span>Filter by:</span>
         <select className="form-select" aria-label="Quotation period" value={period} onChange={e => choosePeriod(e.target.value)}><option value="all">All dates</option><option value="today">Today</option><option value="month">This month</option><option value="custom">Custom</option></select>
         {period === 'custom' && <DateRangePicker start={dateRange.start} end={dateRange.end} active={!!dateRange.start} onChange={(start,end) => setDateRange({start,end})} />}
         <select className="form-select" aria-label="Prepared by" value={preparedBy} onChange={e => setPreparedBy(e.target.value)}><option value="">All users</option>{[...new Set(rows.map(row => row.prepared_by).filter(Boolean))].map(name => <option key={name} value={name}>{name}</option>)}</select>
         <select aria-label="Quotation status" className="form-select" value={status} onChange={e => setStatus(e.target.value)}><option value="">All statuses</option>{['draft','sent','accepted','rejected'].map(s => <option key={s} value={s}>{s}</option>)}</select>
-        {(period !== 'all' || status || preparedBy || search) && <button type="button" className="btn btn-secondary btn-sm" onClick={() => { choosePeriod('all'); setStatus(''); setPreparedBy(''); setSearch(''); }}>Clear</button>}
+        {(period !== 'all' || status || preparedBy || search || (isCustomerList && customerType !== 'all')) && <button type="button" className="btn btn-secondary btn-sm" onClick={() => { choosePeriod('all'); setStatus(''); setPreparedBy(''); setSearch(''); setCustomerType('all'); }}>Clear</button>}
       </div>
       {(view === 'quotations' || selectedGroup) && <>
-        <section className="quote-summary-band"><div className="quote-summary"><span>Total Quotations</span><strong>{rupees(totalQuoted)}</strong><div><span>Accepted: <b>{rupees(acceptedQuoted)}</b></span><span>Open: <b>{rupees(openQuoted)}</b></span></div></div></section>
         <div className="quote-transactions-heading"><h3>Transactions <small>({filtered.length})</small></h3><input aria-label="Search quotations" className="form-input" placeholder="Search transactions" value={search} onChange={e => setSearch(e.target.value)} /></div>
       </>}
-      {view === 'customers' && !selectedGroup && <input aria-label="Search quotation customers" className="form-input" placeholder="Search customers" value={search} onChange={e => setSearch(e.target.value)} />}
-      {view === 'customers' && !selectedGroup ? <div className="table-wrapper"><table className="table"><thead><tr><th>Customer</th><th>Phone</th><th>Location</th><th>Quotations Given</th><th>Customer Type</th></tr></thead><tbody>
-        {customerGroups.filter(g => `${g.row.customer_name} ${g.row.phone_number} ${g.row.address}`.toLowerCase().includes(search.toLowerCase())).map(g => <tr key={g.key}><td><button className="quote-link" onClick={() => { setSelectedCustomerKey(g.key); setSearch(''); setStatus(''); }}>{g.row.customer_name}</button></td><td>{g.row.phone_number}</td><td>{g.row.address}</td><td>{g.quotes.length}</td><td>{g.row.customer_id ? 'Saved customer' : 'Quotation only'}</td></tr>)}
-      </tbody></table>{!customerGroups.length && <p>{loading ? 'Loading customers...' : 'No quotation customers yet.'}</p>}</div> : loading ? <p role="status">Loading quotations...</p> : <div className="table-wrapper quote-transactions"><table className="table"><thead><tr>{['Date','Reference No.','Party Name','Amount','Valid Until','Status','Actions'].map(t => <th key={t}>{t}</th>)}</tr></thead><tbody>
-        {filtered.map(row => <tr key={row.quote_id}><td>{formatDate(row.quote_date)}</td><td><button className="quote-link" onClick={() => open(row)}>{row.estimation_no || row.quote_id}</button></td><td><button className="quote-link" onClick={() => { setView('customers'); setSelectedCustomerKey(keyFor(row)); setSearch(''); setStatus(''); }}>{row.customer_name}</button></td><td className="quote-amount">{rupees(row.total)}</td><td>{formatDate(row.valid_until)}</td><td><select className={`form-select quote-status ${row.status}`} aria-label={`Status for ${row.estimation_no || row.quote_id}`} value={row.status} disabled={busy} onChange={event => updateStatus(row, event.target.value)}>{['draft','sent','accepted','rejected'].map(value => <option key={value} value={value}>{value === 'draft' ? 'Open - Draft' : value === 'sent' ? 'Open - Sent' : value === 'accepted' ? 'Accepted' : 'Rejected'}</option>)}</select></td><td><div className="quote-row-actions">
+      {isCustomerList && <div className="quote-account-toolbar"><div className="quote-account-types" aria-label="Quotation customer types">{[['all', `All (${accountGroups.length})`], ['saved', `Saved (${savedAccounts})`], ['lead', `Quotation Only (${accountGroups.length - savedAccounts})`]].map(([value,label]) => <button className="btn btn-secondary" key={value} aria-pressed={customerType === value} onClick={() => setCustomerType(value)}>{label}</button>)}</div><input aria-label="Search quotation customers" className="form-input" placeholder="Search name, phone, location or quotation reference" value={search} onChange={e => setSearch(e.target.value)} /></div>}
+      {isCustomerList ? <div className="table-wrapper quote-account-table"><table className="table"><thead><tr>{['Customer','Contact Phone','Location','Quotations Given','Customer Type','Latest / Value','Status','Actions'].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>
+        {visibleAccounts.slice(pageStart, pageStart + pageSize).map(group => {
+          const latest = group.quotes[0];
+          const showQuotes = () => { setSelectedCustomerKey(group.key); setSearch(''); setStatus(''); };
+          return <tr key={group.key}>
+            <td><div className="quote-party"><span className="quote-party-avatar" aria-hidden="true">{(group.row.customer_name || 'C').slice(0,1).toUpperCase()}</span><div><button className="quote-link" onClick={showQuotes}>{group.row.customer_name}</button><small>{group.row.customer_id ? 'Saved customer' : 'Quotation account'}</small></div></div></td>
+            <td><a className="quote-account-phone" href={`tel:${group.row.phone_number.replace(/[^+\d]/g,'')}`}>{group.row.phone_number}</a></td>
+            <td className="quote-account-location">{group.row.address || '-'}</td>
+            <td><button className="quote-account-count" onClick={showQuotes}>{group.quotes.length} quote{group.quotes.length === 1 ? '' : 's'}</button></td>
+            <td><span className={`quote-account-type ${group.row.customer_id ? 'saved' : 'lead'}`}>{group.row.customer_id ? 'Saved customer' : 'Quotation only'}</span></td>
+            <td><strong>{rupees(group.quotes.reduce((sum,row) => sum + Number(row.total || 0), 0))}</strong><small className="quote-account-date">{formatDate(latest.quote_date)}</small></td>
+            <td><span className={`quote-account-status ${latest.status}`}>{latest.status === 'draft' ? 'Open - Draft' : latest.status === 'sent' ? 'Open - Sent' : latest.status}</span></td>
+            <td><button className="btn btn-secondary btn-sm" onClick={showQuotes}>View Quotes <ArrowRight size={14} /></button></td>
+          </tr>;
+        })}
+      </tbody></table>{!visibleAccounts.length && <div className="empty-state">{loading ? 'Loading customers...' : 'No quotation customers match the selected filters.'}</div>}</div> : loading ? <p role="status">Loading quotations...</p> : <div className="table-wrapper quote-transactions"><table className="table"><thead><tr>{['Date','Reference No.','Party Name','Amount','Valid Until','Status','Actions'].map(t => <th key={t}>{t}</th>)}</tr></thead><tbody>
+        {filtered.slice(pageStart, pageStart + pageSize).map(row => <tr key={row.quote_id}><td>{formatDate(row.quote_date)}</td><td><button className="quote-link" onClick={() => open(row)}>{row.estimation_no || row.quote_id}</button></td><td><div className="quote-party"><span aria-hidden="true" className="quote-party-avatar">{(row.customer_name || 'C').slice(0, 1).toUpperCase()}</span><div><button className="quote-link" onClick={() => { setView('customers'); setSelectedCustomerKey(keyFor(row)); setSearch(''); setStatus(''); }}>{row.customer_name}</button><small>{row.phone_number}</small></div></div></td><td className="quote-amount">{rupees(row.total)}</td><td>{formatDate(row.valid_until)}</td><td><select className={`form-select quote-status ${row.status}`} aria-label={`Status for ${row.estimation_no || row.quote_id}`} value={row.status} disabled={busy} onChange={event => updateStatus(row, event.target.value)}>{['draft','sent','accepted','rejected'].map(value => <option key={value} value={value}>{value === 'draft' ? 'Open - Draft' : value === 'sent' ? 'Open - Sent' : value === 'accepted' ? 'Accepted' : 'Rejected'}</option>)}</select></td><td><div className="quote-row-actions">
           {user?.role === 'admin' && <button type="button" className="quote-link" disabled={busy} onClick={() => moveCustomer(row)}>Convert to Job</button>}
           {selectedGroup && <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => share(row)}><FaWhatsapp /> Send</button>}
           <details className="quote-action-menu"><summary title="Quotation actions" aria-label={`Actions for ${row.estimation_no || row.quote_id}`}><MdMoreVert /></summary><div className="quote-action-menu-content">
@@ -247,9 +315,15 @@ export default function Quotations() {
           <button type="button" title="Copy PDF link" aria-label={`Copy link for ${row.quote_id}`} className="btn btn-secondary" disabled={busy} onClick={() => share(row, true)}><MdContentCopy /></button>
         </div></details></div></td></tr>)}
       </tbody></table>{!filtered.length && <div className="empty-state">No quotations found.</div>}</div>}
-    </> : <form onSubmit={save}>
+      {!loading && recordCount > 0 && <nav className="quote-pagination" aria-label="Quotation pagination">
+        <span role="status">Showing {pageStart + 1}-{Math.min(pageStart + pageSize, recordCount)} of {recordCount}{isCustomerList ? ' customer accounts' : ''}</span>
+        <label>Rows per page<select className="form-select" value={pageSize} onChange={event => setPageSize(Number(event.target.value))}>{[10,20,50,100].map(size => <option key={size}>{size}</option>)}</select></label>
+        <div className="quote-page-buttons"><button className="btn btn-secondary btn-icon" title="Previous page" aria-label="Previous page" disabled={page === 1} onClick={() => goPage(page - 1)}><ChevronLeft size={16} /></button>{pageNumbers.map((number, index) => <span key={number}>{index > 0 && number - pageNumbers[index - 1] > 1 && <span aria-hidden="true">...</span>}<button className={`btn ${page === number ? 'btn-primary' : 'btn-secondary'}`} aria-label={`Page ${number}`} aria-current={page === number ? 'page' : undefined} onClick={() => goPage(number)}>{number}</button></span>)}<button className="btn btn-secondary btn-icon" title="Next page" aria-label="Next page" disabled={page === pageCount} onClick={() => goPage(page + 1)}><ChevronRight size={16} /></button></div>
+        <form key={`${page}-${pageCount}`} onSubmit={event => { event.preventDefault(); const target = Number(new FormData(event.currentTarget).get('page')); if (Number.isInteger(target) && target >= 1 && target <= pageCount) goPage(target); }}><label>Jump to page<input className="form-input" name="page" type="number" required min="1" max={pageCount} step="1" defaultValue={page} /></label><span>of {pageCount}</span><button className="btn btn-secondary btn-icon" title="Jump to page" aria-label="Jump to page"><ArrowRight size={16} /></button></form>
+      </nav>}
+    </> : <form className="quote-estimate-form" onSubmit={save}>
       <fieldset disabled={busy} className="quote-fieldset">
-        <section className="quote-section"><h3>Customer & Quotation Details</h3><div className="quote-fields">
+        <section className="quote-section quote-estimate-customer"><h3>Customer & Quotation Details</h3><div className="quote-fields">
           <QuotationCustomerPicker customers={customers} quotations={rows} value={form} onSelect={chooseCustomer} />
           {[['customer_name','Customer name',true],['billing_name','Billing name',false],['phone_number','Phone number',true],['gstin','Customer GSTIN',false],['state_of_supply','State of supply',false]].map(([key,label,required]) => <label key={key} className="form-group">{label}<input className="form-input" required={required} value={form[key]} maxLength={key === 'phone_number' ? 30 : key === 'gstin' ? 30 : 200} onChange={e => change(key,e.target.value)} /></label>)}
           <label className="form-group">Quotation date<input required type="date" className="form-input" value={form.quote_date} onChange={e => change('quote_date',e.target.value)} /></label>
@@ -257,7 +331,7 @@ export default function Quotations() {
           {saved && <label className="form-group">Status<select className="form-select" value={form.status} onChange={e => change('status',e.target.value)}>{['draft','sent','accepted','rejected'].map(s => <option key={s} value={s}>{s}</option>)}</select></label>}
           <label className="form-group quote-wide">Address<textarea className="form-input" value={form.address} maxLength={2000} onChange={e => change('address',e.target.value)} /></label>
         </div></section>
-        <section className="quote-section"><h3>Items & Services</h3>
+        <section className="quote-section quote-estimate-items"><h3>Bill of Materials & Field Services</h3>
           <datalist id="quote-inventory">{inventory.map(i => <option key={i.barcode} value={i.item_name}>{i.barcode} - {i.model_number}</option>)}</datalist>
           {form.items.map((item,index) => <div className="quote-item" key={index}>
             <div className="quote-item-title"><strong>Item {index+1}</strong><span>{rupees(totals([item], false).total)}</span><button type="button" title="Remove item" aria-label={`Remove item ${index+1}`} className="btn btn-secondary" disabled={form.items.length === 1} onClick={() => change('items',form.items.filter((_,i) => i!==index))}><MdDeleteOutline /></button></div>
@@ -270,16 +344,18 @@ export default function Quotations() {
           </div>)}
           <button type="button" className="btn btn-secondary" disabled={form.items.length >= 100} onClick={() => change('items',[...form.items,newItem()])}><MdAdd /> Add Item / Service</button>
         </section>
-        <section className="quote-section quote-bottom"><div>
+        <section className="quote-section quote-estimate-terms"><h3>Terms, Conditions & Notes</h3><div>
           <label className="form-group">Terms & Conditions<textarea rows={7} className="form-input" maxLength={10000} value={form.terms} onChange={e => change('terms',e.target.value)} /></label>
           <label className="form-group">Notes<textarea rows={3} className="form-input" maxLength={3000} value={form.notes} onChange={e => change('notes',e.target.value)} /></label>
-        </div><div className="quote-totals"><dl>{[['Subtotal',calculation.subtotal],['Discount',calculation.discount],['Tax',calculation.tax],['Round off',calculation.adjustment],['Total',calculation.total]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{rupees(value)}</dd></div>)}</dl><label><input type="checkbox" checked={form.round_off} onChange={e => change('round_off',e.target.checked)} /> Round off total</label></div></section>
+        </div></section>
+        <aside className="quote-estimate-summary" aria-label="Financial Summary"><h3>Financial Summary</h3><span className="quote-estimate-line-count">{form.items.length} line item{form.items.length === 1 ? '' : 's'}</span><div className="quote-totals"><dl>{[['Subtotal',calculation.subtotal],['Discount',calculation.discount],['Tax',calculation.tax],['Round off',calculation.adjustment],['Total',calculation.total]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{rupees(value)}</dd></div>)}</dl><label><input type="checkbox" checked={form.round_off} onChange={e => change('round_off',e.target.checked)} /> Round off total</label></div>
         <div className="quote-actions quote-footer"><button type="submit" className="btn btn-primary"><MdSave /> {busy ? 'Please wait...' : 'Save Quotation'}</button>
           {user?.role === 'admin' && <button type="button" className="btn btn-secondary" disabled={!saved || dirty} onClick={() => moveCustomer(saved)}><MdAdd /> Move to Customers / Create Job</button>}
           <button type="button" className="btn btn-secondary" disabled={!saved || dirty} onClick={() => download(saved)}><MdDownload /> Download PDF</button>
           <button type="button" className="btn btn-secondary" disabled={!saved || dirty} onClick={() => share(saved)}><FaWhatsapp /> WhatsApp</button>
           <button type="button" className="btn btn-secondary" disabled={!saved || dirty} onClick={() => share(saved,true)}><MdContentCopy /> Copy Link</button>
         </div>
+        </aside>
       </fieldset>
     </form>}
   </div>;

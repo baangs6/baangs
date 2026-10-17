@@ -1,0 +1,68 @@
+.quotations-shell .main-content { background: #f7f9fc; }
+.quotations-shell .sidebar { background: #fff; box-shadow: none; }
+.quotations-shell .app-topbar { background: #fff; height: 70px; padding: 10px 28px; border-bottom: 1px solid #e2e9e5; }
+.quotations-shell .topbar-profile { background: transparent; border: 0; box-shadow: none; backdrop-filter: none; }
+.quotations-shell .sidebar-nav a.active { background: #e5f3ec; color: #0f766e; box-shadow: none; border-color: #d7e8e0; }
+.quote-finance-dashboard { display: flex; flex-direction: column; gap: 20px; }
+.quote-finance-dashboard .quote-dashboard-header { background: none; border: 0; box-shadow: none; border-radius: 0; padding: 0; margin: 0; gap: 16px; }
+.quote-finance-dashboard .page-header h2 { color: #203c38; font-size: 28px; }
+.quote-finance-dashboard .page-header p { color: #7f928b; font-size: 12px; }
+.quote-header-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.quote-finance-dashboard .btn { font-size: 12px; border-radius: 6px; box-shadow: none; }
+.quote-finance-dashboard .btn-primary { background: #0f766e; border-color: #0f766e; }
+.quote-finance-dashboard .btn-primary:hover { background: #0b625b; }
+.quote-finance-dashboard > .quote-actions[aria-label='Quotation views'] { align-self: flex-start; gap: 4px; padding: 4px; border: 1px solid #dde7e3; border-radius: 8px; background: #eaf1ee; margin: 0 !important; }
+.quote-finance-dashboard > .quote-actions[aria-label='Quotation views'] .btn { background: transparent; border-color: transparent; color: #6d8379; }
+.quote-finance-dashboard > .quote-actions[aria-label='Quotation views'] .btn[aria-pressed='true'] { background: #fff; color: #0f766e; }
+.quote-pipeline-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.quote-pipeline-metrics > div { position: relative; display: flex; flex-direction: column; gap: 20px; min-width: 0; padding: 20px; border: 1px solid #e0e9e5; background: #fff; border-radius: 8px; }
+.quote-pipeline-metrics > div > span { font-size: 10px; text-transform: uppercase; color: #687e73; padding-right: 28px; }
+.quote-pipeline-metrics svg { position: absolute; right: 16px; top: 18px; width: 19px; color: #0f766e; }
+.quote-pipeline-metrics > div:nth-child(2) svg { color: #d99a13; }
+.quote-pipeline-metrics > div:nth-child(3) svg { color: #13975f; }
+.quote-pipeline-metrics > div:nth-child(4) svg { color: #2595b4; }
+.quote-pipeline-metrics strong { font-size: 25px; line-height: 1.25; font-weight: 600; color: #243d36; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.quote-pipeline-metrics small { color: #87988e; font-size: 11px; margin-top: auto; }
+.quote-finance-dashboard .quote-dashboard-filters { display: flex; flex-wrap: wrap; gap: 10px; padding: 16px; border: 1px solid #e1e9e4; border-radius: 8px; background: #fff; }
+.quote-finance-dashboard .quote-dashboard-filters > span { font-size: 11px; text-transform: uppercase; color: #698073; }
+.quote-finance-dashboard .form-select, .quote-finance-dashboard .form-input { background-color: #f3f7f5; border-color: #dfe8e2; border-radius: 6px; font-size: 12px; }
+.quote-finance-dashboard .quote-transactions-heading { padding: 0; border: 0; background: transparent; gap: 14px; margin: 0; }
+.quote-finance-dashboard .quote-transactions-heading h3 { font-size: 19px; color: #294138; }
+.quote-finance-dashboard .quote-transactions-heading .form-input { max-width: 340px; }
+.quote-finance-dashboard .table-wrapper { border: 1px solid #e0e8e3; border-radius: 8px; background: #fff; box-shadow: none; overflow-x: auto; }
+.quote-finance-dashboard .table { min-width: 1060px; }
+.quote-finance-dashboard .table th { color: #7d9084; background: #f2f7f4; font-size: 10px; padding: 16px; }
+.quote-finance-dashboard .table td { font-size: 12px; padding: 20px 16px; border-color: #edf2ee; }
+.quote-finance-dashboard .quote-link { color: #0f766e; text-decoration: none; }
+.quote-finance-dashboard .quote-link:hover { text-decoration: underline; }
+.quote-finance-dashboard .quote-amount { color: #243f34; font-variant-numeric: tabular-nums; }
+.quote-party { display: flex; gap: 10px; align-items: center; }
+.quote-party-avatar { display: flex; justify-content: center; align-items: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; background: #e2f3f0; color: #0f766e; font-size: 11px; }
+.quote-party small { display: block; color: #95a397; margin-top: 4px; font-size: 10px; }
+.quote-finance-dashboard .quote-status { border-radius: 6px; padding: 7px 10px; font-size: 11px; }
+.quote-finance-dashboard .quote-status.draft, .quote-finance-dashboard .quote-status.sent { background: #fff6e5; color: #a97017; border-color: #f2e4c8; }
+.quote-finance-dashboard .quote-status.accepted { background: #e6f7ec; color: #178452; }
+.quote-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 12px; color: #7b8f82; }
+.quote-pagination > [role='status'] { margin-right: auto; }
+.quote-pagination label, .quote-page-buttons, .quote-page-buttons > span, .quote-pagination form { display: flex; align-items: center; gap: 6px; }
+.quote-pagination .form-select { width: 70px; }
+.quote-pagination .form-input { width: 65px; }
+.quote-pagination .btn { height: 34px; min-width: 32px; padding: 6px 8px; }
+.quote-finance-dashboard button:focus-visible, .quote-finance-dashboard a:focus-visible { outline: 2px solid #0f766e; outline-offset: 3px; }
+.quote-account-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.quote-account-types { display: flex; flex-wrap: wrap; gap: 6px; margin-right: auto; }
+.quote-account-types .btn[aria-pressed='true'] { background: #e3f2eb; border-color: #9fceba; color: #0f766e; }
+.quote-account-toolbar > .form-input { flex: 1 1 290px; max-width: 440px; min-width: 0; }
+.quote-finance-dashboard .quote-account-table .table { min-width: 1180px; }
+.quote-account-table .table td { vertical-align: middle; }
+.quote-account-phone { color: #5b7568; font-size: 12px; text-decoration: none; }
+.quote-account-location { max-width: 170px; white-space: normal; overflow-wrap: anywhere; color: #829386; }
+.quote-account-count { padding: 5px 10px; border: 1px solid #d7e5dd; border-radius: 4px; background: #eef6f1; color: #287454; font-size: 11px; cursor: pointer; }
+.quote-account-type, .quote-account-status { display: inline-block; padding: 5px 8px; border-radius: 4px; font-size: 10px; text-transform: capitalize; white-space: nowrap; }
+.quote-account-type.saved { background: #e7f6ec; color: #287b4e; }
+.quote-account-type.lead, .quote-account-status.draft, .quote-account-status.sent { background: #fff4df; color: #ad7d22; }
+.quote-account-status.accepted { background: #e6f7ec; color: #178452; }
+.quote-account-status.rejected { background: #ffebee; color: #b44155; }
+.quote-account-date { display: block; color: #95a397; margin-top: 5px; font-size: 10px; }
+@media(max-width: 1100px) { .quote-pipeline-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media(max-width: 650px) { .quote-finance-dashboard .page-header h2 { font-size: 24px; } .quote-pipeline-metrics { gap: 10px; } .quote-pipeline-metrics > div { padding: 14px; } .quote-pipeline-metrics strong { font-size: 21px; } .quote-finance-dashboard .quote-transactions-heading { flex-direction: column; align-items: stretch; } .quote-finance-dashboard .quote-transactions-heading .form-input { max-width: none; } }
