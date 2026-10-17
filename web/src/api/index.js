@@ -128,6 +128,7 @@ export const updatesApi = {
   getJobUpdates: (jobId) => api.get(`/updates/job/${jobId}`),
   create: (data) => api.post('/updates/', data),
   learningLog: (params) => api.get('/updates/learning-log', { params }),
+  createLearning: (data) => api.post('/updates/learning-log', data),
   reviewDoubt: (updateId, data) => api.patch(`/updates/${updateId}/doubt-review`, data),
   verifyManualInventory: (updateId, manualItemId, data) =>
     api.patch(`/updates/${updateId}/manual-inventory/${manualItemId}/verify`, data),

@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 import pytz
 from pymongo.errors import OperationFailure
-from ..models.daily_update import DailyUpdateCreate, DailyUpdateResponse, DoubtReview, ManualInventoryVerify
+from ..models.daily_update import DailyUpdateCreate, DailyUpdateResponse, DoubtReview, ManualInventoryVerify, LearningEntry
 from ..auth.utils import require_admin, require_admin_or_manager, get_current_user
 from ..database import get_db, get_db_mode
 from ..utils.id_generator import generate_update_id, generate_usage_id, generate_transaction_id, generate_inventory_item_id
@@ -247,8 +247,8 @@ async def learning_log(
     query = {
         "update_time": {"$gte": f"{start.isoformat()}T00:00:00", "$lte": f"{end.isoformat()}T23:59:59.999999"},
         "$or": [
-            {"issues_faced": {"$nin": [None, ""]}},
-            {"learning_notes": {"$nin": [None, ""]}},
+            {"issues_faced": {"$exists": True, "$nin": [None, ""]}},
+            {"learning_notes": {"$exists": True, "$nin": [None, ""]}},
         ],
     }
     if staff_id:
@@ -284,6 +284,31 @@ async def learning_log(
     }
 
 
+@router.post("/learning-log")
+async def create_learning_entry(data: LearningEntry, current_user: dict = Depends(require_admin_or_manager)):
+    db = get_db()
+    if not data.note.strip():
+        raise HTTPException(status_code=400, detail="A note is required")
+    job = await db.jobs.find_one({"job_id": data.job_id})
+    person = await db.staff.find_one({"staff_id": data.staff_id})
+    if not job or not person:
+        raise HTTPException(status_code=404, detail="Job or technician not found")
+    if not is_assigned_to_job(job, data.staff_id):
+        raise HTTPException(status_code=400, detail="Select a technician assigned to this job")
+    entry = {
+        "update_id": generate_update_id(), "job_id": data.job_id,
+        "assigned_staff_id": data.staff_id, "staff_name": person.get("name") or person.get("full_name") or data.staff_id,
+        "update_time": now_ist_str(), "status": job.get("status", "in_progress"),
+        "learning_category": data.category.strip() or "General",
+        "issues_faced": data.note.strip() if data.kind == "doubt" else None,
+        "learning_notes": data.note.strip() if data.kind == "learning" else None,
+        "doubt_status": "open" if data.kind == "doubt" else "resolved",
+        "created_by": current_user.get("username"),
+    }
+    await db.daily_updates.insert_one(entry)
+    return {**_fmt(entry), "customer_name": job.get("customer_name")}
+
+
 @router.patch("/{update_id}/doubt-review")
 async def review_doubt(update_id: str, data: DoubtReview, current_user: dict = Depends(require_admin_or_manager)):
     if data.doubt_status not in {"open", "answered", "resolved"}:
@@ -295,8 +320,16 @@ async def review_doubt(update_id: str, data: DoubtReview, current_user: dict = D
         "replied_at": now_ist_str(),
         "replied_by": current_user.get("full_name") or current_user.get("username"),
     }
+    record = await db.daily_updates.find_one({"update_id": update_id})
+    if not record or not (record.get("issues_faced") or record.get("learning_notes")):
+        raise HTTPException(status_code=404, detail="Learning or doubt not found")
+    if (data.team_sop if data.team_sop is not None else record.get("team_sop")) and not ((data.admin_reply or "").strip() or record.get("learning_notes")):
+        raise HTTPException(status_code=400, detail="Add a resolution before saving a team SOP")
+    for field in ("team_sop", "site_visit_required"):
+        if getattr(data, field) is not None:
+            values[field] = getattr(data, field)
     result = await db.daily_updates.find_one_and_update(
-        {"update_id": update_id, "issues_faced": {"$nin": [None, ""]}},
+        {"update_id": update_id},
         {"$set": values},
         return_document=True,
     )
@@ -643,6 +676,9 @@ def _fmt(u: dict) -> dict:
         "doubt_status": u.get("doubt_status") or ("open" if u.get("issues_faced") else "resolved"),
         "admin_reply": u.get("admin_reply"),
         "replied_at": u.get("replied_at"),
+        "replied_by": u.get("replied_by"),
+        "team_sop": u.get("team_sop", False),
+        "site_visit_required": u.get("site_visit_required", False),
         "expense": u.get("expense", 0.0),
         "service_charge": u.get("service_charge", u.get("service_bill", 0.0)),
         "service_bill": u.get("service_bill", 0.0),

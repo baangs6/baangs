@@ -73,8 +73,18 @@ class DailyUpdateResponse(BaseModel):
 
 
 class DoubtReview(BaseModel):
-    admin_reply: Optional[str] = None
+    admin_reply: Optional[str] = Field(default=None, max_length=10000)
     doubt_status: str = "open"
+    team_sop: Optional[bool] = None
+    site_visit_required: Optional[bool] = None
+
+
+class LearningEntry(BaseModel):
+    job_id: str = Field(min_length=1, max_length=100)
+    staff_id: str = Field(min_length=1, max_length=100)
+    note: str = Field(min_length=1, max_length=10000)
+    kind: str = Field(pattern="^(doubt|learning)$")
+    category: str = Field(default="General", max_length=100)
 
 
 class ManualInventoryVerify(BaseModel):
