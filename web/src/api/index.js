@@ -51,6 +51,8 @@ export const authApi = {
 
 // Users
 export const usersApi = {
+  auditLogs: () => api.get('/users/audit-logs'),
+  revokeSessions: id => api.post(`/users/${id}/revoke-sessions`),
   list: () => api.get('/users/'),
   create: (data) => api.post('/users/', data),
   update: (id, data) => api.put(`/users/${id}`, data),
