@@ -44,6 +44,24 @@ for (const width of [1440, 390, 320]) test(`all inventory views fit ${width}px`,
     await page.screenshot({ path: info.outputPath(`inventory-${name.replaceAll(' ', '-')}-${width}.png`), fullPage: true });
   }
 });
+test('create item offers existing names without changing stock or saving', async ({ page }) => {
+  const { calls } = await setup(page);
+  await page.route('**/inventory/B0/price-history', route => route.fulfill({ json: { purchase: [{ price: 12 }], current_purchase_price: 10 } }));
+  await page.getByRole('button', { name: 'Create New Item', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Inventory action' });
+  const name = dialog.getByLabel('Item Name', { exact: true });
+  await name.fill('Camera');
+  await expect(name).toHaveAttribute('list', 'existing-inventory-items');
+  await expect(dialog.locator('#existing-inventory-items option')).toHaveCount(13);
+  await expect(dialog.locator('#existing-inventory-items option').first()).toHaveAttribute('value', 'Camera 0');
+  await expect(dialog.locator('#existing-inventory-items option').first()).toHaveAttribute('label', 'MODEL-00 | Stock: 2 Pcs');
+  await name.fill('Camera 0');
+  await expect(dialog.getByLabel('Model Number', { exact: true })).toHaveValue('MODEL-00');
+  await expect(dialog.getByLabel('Purchase Price', { exact: true })).toHaveValue('12');
+  await expect(dialog.getByLabel('Opening Quantity', { exact: true })).toHaveValue('0');
+  expect(calls).toHaveLength(0);
+});
+
 test('catalog serial search, pagination, export, spec print and reorder request', async ({ page }) => {
   await setup(page);
   await page.getByRole('button', { name: 'Prepare Reorder', exact: true }).click();
