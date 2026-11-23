@@ -44,6 +44,7 @@ function JobsStack() {
   const { colors } = useTheme();
   return (
     <Stack.Navigator
+      initialRouteName="JobsList"
       screenOptions={{
         headerStyle: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
         headerTintColor: colors.text,
@@ -235,6 +236,7 @@ function MainTabs() {
           screen: 'Jobs',
           params: {
             screen: 'JobDetail',
+            initial: false,
             params: { jobId },
           },
         });

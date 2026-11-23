@@ -428,6 +428,8 @@ async def update_job(job_id: str, data: JobUpdate, current_user: dict = Depends(
             update_data["additional_staff_names"] = names
 
     if update_data.get("status") == "complete":
+        if job.get('status') != 'complete':
+            update_data['report_completed_at'] = now_ist_str()
         job = await complete_visit(db, {**job, **update_data})
         await sync_bill(db, job)
     result = await db.jobs.find_one_and_update(

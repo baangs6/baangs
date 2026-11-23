@@ -24,11 +24,17 @@ export default function JobCreateScreen({ navigation }) {
   const [form, setForm] = React.useState(initialForm);
   const [staff, setStaff] = React.useState([]);
   const [customers, setCustomers] = React.useState([]);
+  const [customerSearch, setCustomerSearch] = React.useState('');
+  const [customerError, setCustomerError] = React.useState('');
+  const [customerLoading, setCustomerLoading] = React.useState(false);
+  const [lookupError, setLookupError] = React.useState('');
+  const [retry, setRetry] = React.useState(0);
+  const [selectedCustomerId, setSelectedCustomerId] = React.useState(null);
   const [lookups, setLookups] = React.useState({});
   const [saving, setSaving] = React.useState(false);
   const [amcRows, setAmcRows] = React.useState([]);
   const [amcError, setAmcError] = React.useState(false);
-  const selectedCustomer = customers.find(c => c.customer_name === form.customer_name && c.phone_number === form.phone_number);
+  const selectedCustomer = customers.find(c => c.customer_id === selectedCustomerId);
   React.useEffect(() => {
     let active = true;
     setAmcRows([]);
@@ -42,35 +48,60 @@ export default function JobCreateScreen({ navigation }) {
   const coverage = amcRows.find(c => c.status === 'active' && siteKey(c.location) === siteKey(form.location));
 
   React.useEffect(() => {
-    Promise.allSettled([staffApi.list(), lookupsApi.all(), customersApi.list()]).then(([staffRes, lookupRes, customersRes]) => {
+    let active = true;
+    Promise.allSettled([staffApi.list(), lookupsApi.all()]).then(([staffRes, lookupRes]) => {
+      if (!active) return;
+      setLookupError(staffRes.status === 'rejected' ? 'Unable to load technicians. Please retry.' : '');
       if (staffRes.status === 'fulfilled') setStaff(Array.isArray(staffRes.value.data) ? staffRes.value.data : []);
       if (lookupRes.status === 'fulfilled') setLookups(lookupRes.value.data || {});
-      if (customersRes.status === 'fulfilled') setCustomers(Array.isArray(customersRes.value.data) ? customersRes.value.data : []);
     });
-  }, []);
+    return () => { active = false; };
+  }, [retry]);
+
+  React.useEffect(() => {
+    let active = true;
+    const query = customerSearch.trim();
+    if (query.length < 2) { setCustomerLoading(false); setCustomerError(''); return; }
+    setCustomerLoading(true);
+    setCustomerError('');
+    const timer = setTimeout(async () => {
+      try {
+        const search = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const { data } = await customersApi.list({ search, limit: 20 });
+        if (active) setCustomers(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) { setCustomers([]); setCustomerError('Unable to search customers. Please retry.'); }
+      } finally { if (active) setCustomerLoading(false); }
+    }, 300);
+    return () => { active = false; clearTimeout(timer); };
+  }, [customerSearch, retry]);
 
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const customerMatches = React.useMemo(() => {
-    const q = `${form.customer_name} ${form.phone_number}`.trim().toLowerCase();
+    const q = customerSearch.trim().toLowerCase();
     if (q.length < 2) return [];
-    return customers.filter((c) => `${c.customer_name || c.name || ''} ${c.nickname || ''} ${c.phone_number || c.phone || ''}`.toLowerCase().includes(q)).slice(0, 6);
-  }, [customers, form.customer_name, form.phone_number]);
+    return customers.filter((c) => `${c.customer_name || c.name || ''} ${c.nickname || ''} ${c.phone_number || c.phone || ''} ${c.location || ''}`.toLowerCase().includes(q)).slice(0, 20);
+  }, [customers, customerSearch]);
 
   const selectCustomer = (c) => {
+    setSelectedCustomerId(c.customer_id);
+    setCustomerSearch('');
     setForm((prev) => ({
       ...prev,
       customer_name: c.customer_name || c.name || prev.customer_name,
       customer_nickname: c.nickname || '',
       phone_number: c.phone_number || c.phone || prev.phone_number,
-      location: c.location || c.address || prev.location,
-      map_location: c.map_location || prev.map_location,
-      site_type: c.site_type || prev.site_type,
+      location: c.location || c.address || '',
+      map_location: c.map_location || '',
+      site_type: c.site_type || 'Home',
     }));
   };
 
   const submit = async () => {
-    if (!form.customer_name.trim() || !form.phone_number.trim() || !form.location.trim() || !form.assigned_staff_id) {
-      Alert.alert('Missing details', 'Customer, phone, location and technician are required.');
+    if (saving) return;
+    const missing = [['Customer name', form.customer_name], ['Phone number', form.phone_number], ['Location / Address', form.location], ['Technician', form.assigned_staff_id]].filter(([, value]) => !String(value || '').trim()).map(([label]) => label);
+    if (missing.length) {
+      Alert.alert('Missing details', `Please enter: ${missing.join(', ')}.`);
       return;
     }
     setSaving(true);
@@ -85,24 +116,30 @@ export default function JobCreateScreen({ navigation }) {
       };
       const res = await jobsApi.create(payload);
       Alert.alert('Job Created', res.data?.job_id || 'New job created.');
-      navigation.goBack();
+      if (navigation.canGoBack()) navigation.goBack();
+      else navigation.navigate('JobsList');
     } catch (e) {
-      Alert.alert('Create failed', e?.response?.data?.detail || e.message || 'Please try again.');
+      const detail = e?.response?.data?.detail;
+      Alert.alert('Create failed', typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map(row => `${row.loc?.slice(1).join('.') || 'Field'}: ${row.msg}`).join('\n') : e.message || 'Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Create New Job</Text>
       <Text style={styles.sub}>Add the same job details from the web panel inside the app.</Text>
 
-      <Field label="Customer Name" value={form.customer_name} onChangeText={(v) => update('customer_name', v)} colors={colors} />
+      <Field label="Customer Name" value={form.customer_name} onChangeText={(v) => { update('customer_name', v); setSelectedCustomerId(null); setCustomers([]); setCustomerSearch(v); }} colors={colors} />
       {amcError && <Text style={{ color: colors.text }}>Unable to check AMC coverage.</Text>}
       {coverage && <Text style={{ color: '#20b878', fontWeight: '700', marginVertical: 10 }}>AMC Customer | {coverage.free_visits_used}/4 visits used | {coverage.free_visits_remaining} free remaining{coverage.free_visits_remaining === 0 ? ' | Extra visit charges apply' : ''}</Text>}
       <Field label="Nickname (internal)" value={form.customer_nickname} onChangeText={(v) => update('customer_nickname', v)} colors={colors} />
-      <Field label="Phone Number" value={form.phone_number} onChangeText={(v) => update('phone_number', v)} keyboardType="phone-pad" colors={colors} />
+      <Field label="Phone Number" value={form.phone_number} onChangeText={(v) => { update('phone_number', v); setSelectedCustomerId(null); setCustomers([]); setCustomerSearch(v); }} keyboardType="phone-pad" colors={colors} />
+      {customerLoading && <ActivityIndicator color={colors.accent} />}
+      {!!customerError && <Text accessibilityRole="alert" style={{ color: colors.danger }}>{customerError}</Text>}
+      {!!lookupError && <Text accessibilityRole="alert" style={{ color: colors.danger }}>{lookupError}</Text>}
+      {!!(customerError || lookupError) && <TouchableOpacity accessibilityRole="button" onPress={() => setRetry(value => value + 1)}><Text style={{ color: colors.accent }}>Retry loading details</Text></TouchableOpacity>}
       {customerMatches.length > 0 && (
         <View style={styles.suggestionBox}>
           <Text style={styles.suggestionTitle}>Existing Customers</Text>
@@ -147,6 +184,7 @@ function Field({ label, colors, multiline, ...props }) {
       <Text style={styles.label}>{label}</Text>
       <TextInput
         {...props}
+        accessibilityLabel={label}
         multiline={multiline}
         placeholderTextColor={colors.textMuted}
         style={[styles.input, multiline && styles.textarea]}

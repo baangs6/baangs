@@ -9,6 +9,7 @@ import { callPhone, openJobMap } from '../utils/contactActions';
 import storage from '../utils/storage';
 import { formatDate } from '../utils/dateFormat';
 import useLiveRefresh from '../hooks/useLiveRefresh';
+import { sortJobsByCreatedDate } from '../utils/jobSort';
 
 export default function JobsScreen({ navigation, route }) {
   const theme = useTheme();
@@ -32,6 +33,7 @@ export default function JobsScreen({ navigation, route }) {
   const [priorityMode, setPriorityMode] = useState(false);
   const [jobOrder, setJobOrder] = useState([]);
   const [daysSort, setDaysSort] = useState(null);
+  const [createdSort, setCreatedSort] = useState('desc');
   const assignedStaffId = route?.params?.assigned_staff_id;
   const technicianName = route?.params?.technicianName;
   const orderKey = `jobOrder:${assignedStaffId || user?.staff_id || user?.user_id || 'default'}`;
@@ -139,15 +141,17 @@ export default function JobsScreen({ navigation, route }) {
     if (filter !== 'all') res = res.filter(j => String(j.status || '').toLowerCase() === filter);
     if (serviceTypeFilter !== 'all') res = res.filter(j => j.work_type === serviceTypeFilter);
     if (search.trim()) res = res.filter(j => [j.job_id, j.customer_name, j.customer_nickname, j.phone_number, j.location].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+    res = sortJobsByCreatedDate(res, createdSort);
+    if (!priorityMode && !daysSort) return res;
     const position = new Map(jobOrder.map((id, index) => [id, index]));
     return [...res].sort((a, b) => {
       if (daysSort) {
         const difference = getDaysOpen(a) - getDaysOpen(b);
         if (difference !== 0) return daysSort === 'asc' ? difference : -difference;
       }
-      return (position.get(a.job_id) ?? 99999) - (position.get(b.job_id) ?? 99999);
+      return priorityMode ? (position.get(a.job_id) ?? 99999) - (position.get(b.job_id) ?? 99999) : 0;
     });
-  }, [dateFilteredJobs, filter, serviceTypeFilter, assignedStaffId, jobOrder, daysSort, search]);
+  }, [dateFilteredJobs, filter, serviceTypeFilter, assignedStaffId, jobOrder, daysSort, createdSort, priorityMode, search]);
 
   const moveJob = (jobId, direction) => {
     const visibleIds = filteredJobs.map((j) => j.job_id);
@@ -288,10 +292,16 @@ export default function JobsScreen({ navigation, route }) {
       </View>
 
       <View style={styles.sortRow}>
+        <Text style={styles.sortLabel}>Created Date</Text>
+        {[['desc', 'Newest first'], ['asc', 'Oldest first']].map(([value, label]) => (
+          <TouchableOpacity key={value} accessibilityRole="button" accessibilityLabel={`Created date: ${label}`} accessibilityState={{ selected: createdSort === value && !daysSort && !priorityMode }} style={[styles.sortBtn, createdSort === value && !daysSort && !priorityMode && styles.sortBtnActive]} onPress={() => { setCreatedSort(value); setDaysSort(null); setPriorityMode(false); }}>
+            <Text style={[styles.sortBtnText, createdSort === value && !daysSort && !priorityMode && styles.sortBtnTextActive]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
         <Text style={styles.sortLabel}>Days Open</Text>
         <TouchableOpacity
           style={[styles.sortBtn, daysSort && styles.sortBtnActive]}
-          onPress={() => setDaysSort((current) => current === 'desc' ? 'asc' : current === 'asc' ? null : 'desc')}
+          onPress={() => { setPriorityMode(false); setDaysSort((current) => current === 'desc' ? 'asc' : current === 'asc' ? null : 'desc'); }}
         >
           <Text style={[styles.sortBtnText, daysSort && styles.sortBtnTextActive]}>
             {daysSort === 'desc' ? 'Highest first' : daysSort === 'asc' ? 'Lowest first' : 'Sort'}
@@ -525,7 +535,7 @@ const createStyles = (colors) => StyleSheet.create({
   summaryNum: { fontSize: 20, fontWeight: '800', marginBottom: 2 },
   summaryLabel: { fontSize: 10, fontWeight: '600', color: colors.textMuted, textTransform: 'uppercase' },
   filterWrap: { marginBottom: spacing.md },
-  sortRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.base, marginBottom: spacing.md },
+  sortRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.base, marginBottom: spacing.md },
   sortLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
   sortBtn: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   sortBtnActive: { borderColor: colors.accent, backgroundColor: colors.accentDim },

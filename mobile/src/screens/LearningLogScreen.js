@@ -67,7 +67,7 @@ export default function LearningLogScreen({ navigation }) {
       renderItem={({ item }) => (
         <View style={styles.card}>
           <Text style={styles.staff}>{item.staff_name || item.assigned_staff_id}</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('MainTabs', { screen: 'Jobs', params: { screen: 'JobDetail', params: { jobId: item.job_id } } })}>
+          <TouchableOpacity onPress={() => navigation.navigate('MainTabs', { screen: 'Jobs', params: { screen: 'JobDetail', initial: false, params: { jobId: item.job_id } } })}>
             <Text style={styles.job}>{item.job_id}{item.customer_name ? ` · ${item.customer_name}` : ''}</Text>
           </TouchableOpacity>
           <Text style={styles.date}>{formatDateTime(item.update_time)}</Text>

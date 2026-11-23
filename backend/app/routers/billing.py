@@ -9,6 +9,8 @@ from ..auth.utils import create_access_token, decode_token, require_admin, requi
 from ..database import get_db
 from ..utils.id_generator import generate_billing_id
 from ..utils.timezone import today_ist_str
+from ..utils.timezone import now_ist_str
+from ..utils.billing_history import billing_history
 from ..utils.amc import complete_visit, sync_bill, price_bill
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
@@ -184,9 +186,13 @@ async def create_billing(data: BillingCreate, _=Depends(require_admin)):
     job = await complete_visit(db, job)
     if job.get("amc_benefits"):
         billing_doc = price_bill(billing_doc, job["amc_benefits"])
+    billing_doc.update(billing_history(None, billing_doc))
     await db.billing.insert_one(billing_doc)
     # Mark job as complete
-    await db.jobs.update_one({"job_id": data.job_id}, {"$set": {"status": "complete"}})
+    completion = {"status": "complete"}
+    if job.get('status') != 'complete':
+        completion['report_completed_at'] = now_ist_str()
+    await db.jobs.update_one({"job_id": data.job_id}, {"$set": completion})
     return _fmt(billing_doc)
 
 
@@ -371,14 +377,27 @@ async def update_billing(billing_id: str, data: BillingCreate, _=Depends(require
         update_data["service_amount"] = data.service_amount if "service_amount" in data.model_fields_set else existing.get("service_gross_amount", 0)
         update_data = price_bill(update_data, existing["amc_benefits"])
         update_data["profit"], update_data["profit_percentage"] = calc_profit(update_data["invoice_amount"], data.collected_amount, data.expense, data.material_amount)
+    update_data.update(billing_history(existing, {**existing, **update_data}))
     result = await db.billing.find_one_and_update(
-        {"billing_id": billing_id},
+        {"billing_id": billing_id, "invoice_amount": existing.get("invoice_amount"), "collected_amount": existing.get("collected_amount"), "report_history": existing.get("report_history")},
         {"$set": update_data},
         return_document=True
     )
     if not result:
-        raise HTTPException(status_code=404, detail="Billing record not found")
+        raise HTTPException(status_code=409, detail="Billing changed. Refresh and retry.")
     return _fmt(result)
+
+
+@router.post("/{billing_id}/mark-sent")
+async def mark_bill_sent(billing_id: str, user=Depends(require_admin)):
+    db = get_db()
+    result = await db.billing.update_one(
+        {"billing_id": billing_id, "report_sent_at": None},
+        {"$set": {"report_sent_at": now_ist_str(), "report_sent_by": user["user_id"]}},
+    )
+    if not result.matched_count and not await db.billing.find_one({"billing_id": billing_id}):
+        raise HTTPException(404, "Billing record not found")
+    return {"message": "Bill marked as sent"}
 
 
 @router.get("/summary/monthly")

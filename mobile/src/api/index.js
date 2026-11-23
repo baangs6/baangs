@@ -142,6 +142,7 @@ export const jobsApi = {
 };
 
 export const updatesApi = {
+  addVisitNote: (jobId, visit_notes) => api.post(`/updates/job/${encodeURIComponent(jobId)}/visit-notes`, { visit_notes }),
   getJobUpdates: (jobId) => api.get(`/updates/job/${jobId}`),
   create: (data) => api.post('/updates/', data),
   learningLog: (params) => api.get('/updates/learning-log', { params }),
@@ -193,6 +194,7 @@ export const billingApi = {
 };
 
 export const dashboardApi = {
+  technicianReport: params => api.get('/reports/technicians', { params }),
   summary: () => api.get('/dashboard/summary'),
   technicianPerformance: () => api.get('/dashboard/technician-performance'),
 };

@@ -201,7 +201,7 @@ export default function DashboardScreen({ navigation, route }) {
       {nextJob && <>
         <Text style={styles.sectionLabel}>Priority Up Next</Text>
         <View style={styles.card}>
-          <TouchableOpacity onPress={() => navigation.navigate('Jobs', { screen: 'JobDetail', params: { jobId: nextJob.job_id } })} style={styles.nextJob}>
+          <TouchableOpacity onPress={() => navigation.navigate('Jobs', { screen: 'JobDetail', initial: false, params: { jobId: nextJob.job_id } })} style={styles.nextJob}>
             <View style={styles.techAvatar}><Icon name="place" size={24} color={colors.accent} /></View>
             <View style={{ flex: 1 }}><Text style={styles.techName}>{nextJob.customer_name}</Text><Text style={styles.techSub}>{nextJob.location || 'Location not provided'}</Text><Text style={styles.techSub}>{nextJob.job_id} | {nextJob.priority || 'medium'}</Text></View><Icon name="chevron-right" size={24} color={colors.accent} />
           </TouchableOpacity>
@@ -260,7 +260,7 @@ export default function DashboardScreen({ navigation, route }) {
               <TouchableOpacity
                 key={job.job_id}
                 style={styles.techRow}
-                onPress={() => navigation.navigate('Jobs', { screen: 'JobDetail', params: { jobId: job.job_id } })}
+                onPress={() => navigation.navigate('Jobs', { screen: 'JobDetail', initial: false, params: { jobId: job.job_id } })}
               >
                 <View style={styles.techInfo}>
                   <Text style={styles.techName}>{job.job_id}</Text>

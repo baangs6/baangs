@@ -46,6 +46,7 @@ export default function NotificationsScreen({ navigation }) {
     if (jobId) {
       navigation.navigate('Jobs', {
         screen: 'JobDetail',
+        initial: false,
         params: { jobId },
       });
     }

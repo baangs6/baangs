@@ -5,6 +5,8 @@ import { radius, spacing, useTheme } from '../theme';
 import { callPhone, openJobMap } from '../utils/contactActions';
 import useLiveRefresh from '../hooks/useLiveRefresh';
 import AmcPanel from '../components/AmcPanel';
+import { useAuth } from '../context/AuthContext';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 function useList(loader) {
   const [items, setItems] = React.useState([]);
@@ -243,29 +245,62 @@ function FormInput({ styles, colors, label, ...props }) {
 }
 
 export function ReportsScreen() {
+  const { user } = useAuth();
   const { colors } = useTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [summary, setSummary] = React.useState(null);
   const [perf, setPerf] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [period, setPeriod] = React.useState('daily');
+  const [anchor, setAnchor] = React.useState(new Date());
+  const [pickDate, setPickDate] = React.useState(false);
+  const [report, setReport] = React.useState(null);
+  const [reportError, setReportError] = React.useState('');
+  const reportRequest = React.useRef(0);
+  const dateKey = `${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, '0')}-${String(anchor.getDate()).padStart(2, '0')}`;
 
   const load = React.useCallback(async () => {
+    const request = ++reportRequest.current;
     try {
       const [sumRes, perfRes] = await Promise.all([dashboardApi.summary(), dashboardApi.technicianPerformance()]);
+      if (request !== reportRequest.current) return;
       setSummary(sumRes.data || {});
       setPerf(Array.isArray(perfRes.data) ? perfRes.data : []);
+      if (user?.role === 'admin') {
+        setReport(null); setReportError('');
+        try {
+          const { data } = await dashboardApi.technicianReport({ period, anchor: dateKey });
+          if (request === reportRequest.current) setReport(data);
+        } catch { if (request === reportRequest.current) setReportError('Unable to load technician report. Pull down to retry.'); }
+      }
     } catch (e) {
       Alert.alert('Reports failed', e?.response?.data?.detail || e.message || 'Please try again.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (request === reportRequest.current) { setLoading(false); setRefreshing(false); }
     }
-  }, []);
-  useLiveRefresh(load);
+  }, [period, dateKey, user?.role]);
+  useLiveRefresh(load, `${period}:${dateKey}`);
 
   return (
     <ScreenShell title="Reports" subtitle="Dashboard report view" loading={loading} refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }}>
+      {user?.role === 'admin' && <View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{[['daily', 'Daily'], ['weekly', 'Weekly']].map(([value, label]) => <TouchableOpacity key={value} accessibilityRole="button" accessibilityState={{ selected: period === value }} onPress={() => { setReport(null); setPeriod(value); }}><Text style={{ color: period === value ? colors.accent : colors.text, padding: 12 }}>{label}</Text></TouchableOpacity>)}
+          <TouchableOpacity accessibilityRole="button" onPress={() => setPickDate(true)}><Text style={{ color: colors.accent, padding: 12 }}>{dateKey}</Text></TouchableOpacity></View>
+        {pickDate && <DateTimePicker value={anchor} mode="date" onChange={(event, value) => { setPickDate(false); if (value) { setReport(null); setAnchor(value); } }} />}
+        {!!reportError && <Text accessibilityRole="alert" style={{ color: colors.danger }}>{reportError}</Text>}
+        {report && <>
+          <Text style={styles.cardTitle}>{report.date_from} to {report.date_to}</Text>
+          {[{ ...report.totals, staff_id: 'totals', staff_name: 'All Technicians' }, ...report.technicians].map(row => <View style={styles.card} key={row.staff_id}>
+            <Text style={styles.cardTitle}>{row.staff_name}</Text>
+            <Text style={styles.meta}>Jobs completed: {row.jobs_completed}</Text>
+            <Text style={styles.meta}>Payments received (net): Rs {Number(row.payments_received).toFixed(2)}</Text>
+            <Text style={styles.meta}>Bills created: {row.bills_created} | Admin marked sent: {row.bills_sent}</Text>
+            <Text style={styles.meta}>Pending at period end: Rs {Number(row.payment_pending).toFixed(2)}</Text>
+            {!!(row.pending_unknown || row.completion_date_unknown || row.bill_date_unknown || row.undated_collected) && <Text style={{ color: colors.warning }}>Legacy dates unknown: {row.pending_unknown} balances, {row.completion_date_unknown} completions, {row.bill_date_unknown} invoices. Undated collections: Rs {Number(row.undated_collected).toFixed(2)}. Totals exclude unknown dates.</Text>}
+          </View>)}
+        </>}
+      </View>}
       <View style={styles.reportGrid}>
         <ReportBox label="Jobs" value={summary?.jobs?.total || 0} styles={styles} />
         <ReportBox label="Pending" value={summary?.jobs?.pending || 0} styles={styles} />

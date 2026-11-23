@@ -80,4 +80,6 @@ async def sync_bill(db, job, session=None):
         priced = price_bill(bill, job["amc_benefits"])
         from ..routers.billing import calc_profit
         priced["profit"], priced["profit_percentage"] = calc_profit(priced["invoice_amount"], priced.get("collected_amount"), priced.get("expense"), priced["material_amount"])
+        from .billing_history import billing_history
+        priced.update(billing_history(bill, priced))
         await db.billing.update_one({"job_id": job["job_id"]}, {"$set": {k: v for k, v in priced.items() if k != "_id"}}, session=session)

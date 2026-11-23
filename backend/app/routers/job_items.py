@@ -162,6 +162,7 @@ async def edit_items(job_id: str, data: JobItemsEdit, user=Depends(require_admin
             }}, session=session)
 
         bill = await db.billing.find_one({"job_id": job_id}, session=session)
+        previous_bill = dict(bill) if bill else None
         if bill or rows:
             bill = bill or {"billing_id": generate_billing_id(), "job_id": job_id,
                 "customer_name": job.get("customer_name"), "work_type": job.get("work_type"),
@@ -178,6 +179,8 @@ async def edit_items(job_id: str, data: JobItemsEdit, user=Depends(require_admin
                 bill = price_bill(bill, benefits)
             bill["profit"], bill["profit_percentage"] = calc_profit(
                 bill["invoice_amount"], bill.get("collected_amount"), bill.get("expense"), material)
+            from ..utils.billing_history import billing_history
+            bill.update(billing_history(previous_bill, bill))
             await db.billing.replace_one({"job_id": job_id}, bill, upsert=True, session=session)
         return {"message": "Job items updated"}
 

@@ -75,6 +75,8 @@ app.include_router(customers.router)
 app.include_router(jobs.router)
 app.include_router(updates.router)
 app.include_router(billing.router)
+from .routers import technician_reports
+app.include_router(technician_reports.router)
 app.include_router(attendance.router)
 app.include_router(lookups.router)
 app.include_router(dashboard.router)

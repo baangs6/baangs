@@ -7,6 +7,7 @@ import { formatDate } from '../../utils/dateFormat';
 import { calculateBillingProfit } from '../../utils/billingMath';
 import { createInvoicePdf } from '../../utils/invoicePdf';
 import './BillingList.css';
+import { useAuth } from '../../context/useAuth';
 
 const number = value => Number(value || 0);
 const money = value => `Rs ${number(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -23,6 +24,7 @@ function download(blob, filename) {
 }
 
 export default function BillingList() {
+  const { user } = useAuth();
   const [billing, setBilling] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -99,7 +101,16 @@ export default function BillingList() {
     finally { setBusy(false); }
   };
 
+  const markSent = async () => {
+    if (!selected || !window.confirm(`Confirm you sent the bill for ${selected.job_id} to the customer?`)) return;
+    setBusy(true); setActionError(''); setNotice('');
+    try { await billingApi.markSent(selected.billing_id); setNotice('Bill marked as sent for admin reports.'); }
+    catch { setActionError('Unable to record bill sending. Please retry.'); }
+    finally { setBusy(false); }
+  };
+
   return <div className="animate-fade billing-page">
+    {user?.role === 'admin' && selected && !loading && !error && <button className="btn btn-secondary" disabled={busy} onClick={markSent}><FaWhatsapp />Mark Bill Sent: {selected.job_id}</button>}
     <header className="page-header"><div><h2>Billing & Revenue</h2><p>{visible.length} invoices in this selection</p></div><div className="billing-header-actions"><label className="billing-month">Month<input className="form-input" aria-label="Billing month" type="month" value={month} onChange={event => setMonth(event.target.value)} /></label>{month && <button className="btn btn-secondary" onClick={() => setMonth('')}>All dates</button>}<button className="btn btn-secondary" onClick={exportCsv} disabled={loading || !!error || !visible.length}><Download size={16} /> Export CSV</button><button className="btn btn-secondary btn-icon" title="Refresh billing" aria-label="Refresh billing" disabled={loading} onClick={() => setReload(value => value+1)}><RefreshCw size={16} /></button></div></header>
     <section className="billing-metrics" aria-label="Billing totals"><div><span>Total Billed</span><Banknote aria-hidden="true" /><strong>{money(billed)}</strong><small>{visible.length} invoices</small></div><div><span>Invoice Profit</span><TrendingUp aria-hidden="true" /><strong>{money(profit)}</strong><small>After material and expense deductions</small></div><div><span>Amount Collected</span><Wallet aria-hidden="true" /><strong>{money(collected)}</strong><small>{money(due)} outstanding</small></div><div><span>Profit Margin</span><PieChart aria-hidden="true" /><strong>{billed > 0 ? (profit/billed*100).toFixed(1) : '0.0'}%</strong><small>Profit as a share of billed revenue</small></div></section>
     <div className="billing-toolbar"><div className="billing-tabs" aria-label="Invoice categories">{[['all',`All Invoices (${searched.length})`],['collected',`Collected (${collectedCount})`],['pending',`Pending (${pendingCount})`]].map(([value,label]) => <button className="btn" aria-pressed={tab === value} key={value} onClick={() => setTab(value)}>{label}</button>)}</div><label className="billing-search"><Search size={16} /><input className="form-input" aria-label="Search invoices" placeholder="Search job, customer or payment" value={search} onChange={event => setSearch(event.target.value)} /></label></div>

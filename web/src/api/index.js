@@ -138,6 +138,7 @@ export const updatesApi = {
 
 // Billing
 export const billingApi = {
+  markSent: id => api.post(`/billing/${encodeURIComponent(id)}/mark-sent`),
   list: (params) => api.get('/billing/', { params }),
   get: (id) => api.get(`/billing/${id}`),
   create: (data) => api.post('/billing/', data),

@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 import pytz
 from pymongo.errors import OperationFailure
+from pydantic import BaseModel, Field
 from ..models.daily_update import DailyUpdateCreate, DailyUpdateResponse, DoubtReview, ManualInventoryVerify, LearningEntry
 from ..auth.utils import require_admin, require_admin_or_manager, get_current_user
 from ..database import get_db, get_db_mode
@@ -12,6 +13,7 @@ from ..models.inventory import TransactionType
 from ..utils.notifications import notify_roles
 from ..utils.job_access import is_assigned_to_job
 from ..utils.amc import complete_visit, sync_bill
+from ..utils.billing_history import billing_history
 import uuid
 
 router = APIRouter(prefix="/updates", tags=["Daily Updates"])
@@ -71,6 +73,8 @@ async def _persist_job_update(db, session, data, job, staff_id, staff_name, upda
     if data.status == "complete":
         job = await complete_visit(db, job, session=session)
     job_update = {"status": data.status}
+    if data.status == 'complete' and job.get('status') != 'complete':
+        job_update['report_completed_at'] = now_ist_str()
     if data.work_event == "start_work":
         map_location = _map_location_from_geo(update_doc["location"])
         job_update.update({
@@ -132,6 +136,7 @@ async def _persist_job_update(db, session, data, job, staff_id, staff_name, upda
                 "payment_mode": "cash",
                 "payment_id": "",
             }
+            billing_doc.update(billing_history(None, billing_doc))
             await db.billing.insert_one(billing_doc, session=session)
         else:
             existing_service = billing.get("service_gross_amount", billing.get("service_amount"))
@@ -157,6 +162,7 @@ async def _persist_job_update(db, session, data, job, staff_id, staff_name, upda
                     "material_amount": material_amount,
                     "profit": profit,
                     "profit_percentage": profit_pct,
+                    **billing_history(billing, {**billing, "invoice_amount": new_invoice, "collected_amount": new_collected}),
                 }},
                 session=session,
             )
@@ -336,6 +342,38 @@ async def review_doubt(update_id: str, data: DoubtReview, current_user: dict = D
     if not result:
         raise HTTPException(status_code=404, detail="Doubt not found")
     return _fmt(result)
+
+
+class VisitNoteCreate(BaseModel):
+    visit_notes: str = Field(min_length=1, max_length=5000)
+
+
+@router.post("/job/{job_id}/visit-notes")
+async def add_visit_note(job_id: str, data: VisitNoteCreate, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ("admin", "manager", "technician"):
+        raise HTTPException(403, "Insufficient permissions")
+    note = data.visit_notes.strip()
+    if not note:
+        raise HTTPException(400, "A visit note is required")
+    db = get_db()
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(404, "Job not found")
+    staff_id = current_user.get("staff_id")
+    if current_user["role"] == "technician" and not is_assigned_to_job(job, staff_id):
+        raise HTTPException(403, "Not assigned to this job")
+    staff = await db.staff.find_one({"staff_id": staff_id}) if staff_id else None
+    record = {
+        "update_id": generate_update_id(), "update_time": now_ist_str(),
+        "job_id": job_id, "assigned_staff_id": staff_id or "",
+        "staff_name": (staff or {}).get("name") or (staff or {}).get("full_name") or current_user.get("full_name") or current_user.get("username"),
+        "created_by_user_id": current_user["user_id"],
+        "status": job.get("status"), "work_type": job.get("work_type"),
+        "visit_notes": note, "work_event": "visit_note",
+    }
+    # Notes are append-only and must not run completion, billing or stock actions.
+    await db.daily_updates.insert_one(record)
+    return _fmt(record)
 
 
 @router.post("/", response_model=DailyUpdateResponse)
@@ -624,6 +662,7 @@ async def verify_manual_inventory(
         await db.billing.update_one({"billing_id": billing["billing_id"]}, {"$set": {
             "material_amount": corrected["material_amount"], "service_amount": corrected["service_amount"],
             "invoice_amount": corrected["invoice_amount"], "profit": profit, "profit_percentage": percentage,
+            **billing_history(billing, corrected),
             **({key: corrected[key] for key in ("material_gross_amount", "service_gross_amount", "amc_product_discount", "amc_service_waiver")}
                if corrected.get("amc_benefits") else {}),
         }})

@@ -75,6 +75,20 @@ export default function JobDetailScreen({ route }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [visitNote, setVisitNote] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  const saveVisitNote = async () => {
+    if (noteSaving || !visitNote.trim()) return;
+    setNoteSaving(true);
+    try {
+      const { data } = await updatesApi.addVisitNote(jobId, visitNote.trim());
+      setUpdates(previous => [data, ...previous.filter(update => update.update_id !== data.update_id)]);
+      setVisitNote('');
+    } catch (error) {
+      Alert.alert('Unable to save visit note', error.response?.data?.detail || 'Please try again. Your note has been kept.');
+    } finally { setNoteSaving(false); }
+  };
   const [actionSaving, setActionSaving] = useState(false);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
 
@@ -103,7 +117,6 @@ export default function JobDetailScreen({ route }) {
     learning_category: 'CCTV',
     expense: '0',
     service_charge: '0',
-    collected_amount: '0',
     inventory_used: [],
     manual_inventory_items: [],
   });
@@ -173,7 +186,6 @@ export default function JobDetailScreen({ route }) {
       learning_category: 'CCTV',
       expense: '0',
       service_charge: '0',
-      collected_amount: '0',
       inventory_used: [],
       manual_inventory_items: [],
     });
@@ -245,7 +257,6 @@ export default function JobDetailScreen({ route }) {
         learning_category: updateForm.learning_notes ? updateForm.learning_category : null,
         expense: parseFloat(updateForm.expense) || 0,
         service_charge: parseFloat(updateForm.service_charge) || 0,
-        collected_amount: parseFloat(updateForm.collected_amount) || 0,
         inventory_used: updateForm.inventory_used.map((item) => ({
           barcode: item.barcode,
           serial_number: item.serial_number || null,
@@ -710,7 +721,13 @@ export default function JobDetailScreen({ route }) {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Updates ({updates.length})</Text>
+        <Text style={styles.sectionTitle}>Visit Notes & Updates ({updates.length})</Text>
+        {['admin', 'manager', 'technician'].includes(user?.role) && <View>
+          <TextInput accessibilityLabel="Additional visit note" placeholder="Add a visit note" placeholderTextColor={colors.textMuted} style={styles.input} multiline maxLength={5000} editable={!noteSaving} value={visitNote} onChangeText={setVisitNote} />
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Save visit note" style={styles.updateBtn} disabled={noteSaving || !visitNote.trim()} onPress={saveVisitNote}>
+            <Text style={styles.updateBtnText}>{noteSaving ? 'Saving...' : 'Add Visit Note'}</Text>
+          </TouchableOpacity>
+        </View>}
         {updates.map((update) => (
           <View key={update.update_id} style={styles.updateItem}>
             <Text style={styles.updateStaff}>{update.staff_name}</Text>
@@ -726,7 +743,7 @@ export default function JobDetailScreen({ route }) {
               </Text>
             ) : null}
             {update.location ? <Text style={styles.updateMeta}>Location: {formatLocation(update.location)}</Text> : null}
-            {update.visit_notes ? <Text style={styles.updateNotes}>{update.visit_notes}</Text> : null}
+            {update.visit_notes ? <Text style={styles.updateNotes}>Visit note: {update.visit_notes}</Text> : null}
             {update.issues_faced ? <Text style={[styles.updateNotes, { color: colors.danger }]}>Issues: {update.issues_faced}</Text> : null}
             {update.admin_reply ? <Text style={styles.adminReply}>Admin reply: {update.admin_reply}</Text> : null}
             {update.learning_notes ? (
@@ -859,16 +876,6 @@ export default function JobDetailScreen({ route }) {
                 multiline
               />
             </View>
-
-            <Text style={styles.label}>Amount Collected (Rs)</Text>
-            <TextInput
-              style={styles.input}
-              value={updateForm.collected_amount}
-              onChangeText={(text) => setUpdateForm((prev) => ({ ...prev, collected_amount: text }))}
-              keyboardType="numeric"
-              placeholder="0"
-              placeholderTextColor={colors.textMuted}
-            />
 
             <Text style={styles.label}>Expense (Rs)</Text>
             <TextInput
