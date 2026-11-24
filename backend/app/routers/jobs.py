@@ -36,6 +36,7 @@ def _format_job(j: dict, staff_name: str = None) -> dict:
         "map_location": j.get("map_location"),
         "site_type": j.get("site_type"),
         "work_type": j.get("work_type", "complaint"),
+        "is_small_job": j.get("is_small_job") is True,
         "complaint": j.get("complaint"),
         "priority": j.get("priority", "medium"),
         "scheduled_date": j.get("scheduled_date"),
@@ -93,6 +94,7 @@ async def list_jobs(
     status: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
     work_type: Optional[str] = Query(None),
+    small_jobs_only: bool = False,
     assigned_staff_id: Optional[str] = Query(None),
     site_type: Optional[str] = Query(None),
     is_public_submission: Optional[bool] = Query(None),
@@ -132,6 +134,8 @@ async def list_jobs(
         query["priority"] = priority
     if work_type:
         query["work_type"] = work_type
+    if small_jobs_only:
+        query["is_small_job"] = True
     if is_public_submission is True:
         query["$or"] = [{"is_public_submission": True}, {"work_type": "complaint"}]
     if assigned_staff_id == "__unassigned":
@@ -247,6 +251,7 @@ async def create_job(data: JobCreate, current_user: dict = Depends(require_admin
         "map_location": map_location,
         "site_type": site_type,
         "work_type": data.work_type,
+        "is_small_job": data.is_small_job,
         "complaint": data.complaint,
         "priority": data.priority,
         "scheduled_date": data.scheduled_date,

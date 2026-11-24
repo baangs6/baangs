@@ -18,6 +18,7 @@ class JobPriority(str, Enum):
 
 
 class JobCreate(BaseModel):
+    is_small_job: bool = False
     # Customer fields (auto-dedup by phone number)
     customer_name: str
     customer_nickname: Optional[str] = Field(None, max_length=80)
@@ -66,6 +67,7 @@ class JobRejectRequest(BaseModel):
 
 
 class JobResponse(BaseModel):
+    is_small_job: bool = False
     amc_coverage: Optional[dict] = None
     job_id: str
     customer_id: str

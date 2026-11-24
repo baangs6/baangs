@@ -1,4 +1,5 @@
 import React from 'react';
+import { Switch } from 'react-native';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { amcApi, customersApi, jobsApi, lookupsApi, staffApi } from '../api';
 import { radius, spacing, useTheme } from '../theme';
@@ -10,6 +11,7 @@ const initialForm = {
   location: '',
   map_location: '',
   work_type: 'installation',
+  is_small_job: false,
   site_type: 'Home',
   priority: 'medium',
   scheduled_date: new Date().toISOString().split('T')[0],
@@ -157,6 +159,10 @@ export default function JobCreateScreen({ navigation }) {
       <DropdownField label="Work Type" value={form.work_type} options={(lookups.service_types || []).map((o) => o.value).concat(['installation', 'maintenance', 'complaint'])} onSelect={(v) => update('work_type', v)} styles={styles} />
       <DropdownField label="Site Type" value={form.site_type} options={['Home', 'Office', 'Shop', 'Apartment', 'Other']} onSelect={(v) => update('site_type', v)} styles={styles} />
       <DropdownField label="Priority" value={form.priority} options={['low', 'medium', 'high', 'urgent']} onSelect={(v) => update('priority', v)} styles={styles} />
+      <View style={styles.dropdownTrigger}>
+        <Text style={styles.label}>Small Job</Text>
+        <Switch accessibilityLabel="Small Job" value={form.is_small_job} onValueChange={value => update('is_small_job', value)} />
+      </View>
       <Field label="Scheduled Date" value={form.scheduled_date} onChangeText={(v) => update('scheduled_date', v)} placeholder="YYYY-MM-DD" colors={colors} />
       <Field label="Preferred Time" value={form.preferred_time} onChangeText={(v) => update('preferred_time', v)} placeholder="HH:MM" colors={colors} />
       <Field label="Complaint / Notes" value={form.complaint} onChangeText={(v) => update('complaint', v)} multiline colors={colors} />

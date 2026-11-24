@@ -152,7 +152,7 @@ export default function JobCreate() {
   const [photo, setPhoto] = useState(null);
   const [form, setForm] = useState({
     customer_name: state?.customer?.customer_name || '', customer_nickname: state?.customer?.nickname || '', phone_number: state?.customer?.phone_number || '', location: state?.customer?.location || '', map_location: state?.customer?.map_location || '', site_type: state?.customer?.site_type || '',
-    work_type: '', complaint: '', priority: 'medium',
+    work_type: '', complaint: '', priority: 'medium', is_small_job: false,
     scheduled_date: '', preferred_time: '', assigned_staff_id: '',
     additional_staff_ids: [],
     next_schedule_date: '',
@@ -230,6 +230,9 @@ export default function JobCreate() {
       {error && <div className="toast toast-error" style={{ marginBottom: 16 }}>⚠️ {error}</div>}
 
       <form className="job-ticket-shell" onSubmit={handleSubmit}>
+        <label className="job-ticket-panel">
+          <input type="checkbox" checked={form.is_small_job} onChange={e => set('is_small_job', e.target.checked)} /> Small Job
+        </label>
         {/* Customer Section */}
         <div className="job-ticket-panel">
           <div className="job-ticket-section-title">Customer Details</div>

@@ -81,6 +81,7 @@ export default function JobList() {
       if (filters.status) params.status = filters.status;
       if (filters.priority) params.priority = filters.priority;
       if (filters.work_type) params.work_type = filters.work_type;
+      if (filters.small_jobs_only) params.small_jobs_only = true;
       if (filters.site_type) params.site_type = filters.site_type;
       if (filters.assigned_staff_id) params.assigned_staff_id = filters.assigned_staff_id;
       if (filters.date_from) params.date_from = filters.date_from;
@@ -259,6 +260,7 @@ export default function JobList() {
 
       {/* Filters */}
       <div className="filter-bar">
+        <label><input type="checkbox" checked={!!filters.small_jobs_only} onChange={e => setFilters({ ...filters, small_jobs_only: e.target.checked })} /> Small jobs only</label>
         <div className="search-input-wrapper">
           <MdSearch className="search-icon" />
           <input
@@ -358,7 +360,7 @@ export default function JobList() {
                   <div className="jobs-customer-copy">
                     <div className="jobs-id-line">
                       <Link className="jobs-id" to={`/jobs/${job.job_id}`}>{job.job_id}</Link>
-                      <span className="jobs-work-type">{job.work_type || '-'}</span>
+                      <span className="jobs-work-type">{job.work_type || '-'}{job.is_small_job && ' | Small Job'}</span>
                     </div>
                     <Link className="jobs-customer-name" to={`/jobs/${job.job_id}`}>{job.customer_name || 'Customer'}</Link>
                     {job.customer_nickname && <span className="jobs-nickname">{job.customer_nickname}</span>}

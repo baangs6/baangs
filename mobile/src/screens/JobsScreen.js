@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, createElement, useRef } from 'react';
 import { Animated, PanResponder, View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator, Platform } from 'react-native';
 import Icon from '@expo/vector-icons/MaterialIcons';
+import { Switch } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { jobsApi, lookupsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +27,7 @@ export default function JobsScreen({ navigation, route }) {
   const [showFrom, setShowFrom] = useState(false);
   const [showTo, setShowTo] = useState(false);
   const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
+  const [smallJobsOnly, setSmallJobsOnly] = useState(false);
   const [allServiceTypes, setAllServiceTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -140,6 +142,7 @@ export default function JobsScreen({ navigation, route }) {
     }
     if (filter !== 'all') res = res.filter(j => String(j.status || '').toLowerCase() === filter);
     if (serviceTypeFilter !== 'all') res = res.filter(j => j.work_type === serviceTypeFilter);
+    if (smallJobsOnly) res = res.filter(j => j.is_small_job === true);
     if (search.trim()) res = res.filter(j => [j.job_id, j.customer_name, j.customer_nickname, j.phone_number, j.location].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
     res = sortJobsByCreatedDate(res, createdSort);
     if (!priorityMode && !daysSort) return res;
@@ -151,7 +154,7 @@ export default function JobsScreen({ navigation, route }) {
       }
       return priorityMode ? (position.get(a.job_id) ?? 99999) - (position.get(b.job_id) ?? 99999) : 0;
     });
-  }, [dateFilteredJobs, filter, serviceTypeFilter, assignedStaffId, jobOrder, daysSort, createdSort, priorityMode, search]);
+  }, [dateFilteredJobs, filter, serviceTypeFilter, smallJobsOnly, assignedStaffId, jobOrder, daysSort, createdSort, priorityMode, search]);
 
   const moveJob = (jobId, direction) => {
     const visibleIds = filteredJobs.map((j) => j.job_id);
@@ -292,6 +295,8 @@ export default function JobsScreen({ navigation, route }) {
       </View>
 
       <View style={styles.sortRow}>
+        <Text style={styles.sortLabel}>Small jobs only</Text>
+        <Switch accessibilityLabel="Small jobs only" value={smallJobsOnly} onValueChange={setSmallJobsOnly} />
         <Text style={styles.sortLabel}>Created Date</Text>
         {[['desc', 'Newest first'], ['asc', 'Oldest first']].map(([value, label]) => (
           <TouchableOpacity key={value} accessibilityRole="button" accessibilityLabel={`Created date: ${label}`} accessibilityState={{ selected: createdSort === value && !daysSort && !priorityMode }} style={[styles.sortBtn, createdSort === value && !daysSort && !priorityMode && styles.sortBtnActive]} onPress={() => { setCreatedSort(value); setDaysSort(null); setPriorityMode(false); }}>
@@ -372,7 +377,7 @@ export default function JobsScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
             <View style={styles.cardFooter}>
-              <Text style={styles.workType}>{job.work_type}</Text>
+              <Text style={styles.workType}>{job.work_type}{job.is_small_job && ' | Small Job'}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
                 {job.status !== 'complete' && job.status !== 'cancelled' ? (
                   <Text style={styles.daysOpen}>{getDaysOpen(job)} days open</Text>
