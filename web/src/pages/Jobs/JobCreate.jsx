@@ -230,9 +230,6 @@ export default function JobCreate() {
       {error && <div className="toast toast-error" style={{ marginBottom: 16 }}>⚠️ {error}</div>}
 
       <form className="job-ticket-shell" onSubmit={handleSubmit}>
-        <label className="job-ticket-panel">
-          <input type="checkbox" checked={form.is_small_job} onChange={e => set('is_small_job', e.target.checked)} /> Small Job
-        </label>
         {/* Customer Section */}
         <div className="job-ticket-panel">
           <div className="job-ticket-section-title">Customer Details</div>
@@ -302,6 +299,10 @@ export default function JobCreate() {
                     <span>{p.label}</span>
                   </label>
                 ))}
+                <label className="job-ticket-radio">
+                  <input type="checkbox" checked={form.is_small_job} onChange={e => set('is_small_job', e.target.checked)} />
+                  <span>Small Job</span>
+                </label>
               </div>
             </div>
             <div className="form-group">
