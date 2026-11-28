@@ -10,6 +10,9 @@ const jobs = [
 async function setup(page, onList) {
   await page.route('**/jobs/**', route => {
     const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/JOB-TEST-003/accept')) return route.fulfill({
+      json: { ...jobs[2], request_status: 'accepted', assigned_staff_id: 'TECH-1' },
+    });
     if (route.request().method() !== 'GET') return route.fulfill({ json: { success: true } });
     if (onList) return onList(route, url);
     const status = url.searchParams.get('status');
@@ -69,6 +72,11 @@ test('customer request actions keep confirmation flows', async ({ page }) => {
   const accept = page.waitForRequest(request => request.url().endsWith('/JOB-TEST-003/accept') && request.method() === 'PATCH');
   await page.getByRole('button', { name: 'Accept & Assign' }).click();
   expect((await accept).postDataJSON().assigned_staff_id).toBe('TECH-1');
+  await expect(page.locator('.jobs-row')).toHaveCount(0);
+  await page.getByRole('button', { name: /All Work Orders/ }).click();
+  await expect(page.locator('.jobs-row').filter({ hasText: 'JOB-TEST-003' })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: /Customer Requests/ }).click();
   await page.getByRole('button', { name: 'Reject', exact: true }).click();
   await page.locator('.modal textarea').fill('Unavailable');
   const reject = page.waitForRequest(request => request.url().endsWith('/JOB-TEST-003/reject') && request.method() === 'PATCH');

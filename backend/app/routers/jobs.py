@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
 from typing import List, Optional
 import secrets
+import logging
 from ..models.job import JobAcceptRequest, JobCreate, JobRejectRequest, JobUpdate, JobResponse
 from ..auth.utils import require_admin, require_admin_or_manager, require_any, get_current_user
 from ..database import get_db
@@ -503,12 +504,14 @@ async def accept_customer_request(job_id: str, data: JobAcceptRequest, _=Depends
 
     title = "Customer Request Accepted"
     msg = f"{job_id} - {job.get('customer_name', '')} assigned to {update_data['assigned_staff_name']}"
-    await notify_roles(db, ["admin", "manager"], title, msg, {"job_id": job_id, "type": "customer_request_accepted"})
-    all_staff_ids = [data.assigned_staff_id] + additional_staff_ids
-    for sid in all_staff_ids:
-        tech_user = await db.users.find_one({"staff_id": sid, "role": "technician", "status": "active"})
-        if tech_user and tech_user.get("user_id"):
-            await notify_users(db, [tech_user["user_id"]], "New Job Assigned", msg, {"job_id": job_id, "type": "job_assigned"})
+    try:
+        await notify_roles(db, ["admin", "manager"], title, msg, {"job_id": job_id, "type": "customer_request_accepted"})
+        for sid in [data.assigned_staff_id] + additional_staff_ids:
+            tech_user = await db.users.find_one({"staff_id": sid, "role": "technician", "status": "active"})
+            if tech_user and tech_user.get("user_id"):
+                await notify_users(db, [tech_user["user_id"]], "New Job Assigned", msg, {"job_id": job_id, "type": "job_assigned"})
+    except Exception:
+        logging.getLogger(__name__).exception("Notification failed after accepting job %s", job_id)
 
     return _format_job(result)
 

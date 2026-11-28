@@ -164,14 +164,18 @@ export default function JobList() {
     }
     setActionSaving(true);
     try {
-      await jobsApi.acceptRequest(acceptJob.job_id, {
+      const { data: accepted } = await jobsApi.acceptRequest(acceptJob.job_id, {
         assigned_staff_id: acceptForm.assigned_staff_id,
         additional_staff_ids: [],
         scheduled_date: acceptForm.scheduled_date || null,
         preferred_time: acceptForm.preferred_time || null,
       });
+      requestId.current++;
+      setJobs(previous => previous.map(job => job.job_id === accepted.job_id
+        ? { ...job, ...accepted, amc_coverage: job.amc_coverage }
+        : job));
+      setLoading(false);
       setAcceptJob(null);
-      await fetchJobs();
     } catch (e) {
       alert(e.response?.data?.detail || 'Unable to accept request');
     } finally {
